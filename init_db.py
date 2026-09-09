@@ -1,15 +1,36 @@
 import sqlite3
+from werkzeug.security import generate_password_hash
 
 conn = sqlite3.connect("database.db")
 cursor = conn.cursor()
 
+# Пользователи
 cursor.execute("""
-CREATE TABLE IF NOT EXISTS projects (
+CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL
+    username TEXT NOT NULL UNIQUE,
+    password TEXT NOT NULL,
+    role TEXT NOT NULL
 )
 """)
 
+# Проекты
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    owner_id INTEGER,
+    FOREIGN KEY (owner_id) REFERENCES users (id)
+)
+""")
+
+# Если база была создана старой версией M-Flow, добавляем owner_id.
+cursor.execute("PRAGMA table_info(projects)")
+project_columns = [row[1] for row in cursor.fetchall()]
+if "owner_id" not in project_columns:
+    cursor.execute("ALTER TABLE projects ADD COLUMN owner_id INTEGER")
+
+# Задачи
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,15 +42,53 @@ CREATE TABLE IF NOT EXISTS tasks (
 )
 """)
 
-# Создаём один проект для начала, с прежними тестовыми задачами
-cursor.execute("INSERT INTO projects (name) VALUES (?)", ("Мой первый проект",))
-project_id = cursor.lastrowid
+# Создаём тестовых пользователей только один раз.
+cursor.execute("SELECT id FROM users WHERE username = ?", ("milosh",))
+student = cursor.fetchone()
+if student is None:
+    cursor.execute(
+        "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+        ("milosh", generate_password_hash("1234"), "student"),
+    )
+    student_id = cursor.lastrowid
+else:
+    student_id = student[0]
 
-cursor.execute("INSERT INTO tasks (project_id, title, done, deadline) VALUES (?, ?, ?, ?)", (project_id, "Придумать название проекта", 1, "2026-09-10"))
-cursor.execute("INSERT INTO tasks (project_id, title, done, deadline) VALUES (?, ?, ?, ?)", (project_id, "Установить Flask", 1, "2026-09-12"))
-cursor.execute("INSERT INTO tasks (project_id, title, done, deadline) VALUES (?, ?, ?, ?)", (project_id, "Сделать список задач", 0, "2026-09-20"))
+cursor.execute("SELECT id FROM users WHERE username = ?", ("uchitel",))
+teacher = cursor.fetchone()
+if teacher is None:
+    cursor.execute(
+        "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+        ("uchitel", generate_password_hash("1234"), "teacher"),
+    )
+
+# Старые проекты получают владельца — первого ученика.
+cursor.execute(
+    "UPDATE projects SET owner_id = ? WHERE owner_id IS NULL",
+    (student_id,),
+)
+
+# Если проектов ещё нет, создаём стартовый проект и задачи.
+cursor.execute("SELECT id FROM projects LIMIT 1")
+project = cursor.fetchone()
+if project is None:
+    cursor.execute(
+        "INSERT INTO projects (name, owner_id) VALUES (?, ?)",
+        ("Мой первый проект", student_id),
+    )
+    project_id = cursor.lastrowid
+
+    tasks = [
+        (project_id, "Придумать название проекта", 1, "2026-09-10"),
+        (project_id, "Установить Flask", 1, "2026-09-12"),
+        (project_id, "Сделать список задач", 0, "2026-09-20"),
+    ]
+    cursor.executemany(
+        "INSERT INTO tasks (project_id, title, done, deadline) VALUES (?, ?, ?, ?)",
+        tasks,
+    )
 
 conn.commit()
 conn.close()
 
-print("База данных создана и заполнена!")
+print("База данных создана и обновлена!")
