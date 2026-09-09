@@ -1,34 +1,71 @@
-from flask import Flask, request, redirect
+from flask import Flask, request, redirect, session
 import sqlite3
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+app.secret_key = "m-flow-dev-secret-change-later"
 
 
 def get_db():
     return sqlite3.connect("database.db")
 
 
-def get_projects():
+def login_required(route):
+    @wraps(route)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect("/login")
+        return route(*args, **kwargs)
+    return wrapper
+
+
+def get_current_user():
+    user_id = session.get("user_id")
+    if not user_id:
+        return None
+
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name FROM projects ORDER BY id DESC")
+    cursor.execute("SELECT id, username, role FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+    return user
+
+
+def get_projects():
+    user_id = session["user_id"]
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, name FROM projects WHERE owner_id = ? ORDER BY id DESC",
+        (user_id,),
+    )
     rows = cursor.fetchall()
     conn.close()
     return rows
 
 
 def add_project(name):
+    user_id = session["user_id"]
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO projects (name) VALUES (?)", (name.strip(),))
+    cursor.execute(
+        "INSERT INTO projects (name, owner_id) VALUES (?, ?)",
+        (name.strip(), user_id),
+    )
     conn.commit()
     conn.close()
 
 
 def get_project_name(project_id):
+    user_id = session["user_id"]
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT name FROM projects WHERE id = ?", (project_id,))
+    cursor.execute(
+        "SELECT name FROM projects WHERE id = ? AND owner_id = ?",
+        (project_id, user_id),
+    )
     row = cursor.fetchone()
     conn.close()
     return row[0] if row else None
@@ -146,20 +183,105 @@ PAGE_STYLE = """
         margin: 18px 0;
         box-shadow: 0 1px 4px rgba(0,0,0,0.08);
     }
+    .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+    .topbar a { margin-left: 0; }
+    .auth-box {
+        max-width: 420px;
+        margin: 80px auto;
+        background: white;
+        padding: 28px;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+    .auth-box form { display: flex; flex-direction: column; }
+    .auth-box button { margin-top: 4px; }
+    .error { color: #b42318; margin-top: 10px; }
     .project-link { margin-left: auto; }
     @media (max-width: 600px) {
         form { flex-direction: column; }
         li { align-items: flex-start; flex-direction: column; }
         .project-link { margin-left: 0; }
+        .topbar { align-items: flex-start; flex-direction: column; }
     }
 </style>
 """
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = ""
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, username, password FROM users WHERE username = ?",
+            (username,),
+        )
+        user = cursor.fetchone()
+
+        if user and check_password_hash(user[2], password):
+            session["user_id"] = user[0]
+            conn.close()
+            return redirect("/")
+
+        # Поддерживаем старые тестовые пароли из базы и сразу заменяем их
+        # на безопасный хеш после успешного входа.
+        if user and user[2] == password:
+            new_hash = generate_password_hash(password)
+            cursor.execute(
+                "UPDATE users SET password = ? WHERE id = ?",
+                (new_hash, user[0]),
+            )
+            conn.commit()
+            session["user_id"] = user[0]
+            conn.close()
+            return redirect("/")
+
+        conn.close()
+        error = "Неверный логин или пароль"
+
+    html = f"""
+    <html><head><title>Вход — M-Flow</title>{PAGE_STYLE}</head>
+    <body>
+        <div class="auth-box">
+            <h1>M-Flow</h1>
+            <p class="subtitle">Вход в систему управления проектами</p>
+            <form method="POST">
+                <input type="text" name="username" placeholder="Логин" maxlength="50" required>
+                <input type="password" name="password" placeholder="Пароль" maxlength="100" required>
+                <button type="submit">Войти</button>
+            </form>
+            {f'<p class="error">{error}</p>' if error else ''}
+            <p>Тестовые аккаунты: <b>milosh</b> / <b>1234</b></p>
+        </div>
+    </body></html>
+    """
+    return html
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+
 @app.route("/")
+@login_required
 def home():
     projects = get_projects()
+    user = get_current_user()
     items = ""
+
     for project_id, name in projects:
         items += f'''
         <li>
@@ -174,8 +296,13 @@ def home():
     html = f"""
     <html><head><title>M-Flow</title>{PAGE_STYLE}</head>
     <body>
-        <h1>M-Flow</h1>
-        <p class="subtitle">Управление школьными проектами</p>
+        <div class="topbar">
+            <div>
+                <h1>M-Flow</h1>
+                <p class="subtitle">Управление школьными проектами</p>
+            </div>
+            <div>Вы вошли как <b>{user[1]}</b> · <a href="/logout">Выйти</a></div>
+        </div>
         <ul>{items}</ul>
         <form method="POST" action="/add_project">
             <input type="text" name="name" placeholder="Название нового проекта" maxlength="100" required>
@@ -187,6 +314,7 @@ def home():
 
 
 @app.route("/add_project", methods=["POST"])
+@login_required
 def add_project_route():
     name = request.form.get("name", "")
     if name.strip():
@@ -195,6 +323,7 @@ def add_project_route():
 
 
 @app.route("/project/<int:project_id>")
+@login_required
 def project_page(project_id):
     project_name = get_project_name(project_id)
     if project_name is None:
@@ -245,6 +374,7 @@ def project_page(project_id):
 
 
 @app.route("/project/<int:project_id>/add", methods=["POST"])
+@login_required
 def add_task_route(project_id):
     title = request.form.get("title", "")
     deadline = request.form.get("deadline", "")
@@ -254,13 +384,19 @@ def add_task_route(project_id):
 
 
 @app.route("/project/<int:project_id>/toggle/<int:task_id>")
+@login_required
 def toggle_route(project_id, task_id):
+    if get_project_name(project_id) is None:
+        return "Проект не найден", 404
     toggle_task(task_id, project_id)
     return redirect(f"/project/{project_id}")
 
 
 @app.route("/project/<int:project_id>/delete/<int:task_id>")
+@login_required
 def delete_route(project_id, task_id):
+    if get_project_name(project_id) is None:
+        return "Проект не найден", 404
     delete_task(task_id, project_id)
     return redirect(f"/project/{project_id}")
 
