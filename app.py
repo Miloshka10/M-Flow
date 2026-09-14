@@ -607,6 +607,7 @@ def get_project_members(project_id):
 
 PAGE_STYLE = """
 <style>
+@import url('/static/mflow-theme.css');
 
 * {
     box-sizing: border-box;
