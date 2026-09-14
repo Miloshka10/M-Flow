@@ -1,0 +1,189 @@
+/* M-Flow — Fintech Theme v1
+   Visual-only layer. Backend/routes are intentionally untouched.
+*/
+
+:root {
+    --mf-yellow: #ffcc00;
+    --mf-yellow-soft: #fff4b8;
+    --mf-black: #171717;
+    --mf-text: #171717;
+    --mf-muted: #777777;
+    --mf-bg: #f3f3f1;
+    --mf-card: #ffffff;
+    --mf-line: #e6e6e2;
+    --mf-radius: 24px;
+    --mf-shadow: 0 10px 30px rgba(0,0,0,.06);
+}
+
+* { box-sizing: border-box; }
+
+body {
+    background: var(--mf-bg) !important;
+    color: var(--mf-text) !important;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif !important;
+}
+
+a { transition: .18s ease; }
+
+.container {
+    width: min(1240px, calc(100% - 36px)) !important;
+}
+
+.main-header {
+    height: 82px !important;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: rgba(243,243,241,.92);
+    backdrop-filter: blur(16px);
+}
+
+.brand {
+    color: var(--mf-black) !important;
+    font-size: 28px !important;
+    letter-spacing: -1.5px !important;
+}
+
+.brand span { color: var(--mf-black) !important; }
+
+.avatar {
+    background: var(--mf-yellow) !important;
+    color: var(--mf-black) !important;
+    border-radius: 50% !important;
+}
+
+.hero {
+    background: var(--mf-black) !important;
+    color: white !important;
+    border-radius: 30px !important;
+    box-shadow: 0 20px 45px rgba(0,0,0,.14) !important;
+    padding: 42px !important;
+    position: relative;
+    overflow: hidden;
+}
+
+.hero::after {
+    content: "";
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    right: -70px;
+    top: -100px;
+    background: var(--mf-yellow);
+    border-radius: 50%;
+    opacity: .95;
+}
+
+.hero h1 { color: white !important; font-size: 42px !important; }
+.hero p { color: rgba(255,255,255,.68) !important; }
+.hero > * { position: relative; z-index: 1; }
+
+.main-progress { background: #3a3a3a !important; }
+.main-progress div { background: var(--mf-yellow) !important; }
+
+.stats-line {
+    border: 0 !important;
+    border-radius: var(--mf-radius) !important;
+    box-shadow: var(--mf-shadow);
+    background: var(--mf-card) !important;
+}
+
+.stats-line > div { border-color: var(--mf-line) !important; }
+
+.stats-line strong { font-size: 32px !important; letter-spacing: -1px; }
+.stats-line span { color: var(--mf-muted) !important; }
+
+.section-title h2 { font-size: 27px !important; letter-spacing: -.7px; }
+
+.project-card,
+.card,
+.task-form,
+.members-card,
+.progress-card {
+    background: var(--mf-card) !important;
+    border: 1px solid var(--mf-line) !important;
+    border-radius: var(--mf-radius) !important;
+    box-shadow: var(--mf-shadow) !important;
+}
+
+button,
+.btn,
+input[type="submit"] {
+    border-radius: 14px !important;
+    border: 0 !important;
+    background: var(--mf-black) !important;
+    color: white !important;
+    font-weight: 700 !important;
+    transition: transform .16s ease, background .16s ease, color .16s ease !important;
+}
+
+button:hover,
+.btn:hover,
+input[type="submit"]:hover {
+    background: var(--mf-yellow) !important;
+    color: var(--mf-black) !important;
+    transform: translateY(-1px);
+}
+
+input,
+select,
+textarea {
+    border: 1px solid var(--mf-line) !important;
+    background: #fafaf8 !important;
+    color: var(--mf-text) !important;
+    border-radius: 14px !important;
+    min-height: 44px;
+    outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: var(--mf-yellow) !important;
+    box-shadow: 0 0 0 4px rgba(255,204,0,.18) !important;
+}
+
+/* Kanban */
+.kanban,
+.kanban-board,
+.kanban-column {
+    gap: 16px !important;
+}
+
+.kanban-column {
+    background: #e9e9e5 !important;
+    border: 0 !important;
+    border-radius: 22px !important;
+    padding: 14px !important;
+}
+
+.task-card {
+    background: white !important;
+    border: 1px solid var(--mf-line) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 5px 18px rgba(0,0,0,.05) !important;
+    transition: transform .16s ease, box-shadow .16s ease !important;
+}
+
+.task-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(0,0,0,.09) !important;
+}
+
+/* Priority accents */
+.priority-urgent { background: #171717 !important; color: white !important; }
+.priority-high { background: var(--mf-yellow) !important; color: var(--mf-black) !important; }
+
+/* Project links */
+.project-card a:hover { color: #000 !important; }
+
+@media (max-width: 760px) {
+    .container { width: min(100% - 22px, 1240px) !important; }
+    .main-header { height: 70px !important; }
+    .account-text { display: none !important; }
+    .hero { padding: 28px 22px !important; border-radius: 22px !important; }
+    .hero h1 { font-size: 32px !important; }
+    .stats-line { grid-template-columns: 1fr !important; }
+    .stats-line > div { border-right: 0 !important; border-bottom: 1px solid var(--mf-line); }
+    .stats-line > div:last-child { border-bottom: 0; }
+}
