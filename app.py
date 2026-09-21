@@ -8,6 +8,8 @@ from flask import (
     jsonify
 )
 import sqlite3
+import os
+from datetime import date
 from functools import wraps
 from werkzeug.security import (
     check_password_hash,
@@ -17,7 +19,16 @@ from html import escape
 
 
 app = Flask(__name__)
-app.secret_key = "m-flow-dev-secret-change-later"
+app.config.update(
+    SECRET_KEY=os.environ.get("M_FLOW_SECRET_KEY", "m-flow-local-secret"),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
+
+DATABASE_PATH = os.environ.get(
+    "M_FLOW_DATABASE",
+    os.path.join(app.root_path, "database.db")
+)
 
 
 # =========================================================
@@ -25,14 +36,62 @@ app.secret_key = "m-flow-dev-secret-change-later"
 # =========================================================
 
 def get_db():
-    conn = sqlite3.connect("database.db")
+    conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
 def prepare_database():
 
     conn = get_db()
+
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('teacher', 'student'))
+        );
+
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            owner_id INTEGER,
+            FOREIGN KEY (owner_id) REFERENCES users (id)
+        );
+
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            done INTEGER NOT NULL DEFAULT 0,
+            deadline TEXT,
+            status TEXT NOT NULL DEFAULT 'todo',
+            priority TEXT NOT NULL DEFAULT 'normal',
+            assignee_id INTEGER,
+            FOREIGN KEY (project_id) REFERENCES projects (id),
+            FOREIGN KEY (assignee_id) REFERENCES users (id)
+        );
+
+        CREATE TABLE IF NOT EXISTS project_members (
+            project_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            PRIMARY KEY (project_id, user_id),
+            FOREIGN KEY (project_id) REFERENCES projects (id),
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        );
+        """
+    )
+
+    project_columns = {
+        column["name"]
+        for column in conn.execute("PRAGMA table_info(projects)").fetchall()
+    }
+
+    if "owner_id" not in project_columns:
+        conn.execute("ALTER TABLE projects ADD COLUMN owner_id INTEGER")
 
     columns = conn.execute(
         "PRAGMA table_info(tasks)"
@@ -78,6 +137,29 @@ def prepare_database():
             """
         )
 
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_tasks_project_assignee
+        ON tasks(project_id, assignee_id)
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_project_members_user
+        ON project_members(user_id)
+        """
+    )
+
+    for username, role in (("milosh", "student"), ("uchitel", "teacher")):
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO users (username, password, role)
+            VALUES (?, ?, ?)
+            """,
+            (username, generate_password_hash("1234"), role)
+        )
+
     conn.commit()
     conn.close()
 
@@ -94,7 +176,8 @@ def login_required(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
 
-        if "user_id" not in session:
+        if "user_id" not in session or get_current_user() is None:
+            session.clear()
             return redirect("/login")
 
         return func(*args, **kwargs)
@@ -226,6 +309,19 @@ def get_projects():
     return projects
 
 
+def is_valid_date(value):
+
+    if not value:
+        return True
+
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+
+    return True
+
+
 def add_project(name):
 
     user = get_current_user()
@@ -337,7 +433,7 @@ def get_tasks(project_id):
                 WHEN 'low' THEN 4
                 ELSE 5
             END,
-            id
+            tasks.id
         """,
         (project_id,)
     ).fetchall()
@@ -2142,6 +2238,9 @@ def index():
     total_projects = len(projects)
     total_tasks = 0
     completed_tasks = 0
+    active_tasks = 0
+    overdue_tasks = 0
+    today = date.today().isoformat()
 
     projects_html = ""
 
@@ -2166,6 +2265,16 @@ def index():
 
         total_tasks += project_total
         completed_tasks += project_done
+        active_tasks += sum(
+            task["status"] == "progress"
+            for task in tasks
+        )
+        overdue_tasks += sum(
+            task["deadline"]
+            and task["deadline"] < today
+            and task["status"] != "done"
+            for task in tasks
+        )
 
 
         if project_total:
@@ -2428,6 +2537,32 @@ def index():
 
                     </div>
 
+                    <div>
+
+                        <strong>
+                            {overdue_tasks}
+                        </strong>
+
+                        <span>
+                            Просрочено
+                        </span>
+
+                    </div>
+
+                </section>
+
+
+                <section class="focus-strip">
+
+                    <div class="focus-icon">◌</div>
+
+                    <div>
+                        <strong>Фокус на сегодня</strong>
+                        <span>В работе: {active_tasks} · Просрочено: {overdue_tasks}</span>
+                    </div>
+
+                    <div class="focus-mark">M</div>
+
                 </section>
 
 
@@ -2523,6 +2658,15 @@ def create_project():
 
         return redirect("/")
 
+    if len(name) > 80:
+
+        flash(
+            "Название проекта должно быть не длиннее 80 символов.",
+            "error"
+        )
+
+        return redirect("/")
+
 
     add_project(name)
 
@@ -2597,6 +2741,14 @@ def project(project_id):
 
     total_tasks = len(tasks)
     completed_tasks = len(done_tasks)
+    todo_count = len(todo_tasks)
+    progress_count = len(progress_tasks)
+    overdue_count = sum(
+        task["deadline"]
+        and task["deadline"] < date.today().isoformat()
+        and task["status"] != "done"
+        for task in tasks
+    )
 
 
     progress = (
@@ -3183,6 +3335,31 @@ def project(project_id):
                 </div>
 
 
+                <section class="project-metrics">
+
+                    <div class="metric-card metric-todo">
+                        <span>Новые</span>
+                        <strong>{todo_count}</strong>
+                    </div>
+
+                    <div class="metric-card metric-progress">
+                        <span>В работе</span>
+                        <strong>{progress_count}</strong>
+                    </div>
+
+                    <div class="metric-card metric-done">
+                        <span>Готово</span>
+                        <strong>{completed_tasks}</strong>
+                    </div>
+
+                    <div class="metric-card metric-overdue">
+                        <span>Просрочено</span>
+                        <strong>{overdue_count}</strong>
+                    </div>
+
+                </section>
+
+
                 <div class="kanban-wrapper">
 
                     <div class="section-title">
@@ -3489,6 +3666,24 @@ def add_project_task(project_id):
 
     if title:
 
+        if len(title) > 160:
+
+            flash(
+                "Название задачи должно быть не длиннее 160 символов.",
+                "error"
+            )
+
+            return redirect(f"/project/{project_id}")
+
+        if not is_valid_date(deadline):
+
+            flash(
+                "Укажите корректную дату дедлайна.",
+                "error"
+            )
+
+            return redirect(f"/project/{project_id}")
+
         add_task(
             project_id,
             title,
@@ -3718,11 +3913,55 @@ def delete_project_task(
 
 
 # =========================================================
+# ERROR PAGES
+# =========================================================
+
+def render_error_page(title, message, status_code):
+
+    return render_template_string(
+        PAGE_STYLE
+        + f"""
+        <div class="login-page">
+            <div class="login-box">
+                <div class="login-logo">M<span>-</span>Flow</div>
+                <span class="eyebrow" style="color:#b7791f">{status_code}</span>
+                <h1>{escape(title)}</h1>
+                <p>{escape(message)}</p>
+                <a href="/" class="back">← Вернуться на главную</a>
+            </div>
+        </div>
+        """,
+    ), status_code
+
+
+@app.errorhandler(404)
+def page_not_found(error):
+
+    return render_error_page(
+        "Страница не найдена",
+        "Проверьте адрес или вернитесь в своё рабочее пространство.",
+        404
+    )
+
+
+@app.errorhandler(500)
+def internal_server_error(error):
+
+    app.logger.exception("Необработанная ошибка M-Flow: %s", error)
+
+    return render_error_page(
+        "Что-то пошло не так",
+        "Мы уже зафиксировали ошибку. Обновите страницу или вернитесь на главную.",
+        500
+    )
+
+
+# =========================================================
 # START
 # =========================================================
 
 if __name__ == "__main__":
 
     app.run(
-        debug=True
+        debug=os.environ.get("M_FLOW_DEBUG") == "1"
     )
