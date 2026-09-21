@@ -48,7 +48,9 @@ CREATE TABLE IF NOT EXISTS tasks (
     deadline TEXT,
     status TEXT NOT NULL DEFAULT 'todo',
     priority TEXT NOT NULL DEFAULT 'normal',
-    FOREIGN KEY (project_id) REFERENCES projects (id)
+    assignee_id INTEGER,
+    FOREIGN KEY (project_id) REFERENCES projects (id),
+    FOREIGN KEY (assignee_id) REFERENCES users (id)
 )
 """)
 
@@ -80,6 +82,10 @@ if "priority" not in task_columns:
         """
     )
 
+# Если база создана старой версией M-Flow,
+# добавляем ответственного за задачу.
+if "assignee_id" not in task_columns:
+    cursor.execute("ALTER TABLE tasks ADD COLUMN assignee_id INTEGER")
 
 # Участники проектов
 cursor.execute("""

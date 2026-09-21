@@ -69,6 +69,15 @@ def prepare_database():
             """
         )
 
+    if "assignee_id" not in column_names:
+
+        conn.execute(
+            """
+            ALTER TABLE tasks
+            ADD COLUMN assignee_id INTEGER
+            """
+        )
+
     conn.commit()
     conn.close()
 
@@ -308,14 +317,18 @@ def get_tasks(project_id):
     tasks = conn.execute(
         """
         SELECT
-            id,
-            title,
-            done,
-            deadline,
-            status,
-            priority
+            tasks.id,
+            tasks.title,
+            tasks.done,
+            tasks.deadline,
+            tasks.status,
+            tasks.priority,
+            tasks.assignee_id,
+            users.username AS assignee_name
         FROM tasks
-        WHERE project_id = ?
+        LEFT JOIN users
+            ON users.id = tasks.assignee_id
+        WHERE tasks.project_id = ?
         ORDER BY
             CASE priority
                 WHEN 'urgent' THEN 1
@@ -338,7 +351,8 @@ def add_task(
     project_id,
     title,
     deadline,
-    priority
+    priority,
+    assignee_id
 ):
 
     allowed_priorities = {
@@ -351,6 +365,24 @@ def add_task(
     if priority not in allowed_priorities:
         priority = "normal"
 
+    if assignee_id is not None:
+        conn = get_db()
+        member = conn.execute(
+            """
+            SELECT 1
+            FROM project_members
+            JOIN users ON users.id = project_members.user_id
+            WHERE project_members.project_id = ?
+            AND project_members.user_id = ?
+            AND users.role = 'student'
+            """,
+            (project_id, assignee_id)
+        ).fetchone()
+        conn.close()
+
+        if member is None:
+            assignee_id = None
+
     conn = get_db()
 
     conn.execute(
@@ -362,15 +394,17 @@ def add_task(
             deadline,
             done,
             status,
-            priority
+            priority,
+            assignee_id
         )
-        VALUES (?, ?, ?, 0, 'todo', ?)
+        VALUES (?, ?, ?, 0, 'todo', ?, ?)
         """,
         (
             project_id,
             title,
             deadline,
-            priority
+            priority,
+            assignee_id
         )
     )
 
@@ -512,6 +546,35 @@ def update_task_status(
     return True
 
 
+def user_can_update_task(project_id, task_id):
+
+    user = get_current_user()
+
+    if user is None:
+        return False
+
+    conn = get_db()
+
+    task = conn.execute(
+        """
+        SELECT tasks.id
+        FROM tasks
+        JOIN projects ON projects.id = tasks.project_id
+        WHERE tasks.id = ?
+        AND tasks.project_id = ?
+        AND (
+            projects.owner_id = ?
+            OR tasks.assignee_id = ?
+        )
+        """,
+        (task_id, project_id, user["id"], user["id"])
+    ).fetchone()
+
+    conn.close()
+
+    return task is not None
+
+
 def update_task_priority(
     project_id,
     task_id,
@@ -599,6 +662,37 @@ def get_project_members(project_id):
     conn.close()
 
     return members
+
+
+def get_student_progress(project_id):
+
+    conn = get_db()
+
+    students = conn.execute(
+        """
+        SELECT
+            users.id,
+            users.username,
+            COUNT(tasks.id) AS task_count,
+            COALESCE(SUM(CASE WHEN tasks.status = 'done' THEN 1 ELSE 0 END), 0)
+                AS completed_count
+        FROM project_members
+        JOIN users
+            ON users.id = project_members.user_id
+        LEFT JOIN tasks
+            ON tasks.project_id = project_members.project_id
+            AND tasks.assignee_id = users.id
+        WHERE project_members.project_id = ?
+        AND users.role = 'student'
+        GROUP BY users.id, users.username
+        ORDER BY users.username
+        """,
+        (project_id,)
+    ).fetchall()
+
+    conn.close()
+
+    return students
 
 
 # =========================================================
@@ -2471,6 +2565,10 @@ def project(project_id):
         project_id
     )
 
+    student_progress = get_student_progress(
+        project_id
+    )
+
     owner = is_project_owner(
         project_id
     )
@@ -2572,6 +2670,16 @@ def project(project_id):
 
         task_id = task["id"]
 
+        can_update = user_can_update_task(project_id, task_id)
+        draggable = "true" if can_update else "false"
+        assignee_name = escape(task["assignee_name"] or "Не назначена")
+
+        delete_control = f"""
+            <form action="/project/{project_id}/delete/{task_id}" method="post">
+                <button type="submit" class="delete-task" title="Удалить задачу">Удалить</button>
+            </form>
+        """ if owner else ""
+
         task_title = escape(
             task["title"]
         )
@@ -2604,11 +2712,20 @@ def project(project_id):
             else ""
         )
 
+        priority_control = f"""
+            <select class="task-priority-select" data-task-id="{task_id}" onchange="changePriority(this)">
+                <option value="low" {low_selected}>🟢 Низкий</option>
+                <option value="normal" {normal_selected}>🔵 Обычный</option>
+                <option value="high" {high_selected}>🟠 Высокий</option>
+                <option value="urgent" {urgent_selected}>🔴 Срочный</option>
+            </select>
+        """ if owner else ""
+
 
         return f"""
         <div
             class="task-card {done_class}"
-            draggable="true"
+            draggable="{draggable}"
             data-task-id="{task_id}"
         >
 
@@ -2623,41 +2740,7 @@ def project(project_id):
             </div>
 
 
-            <select
-                class="task-priority-select"
-                data-task-id="{task_id}"
-                onchange="changePriority(this)"
-            >
-
-                <option
-                    value="low"
-                    {low_selected}
-                >
-                    🟢 Низкий
-                </option>
-
-                <option
-                    value="normal"
-                    {normal_selected}
-                >
-                    🔵 Обычный
-                </option>
-
-                <option
-                    value="high"
-                    {high_selected}
-                >
-                    🟠 Высокий
-                </option>
-
-                <option
-                    value="urgent"
-                    {urgent_selected}
-                >
-                    🔴 Срочный
-                </option>
-
-            </select>
+            {priority_control}
 
 
             <div class="task-footer">
@@ -2666,21 +2749,9 @@ def project(project_id):
                     📅 {safe_deadline}
                 </span>
 
+                <span class="role">👤 {assignee_name}</span>
 
-                <form
-                    action="/project/{project_id}/delete/{task_id}"
-                    method="post"
-                >
-
-                    <button
-                        type="submit"
-                        class="delete-task"
-                        title="Удалить задачу"
-                    >
-                        Удалить
-                    </button>
-
-                </form>
+                {delete_control}
 
             </div>
 
@@ -2847,6 +2918,63 @@ def project(project_id):
 
         </div>
         """
+
+    student_options = '<option value="">Не назначать</option>'
+
+    for member in members:
+        if member["role"] == "student":
+            student_options += (
+                f'<option value="{member["id"]}">'
+                f'{escape(member["username"])}'
+                f'</option>'
+            )
+
+    student_progress_html = ""
+
+    if owner and current_user["role"] == "teacher":
+        for student in student_progress:
+            task_count = student["task_count"]
+            completed_count = student["completed_count"]
+            student_percent = (
+                round(completed_count / task_count * 100)
+                if task_count else 0
+            )
+            student_progress_html += f"""
+            <div class="member">
+                <b>{escape(student['username'])}</b>
+                <span class="role">{completed_count} из {task_count} задач · {student_percent}%</span>
+            </div>
+            """
+
+        if not student_progress_html:
+            student_progress_html = "<p>Добавьте учеников в проект, чтобы видеть их прогресс.</p>"
+
+    teacher_dashboard = f"""
+    <div class="card">
+        <h2>Прогресс учеников</h2>
+        {student_progress_html}
+    </div>
+    """ if owner and current_user["role"] == "teacher" else ""
+
+    add_task_section = f"""
+    <div class="card">
+        <h2>Добавить задачу</h2>
+        <form action="/project/{project_id}/add" method="post" class="add-task-form">
+            <input name="title" placeholder="Название задачи" required>
+            <input name="deadline" type="date">
+            <select name="priority" class="priority-select add-task-priority">
+                <option value="low">🟢 Низкий</option>
+                <option value="normal" selected>🔵 Обычный</option>
+                <option value="high">🟠 Высокий</option>
+                <option value="urgent">🔴 Срочный</option>
+            </select>
+            <select name="assignee_id" class="priority-select">
+                {student_options}
+            </select>
+            <button type="submit">Добавить</button>
+        </form>
+    </div>
+    """ if owner else ""
 
 
     # =====================================================
@@ -3078,63 +3206,9 @@ def project(project_id):
 
                 </div>
 
+                {teacher_dashboard}
 
-                <div class="card">
-
-                    <h2>
-                        Добавить задачу
-                    </h2>
-
-                    <form
-                        action="/project/{project_id}/add"
-                        method="post"
-                        class="add-task-form"
-                    >
-
-                        <input
-                            name="title"
-                            placeholder="Название задачи"
-                            required
-                        >
-
-                        <input
-                            name="deadline"
-                            type="date"
-                        >
-
-                        <select
-                            name="priority"
-                            class="priority-select add-task-priority"
-                        >
-
-                            <option value="low">
-                                🟢 Низкий
-                            </option>
-
-                            <option
-                                value="normal"
-                                selected
-                            >
-                                🔵 Обычный
-                            </option>
-
-                            <option value="high">
-                                🟠 Высокий
-                            </option>
-
-                            <option value="urgent">
-                                🔴 Срочный
-                            </option>
-
-                        </select>
-
-                        <button type="submit">
-                            Добавить
-                        </button>
-
-                    </form>
-
-                </div>
+                {add_task_section}
 
 
                 <div class="card">
@@ -3382,7 +3456,7 @@ def remove_member(
 @login_required
 def add_project_task(project_id):
 
-    if not user_has_project_access(project_id):
+    if not is_project_owner(project_id):
 
         return (
             "Проект не найден или у вас нет доступа.",
@@ -3407,6 +3481,11 @@ def add_project_task(project_id):
         "normal"
     )
 
+    assignee_id = request.form.get(
+        "assignee_id",
+        type=int
+    )
+
 
     if title:
 
@@ -3414,7 +3493,8 @@ def add_project_task(project_id):
             project_id,
             title,
             deadline,
-            priority
+            priority,
+            assignee_id
         )
 
 
@@ -3469,6 +3549,13 @@ def change_task_status(project_id):
             "error": "Неверный task_id"
         }), 400
 
+    if not user_can_update_task(project_id, task_id):
+
+        return jsonify({
+            "success": False,
+            "error": "Вы можете менять статус только своих задач"
+        }), 403
+
 
     success = update_task_status(
         project_id,
@@ -3501,9 +3588,7 @@ def change_task_status(project_id):
 @login_required
 def change_task_priority(project_id):
 
-    if not user_has_project_access(
-        project_id
-    ):
+    if not is_project_owner(project_id):
 
         return jsonify({
             "success": False,
@@ -3613,9 +3698,7 @@ def delete_project_task(
     task_id
 ):
 
-    if not user_has_project_access(
-        project_id
-    ):
+    if not is_project_owner(project_id):
 
         return (
             "Проект не найден или у вас нет доступа.",
