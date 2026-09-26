@@ -1,0 +1,44 @@
+name: Connect M-Flow theme
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  connect-theme:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Connect theme CSS
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('app.py')
+          text = path.read_text(encoding='utf-8')
+          marker = '<style>\n'
+          import_line = "@import url('/static/mflow-theme.css');\n"
+
+          if import_line not in text:
+              if marker not in text:
+                  raise SystemExit('Could not find PAGE_STYLE <style> block')
+              text = text.replace(marker, marker + import_line, 1)
+              path.write_text(text, encoding='utf-8')
+          else:
+              print('Theme is already connected')
+          PY
+
+      - name: Commit change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.py
+          git diff --cached --quiet && exit 0
+          git commit -m "Connect M-Flow fintech theme"
+          git push
