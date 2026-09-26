@@ -1508,59 +1508,126 @@ input:focus,
 }
 
 
-/* LOGIN */
+/* LOGIN / REGISTER */
 
-.login-page {
+.auth-page {
     min-height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
     padding: 20px;
+    background: #171717;
 }
 
-.login-box {
+.auth-card {
     width: 100%;
-    max-width: 400px;
+    max-width: 860px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     background: white;
-    padding: 35px;
-    border: 1px solid #e5e9f0;
-    border-radius: 20px;
-    box-shadow:
-        0 15px 40px
-        rgba(30,41,59,0.08);
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 30px 70px rgba(0,0,0,.35);
 }
 
-.login-logo {
-    margin-bottom: 25px;
-    font-size: 28px;
+.auth-hero {
+    background: #171717;
+    color: white;
+    padding: 48px 40px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.auth-hero::after {
+    content: "";
+    position: absolute;
+    width: 220px;
+    height: 220px;
+    right: -60px;
+    top: -80px;
+    background: #ffcc00;
+    border-radius: 50%;
+    opacity: .9;
+}
+
+.auth-hero-content { position: relative; z-index: 1; }
+
+.auth-logo {
+    font-size: 26px;
     font-weight: 800;
+    margin-bottom: 18px;
 }
 
-.login-logo span {
-    color: #2563eb;
+.auth-logo span { color: #ffcc00; }
+
+.auth-hero h2 {
+    font-size: 24px;
+    margin: 0 0 10px;
 }
 
-.login-box h1 {
-    margin: 0 0 8px;
-    font-size: 25px;
+.auth-hero p {
+    color: rgba(255,255,255,.65);
+    font-size: 14px;
+    line-height: 1.5;
 }
 
-.login-box p {
-    color: #8a94a6;
-    font-size: 13px;
+.auth-form-side {
+    padding: 48px 40px;
 }
 
-.login-box form {
-    margin-top: 20px;
+.auth-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 28px;
+    background: #f3f3f1;
+    padding: 5px;
+    border-radius: 12px;
 }
 
-.login-box input {
-    margin-bottom: 10px;
+.auth-tab {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+    border-radius: 9px;
+    text-decoration: none;
+    color: #777;
+    font-weight: 600;
+    font-size: 14px;
 }
 
-.login-box button {
+.auth-tab.active {
+    background: #171717;
+    color: white;
+}
+
+.auth-form-side input {
     width: 100%;
-    margin-top: 5px;
+    margin-bottom: 12px;
+    padding: 13px 14px;
+    border-radius: 12px;
+    border: 1px solid #e6e6e2;
+}
+
+.auth-form-side button {
+    width: 100%;
+    padding: 13px;
+    margin-top: 6px;
+    border-radius: 12px;
+    border: 0;
+    background: #171717;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.auth-form-side button:hover { background: #ffcc00; color: #171717; }
+
+@media (max-width: 700px) {
+    .auth-card { grid-template-columns: 1fr; }
+    .auth-hero { padding: 32px 28px; }
 }
 
 
@@ -1983,238 +2050,134 @@ document.addEventListener(
 # LOGIN
 # =========================================================
 
-@app.route(
-    "/login",
-    methods=["GET", "POST"]
-)
-def login():
+def render_auth_page(mode, error=None):
+    is_login = mode == "login"
 
-    if request.method == "POST":
+    error_html = f'<div class="error">{escape(error)}</div>' if error else ""
 
-        username = request.form.get(
-            "username",
-            ""
-        ).strip()
-
-        password = request.form.get(
-            "password",
-            ""
-        )
-
-        conn = get_db()
-
-        user = conn.execute(
-            """
-            SELECT *
-            FROM users
-            WHERE username = ?
-            """,
-            (username,)
-        ).fetchone()
-
-
-        if user is None:
-
-            conn.close()
-
-            return render_template_string(
-                PAGE_STYLE
-                + """
-                <div class="login-page">
-
-                    <div class="login-box">
-
-                        <div class="login-logo">
-                            M<span>-</span>Flow
-                        </div>
-
-                        <h1>Вход</h1>
-
-                        <div class="error">
-                            Неверный логин или пароль.
-                        </div>
-
-                        <form method="post">
-
-                            <input
-                                name="username"
-                                placeholder="Логин"
-                                required
-                            >
-
-                            <input
-                                name="password"
-                                type="password"
-                                placeholder="Пароль"
-                                required
-                            >
-
-                            <button type="submit">
-                                Войти
-                            </button>
-
-                        </form>
-
-                    </div>
-
-                </div>
-                """
-            )
-
-
-        stored_password = user["password"]
-
-
-        try:
-
-            password_ok = check_password_hash(
-                stored_password,
-                password
-            )
-
-        except (
-            ValueError,
-            TypeError
-        ):
-
-            password_ok = (
-                stored_password == password
-            )
-
-
-        if not password_ok:
-
-            conn.close()
-
-            return render_template_string(
-                PAGE_STYLE
-                + """
-                <div class="login-page">
-
-                    <div class="login-box">
-
-                        <div class="login-logo">
-                            M<span>-</span>Flow
-                        </div>
-
-                        <h1>Вход</h1>
-
-                        <div class="error">
-                            Неверный логин или пароль.
-                        </div>
-
-                        <form method="post">
-
-                            <input
-                                name="username"
-                                placeholder="Логин"
-                                required
-                            >
-
-                            <input
-                                name="password"
-                                type="password"
-                                placeholder="Пароль"
-                                required
-                            >
-
-                            <button type="submit">
-                                Войти
-                            </button>
-
-                        </form>
-
-                    </div>
-
-                </div>
-                """
-            )
-
-
-        if stored_password == password:
-
-            new_password = generate_password_hash(
-                password
-            )
-
-            conn.execute(
-                """
-                UPDATE users
-                SET password = ?
-                WHERE id = ?
-                """,
-                (
-                    new_password,
-                    user["id"]
-                )
-            )
-
-            conn.commit()
-
-
-        conn.close()
-
-        session["user_id"] = user["id"]
-
-        return redirect("/")
-
+    if is_login:
+        form_fields = """
+            <input name="username" placeholder="Логин" required>
+            <input name="password" type="password" placeholder="Пароль" required>
+        """
+        submit_label = "Войти"
+        hero_title = "С возвращением"
+        hero_text = "Заходи в своё рабочее пространство — задачи и дедлайны на месте."
+    else:
+        form_fields = """
+            <input name="username" placeholder="Придумай логин" required>
+            <input name="password" type="password" placeholder="Придумай пароль" required>
+        """
+        submit_label = "Зарегистрироваться"
+        hero_title = "Начни работу с M-Flow"
+        hero_text = "Создай аккаунт ученика, чтобы вести свои проекты и задачи."
 
     return render_template_string(
         PAGE_STYLE
-        + """
-        <div class="login-page">
-
-            <div class="login-box">
-
-                <div class="login-logo">
-                    M<span>-</span>Flow
+        + f"""
+        <div class="auth-page">
+            <div class="auth-card">
+                <div class="auth-hero">
+                    <div class="auth-hero-content">
+                        <div class="auth-logo">M<span>-</span>Flow</div>
+                        <h2>{hero_title}</h2>
+                        <p>{hero_text}</p>
+                    </div>
                 </div>
-
-                <h1>
-                    Добро пожаловать
-                </h1>
-
-                <p>
-                    Войди в своё школьное
-                    рабочее пространство.
-                </p>
-
-                <form method="post">
-
-                    <input
-                        name="username"
-                        placeholder="Логин"
-                        required
-                    >
-
-                    <input
-                        name="password"
-                        type="password"
-                        placeholder="Пароль"
-                        required
-                    >
-
-                    <button type="submit">
-                        Войти
-                    </button>
-
-                </form>
-
-                <p>
-                    Тестовый аккаунт:
-                    <b>milosh</b> / <b>1234</b>
-                </p>
-
+                <div class="auth-form-side">
+                    <div class="auth-tabs">
+                        <a href="/login" class="auth-tab {'active' if is_login else ''}">Вход</a>
+                        <a href="/register" class="auth-tab {'active' if not is_login else ''}">Регистрация</a>
+                    </div>
+                    {error_html}
+                    <form method="post">
+                        {form_fields}
+                        <button type="submit">{submit_label}</button>
+                    </form>
+                </div>
             </div>
-
         </div>
         """
     )
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        conn = get_db()
+        user = conn.execute(
+            "SELECT * FROM users WHERE username = ?",
+            (username,)
+        ).fetchone()
+
+        if user is None:
+            conn.close()
+            return render_auth_page("login", error="Неверный логин или пароль.")
+
+        stored_password = user["password"]
+
+        try:
+            password_ok = check_password_hash(stored_password, password)
+        except (ValueError, TypeError):
+            password_ok = (stored_password == password)
+
+        if not password_ok:
+            conn.close()
+            return render_auth_page("login", error="Неверный логин или пароль.")
+
+        if stored_password == password:
+            new_password = generate_password_hash(password)
+            conn.execute(
+                "UPDATE users SET password = ? WHERE id = ?",
+                (new_password, user["id"])
+            )
+            conn.commit()
+
+        conn.close()
+        session["user_id"] = user["id"]
+        return redirect("/")
+
+    return render_auth_page("login")
+
 # =========================================================
 # LOGOUT
 # =========================================================
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        if not username or not password:
+            return render_auth_page("register", error="Заполни оба поля.")
+
+        conn = get_db()
+
+        existing = conn.execute(
+            "SELECT id FROM users WHERE username = ?",
+            (username,)
+        ).fetchone()
+
+        if existing is not None:
+            conn.close()
+            return render_auth_page("register", error="Такой логин уже занят.")
+
+        cursor = conn.execute(
+            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+            (username, generate_password_hash(password), "student")
+        )
+
+        conn.commit()
+        new_user_id = cursor.lastrowid
+        conn.close()
+
+        session["user_id"] = new_user_id
+        return redirect("/")
+
+    return render_auth_page("register")
 
 @app.route("/logout")
 def logout():
