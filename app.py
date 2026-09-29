@@ -9,7 +9,7 @@ from flask import (
 )
 import sqlite3
 import os
-from datetime import date
+from datetime import date, timedelta
 from functools import wraps
 from werkzeug.security import (
     check_password_hash,
@@ -1631,6 +1631,97 @@ input:focus,
 }
 
 
+/* DEADLINES */
+
+.task-deadline.deadline-overdue {
+    color: #c0392b;
+    font-weight: 700;
+}
+
+.task-deadline.deadline-soon {
+    color: #b7791f;
+    font-weight: 700;
+}
+
+.hot-strip {
+    margin: 0 0 18px;
+    padding: 14px 18px;
+    border-radius: 18px;
+    background: #fff4b8;
+    border: 1px solid #f1d96b;
+}
+
+.hot-strip strong { display: block; margin-bottom: 8px; }
+
+.hot-strip ul { margin: 0; padding-left: 18px; }
+
+.hot-strip li { margin: 3px 0; font-size: 14px; }
+
+.hot-strip li.overdue { color: #c0392b; font-weight: 600; }
+
+
+/* PROFILE */
+
+.profile-card {
+    max-width: 520px;
+    margin: 30px auto;
+    padding: 28px;
+    background: white;
+    border: 1px solid #e6e6e2;
+    border-radius: 24px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.06);
+}
+
+.profile-card h1 { margin-top: 0; }
+
+.profile-card dl { margin: 0 0 22px; }
+
+.profile-card dt { color: #777; font-size: 13px; margin-top: 12px; }
+
+.profile-card dd { margin: 2px 0 0; font-weight: 600; }
+
+.profile-card input {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.profile-card .ok { color: #1e7e4f; margin-bottom: 12px; }
+
+
+/* TASK FILTERS */
+
+.task-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0 0 18px;
+    align-items: center;
+}
+
+.task-filters input[type="search"] {
+    flex: 1;
+    min-width: 180px;
+}
+
+.task-filters select {
+    min-width: 150px;
+}
+
+.task-filters label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: #555;
+}
+
+.task-filters .filter-reset {
+    font-size: 13px;
+    color: #777;
+    text-decoration: none;
+}
+
+
 /* MOBILE */
 
 @media (max-width: 1050px) {
@@ -2053,7 +2144,11 @@ document.addEventListener(
 def render_auth_page(mode, error=None):
     is_login = mode == "login"
 
-    error_html = f'<div class="error">{escape(error)}</div>' if error else ""
+    error_html = (
+        f'<div class="error">{escape(error)}</div>'
+        if error
+        else ""
+    )
 
     if is_login:
         form_fields = """
@@ -2072,6 +2167,9 @@ def render_auth_page(mode, error=None):
         hero_title = "Начни работу с M-Flow"
         hero_text = "Создай аккаунт ученика, чтобы вести свои проекты и задачи."
 
+    login_active = "active" if is_login else ""
+    register_active = "" if is_login else "active"
+
     return render_template_string(
         PAGE_STYLE
         + f"""
@@ -2086,8 +2184,8 @@ def render_auth_page(mode, error=None):
                 </div>
                 <div class="auth-form-side">
                     <div class="auth-tabs">
-                        <a href="/login" class="auth-tab {'active' if is_login else ''}">Вход</a>
-                        <a href="/register" class="auth-tab {'active' if not is_login else ''}">Регистрация</a>
+                        <a href="/login" class="auth-tab {login_active}">Вход</a>
+                        <a href="/register" class="auth-tab {register_active}">Регистрация</a>
                     </div>
                     {error_html}
                     <form method="post">
@@ -2142,9 +2240,7 @@ def login():
 
     return render_auth_page("login")
 
-# =========================================================
-# LOGOUT
-# =========================================================
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
@@ -2153,6 +2249,12 @@ def register():
 
         if not username or not password:
             return render_auth_page("register", error="Заполни оба поля.")
+
+        if len(username) < 3 or len(username) > 30:
+            return render_auth_page("register", error="Логин должен быть от 3 до 30 символов.")
+
+        if len(password) < 4:
+            return render_auth_page("register", error="Пароль слишком короткий (минимум 4 символа).")
 
         conn = get_db()
 
@@ -2178,6 +2280,82 @@ def register():
         return redirect("/")
 
     return render_auth_page("register")
+
+
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    user = get_current_user()
+    message = ""
+    error = ""
+
+    if request.method == "POST":
+        old_password = request.form.get("old_password", "")
+        new_password = request.form.get("new_password", "")
+        repeat_password = request.form.get("repeat_password", "")
+
+        conn = get_db()
+        row = conn.execute(
+            "SELECT password FROM users WHERE id = ?",
+            (user["id"],)
+        ).fetchone()
+        conn.close()
+
+        if row is None or not check_password_hash(row["password"], old_password):
+            error = "Старый пароль введён неверно."
+        elif len(new_password) < 4:
+            error = "Новый пароль слишком короткий (минимум 4 символа)."
+        elif new_password != repeat_password:
+            error = "Новые пароли не совпадают."
+        else:
+            conn = get_db()
+            conn.execute(
+                "UPDATE users SET password = ? WHERE id = ?",
+                (generate_password_hash(new_password), user["id"])
+            )
+            conn.commit()
+            conn.close()
+            message = "Пароль изменён."
+
+    role_name = "Учитель" if user["role"] == "teacher" else "Ученик"
+    projects_count = len(get_projects())
+
+    message_html = f'<div class="ok">{message}</div>' if message else ""
+    error_html = f'<div class="error">{error}</div>' if error else ""
+
+    return render_template_string(
+        PAGE_STYLE
+        + f"""
+        <div class="container">
+            <div class="profile-card">
+                <a href="/">← На главную</a>
+                <h1>Профиль</h1>
+                <dl>
+                    <dt>Логин</dt>
+                    <dd>{escape(user["username"])}</dd>
+                    <dt>Роль</dt>
+                    <dd>{role_name}</dd>
+                    <dt>Проектов</dt>
+                    <dd>{projects_count}</dd>
+                </dl>
+                <h3>Смена пароля</h3>
+                {message_html}
+                {error_html}
+                <form method="post">
+                    <input type="password" name="old_password" placeholder="Старый пароль" required>
+                    <input type="password" name="new_password" placeholder="Новый пароль" required>
+                    <input type="password" name="repeat_password" placeholder="Повтори новый пароль" required>
+                    <button type="submit">Сменить пароль</button>
+                </form>
+            </div>
+        </div>
+        """
+    )
+
+
+# =========================================================
+# LOGOUT
+# =========================================================
 
 @app.route("/logout")
 def logout():
@@ -2233,7 +2411,7 @@ def index():
             for task in tasks
         )
         overdue_tasks += sum(
-             1
+            1
             for task in tasks
             if task["deadline"]
             and task["deadline"] < today
@@ -2401,6 +2579,13 @@ def index():
                     <div class="avatar">
                         {avatar}
                     </div>
+
+                    <a
+                        href="/profile"
+                        class="logout"
+                    >
+                        Профиль
+                    </a>
 
                     <a
                         href="/logout"
@@ -2665,7 +2850,7 @@ def project(project_id):
         )
 
 
-    tasks = get_tasks(
+    all_tasks = get_tasks(
         project_id
     )
 
@@ -2682,6 +2867,100 @@ def project(project_id):
     )
 
     current_user = get_current_user()
+
+
+    # ---------- фильтры (поиск, приоритет, только мои) ----------
+
+    search_query = request.args.get("q", "").strip()
+    priority_filter = request.args.get("priority", "")
+    only_mine = request.args.get("mine") == "1"
+
+    tasks = list(all_tasks)
+
+    if search_query:
+        tasks = [
+            task for task in tasks
+            if search_query.lower() in task["title"].lower()
+        ]
+
+    if priority_filter in ("low", "normal", "high", "urgent"):
+        tasks = [
+            task for task in tasks
+            if (task["priority"] or "normal") == priority_filter
+        ]
+
+    if only_mine:
+        tasks = [
+            task for task in tasks
+            if task["assignee_id"] == current_user["id"]
+        ]
+
+    filters_active = bool(search_query or priority_filter or only_mine)
+
+    hot_items = ""
+
+    for task in all_tasks:
+        if not task["deadline"] or task["status"] == "done":
+            continue
+
+        try:
+            days_left = (
+                date.fromisoformat(task["deadline"])
+                - date.today()
+            ).days
+        except ValueError:
+            continue
+
+        if days_left > 3:
+            continue
+
+        if days_left < 0:
+            label = f"просрочено на {-days_left} дн."
+            css = "overdue"
+        elif days_left == 0:
+            label = "сегодня"
+            css = ""
+        else:
+            label = f"через {days_left} дн."
+            css = ""
+
+        hot_items += (
+            f'<li class="{css}">{escape(task["title"])} — '
+            f'{escape(task["deadline"])} ({label})</li>'
+        )
+
+    hot_html = (
+        f'<div class="hot-strip"><strong>🔥 Горящие дедлайны</strong>'
+        f'<ul>{hot_items}</ul></div>'
+        if hot_items
+        else ""
+    )
+
+    def selected(value):
+        return "selected" if priority_filter == value else ""
+
+    mine_checked = "checked" if only_mine else ""
+    reset_link = (
+        f'<a class="filter-reset" href="/project/{project_id}">Сбросить</a>'
+        if filters_active
+        else ""
+    )
+
+    filters_html = f"""
+    <form method="get" class="task-filters">
+        <input type="search" name="q" value="{escape(search_query)}" placeholder="Поиск по названию задачи">
+        <select name="priority">
+            <option value="">Любой приоритет</option>
+            <option value="low" {selected("low")}>🟢 Низкий</option>
+            <option value="normal" {selected("normal")}>🔵 Обычный</option>
+            <option value="high" {selected("high")}>🟠 Высокий</option>
+            <option value="urgent" {selected("urgent")}>🔴 Срочный</option>
+        </select>
+        <label><input type="checkbox" name="mine" value="1" {mine_checked}> Только мои</label>
+        <button type="submit">Найти</button>
+        {reset_link}
+    </form>
+    """
 
 
     todo_tasks = [
@@ -2703,17 +2982,17 @@ def project(project_id):
     ]
 
 
-    total_tasks = len(tasks)
-    completed_tasks = len(done_tasks)
-    todo_count = len(todo_tasks)
-    progress_count = len(progress_tasks)
+    total_tasks = len(all_tasks)
+    completed_tasks = sum(1 for task in all_tasks if task["status"] == "done")
+    todo_count = sum(1 for task in all_tasks if task["status"] == "todo")
+    progress_count = sum(1 for task in all_tasks if task["status"] == "progress")
     overdue_count = sum(
-         1
-         for task in tasks
-         if task["deadline"]
-         and task["deadline"] < date.today().isoformat()
-         and task["status"] != "done"
-         )
+        1
+        for task in all_tasks
+        if task["deadline"]
+        and task["deadline"] < date.today().isoformat()
+        and task["status"] != "done"
+    )
 
 
     progress = (
@@ -2805,6 +3084,22 @@ def project(project_id):
             deadline
         )
 
+        deadline_class = ""
+
+        if task["deadline"] and task["status"] != "done":
+            try:
+                days_left = (
+                    date.fromisoformat(task["deadline"])
+                    - date.today()
+                ).days
+
+                if days_left < 0:
+                    deadline_class = "deadline-overdue"
+                elif days_left <= 2:
+                    deadline_class = "deadline-soon"
+            except ValueError:
+                pass
+
         low_selected = (
             "selected"
             if priority == "low"
@@ -2862,7 +3157,7 @@ def project(project_id):
 
             <div class="task-footer">
 
-                <span class="task-deadline">
+                <span class="task-deadline {deadline_class}">
                     📅 {safe_deadline}
                 </span>
 
@@ -3225,6 +3520,13 @@ def project(project_id):
                     </div>
 
                     <a
+                        href="/profile"
+                        class="logout"
+                    >
+                        Профиль
+                    </a>
+
+                    <a
                         href="/logout"
                         class="logout"
                     >
@@ -3343,6 +3645,10 @@ def project(project_id):
                         </div>
 
                     </div>
+
+                    {hot_html}
+
+                    {filters_html}
 
                     {kanban_html}
 
