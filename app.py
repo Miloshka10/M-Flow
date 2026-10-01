@@ -3,7 +3,6 @@ from flask import (
     request,
     redirect,
     session,
-    render_template_string,
     flash,
     jsonify
 )
@@ -19,11 +18,38 @@ from html import escape
 
 
 app = Flask(__name__)
+DEBUG_MODE = os.environ.get("M_FLOW_DEBUG") == "1"
+
+SECRET_KEY = os.environ.get("M_FLOW_SECRET_KEY")
+
+if not SECRET_KEY:
+    if DEBUG_MODE:
+        SECRET_KEY = "m-flow-dev-only-key"
+    else:
+        raise RuntimeError(
+            "Задайте переменную окружения M_FLOW_SECRET_KEY "
+            "(длинная случайная строка)."
+        )
+
 app.config.update(
-    SECRET_KEY=os.environ.get("M_FLOW_SECRET_KEY", "m-flow-local-secret"),
+    SECRET_KEY=SECRET_KEY,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=not DEBUG_MODE,
 )
+
+
+def render_page(html):
+    # Страницы собираются f-строками с экранированием через escape().
+    # Отдаём их как есть: пропускать через Jinja нельзя, иначе
+    # {{ ... }} из пользовательских данных будет выполнен как код.
+    return html
+
+
+def teacher_nav(user):
+    if user["role"] == "teacher":
+        return '<a href="/teacher" class="logout">Кабинет</a>'
+    return ""
 
 DATABASE_PATH = os.environ.get(
     "M_FLOW_DATABASE",
@@ -151,13 +177,27 @@ def prepare_database():
         """
     )
 
-    for username, role in (("milosh", "student"), ("uchitel", "teacher")):
+    if os.environ.get("M_FLOW_DEBUG") == "1":
+        for username, role in (("milosh", "student"), ("uchitel", "teacher")):
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO users (username, password, role)
+                VALUES (?, ?, ?)
+                """,
+                (username, generate_password_hash("1234"), role)
+            )
+
+    # Учитель для рабочего сайта: создаётся из переменных окружения.
+    teacher_name = os.environ.get("M_FLOW_TEACHER_USER", "").strip()
+    teacher_password = os.environ.get("M_FLOW_TEACHER_PASSWORD", "")
+
+    if teacher_name and len(teacher_password) >= 8:
         conn.execute(
             """
             INSERT OR IGNORE INTO users (username, password, role)
-            VALUES (?, ?, ?)
+            VALUES (?, ?, 'teacher')
             """,
-            (username, generate_password_hash("1234"), role)
+            (teacher_name, generate_password_hash(teacher_password))
         )
 
     conn.commit()
@@ -315,11 +355,11 @@ def is_valid_date(value):
         return True
 
     try:
-        date.fromisoformat(value)
+        parsed = date.fromisoformat(value)
     except ValueError:
         return False
 
-    return True
+    return value == parsed.isoformat()
 
 
 def add_project(name):
@@ -503,61 +543,6 @@ def add_task(
             assignee_id
         )
     )
-
-    conn.commit()
-    conn.close()
-
-
-def toggle_task(project_id, task_id):
-
-    conn = get_db()
-
-    task = conn.execute(
-        """
-        SELECT status
-        FROM tasks
-        WHERE id = ?
-        AND project_id = ?
-        """,
-        (
-            task_id,
-            project_id
-        )
-    ).fetchone()
-
-    if task is not None:
-
-        if task["status"] == "done":
-
-            conn.execute(
-                """
-                UPDATE tasks
-                SET done = 0,
-                    status = 'todo'
-                WHERE id = ?
-                AND project_id = ?
-                """,
-                (
-                    task_id,
-                    project_id
-                )
-            )
-
-        else:
-
-            conn.execute(
-                """
-                UPDATE tasks
-                SET done = 1,
-                    status = 'done'
-                WHERE id = ?
-                AND project_id = ?
-                """,
-                (
-                    task_id,
-                    project_id
-                )
-            )
 
     conn.commit()
     conn.close()
@@ -2170,7 +2155,7 @@ def render_auth_page(mode, error=None):
     login_active = "active" if is_login else ""
     register_active = "" if is_login else "active"
 
-    return render_template_string(
+    return render_page(
         PAGE_STYLE
         + f"""
         <div class="auth-page">
@@ -2215,24 +2200,9 @@ def login():
             conn.close()
             return render_auth_page("login", error="Неверный логин или пароль.")
 
-        stored_password = user["password"]
-
-        try:
-            password_ok = check_password_hash(stored_password, password)
-        except (ValueError, TypeError):
-            password_ok = (stored_password == password)
-
-        if not password_ok:
+        if not check_password_hash(user["password"], password):
             conn.close()
             return render_auth_page("login", error="Неверный логин или пароль.")
-
-        if stored_password == password:
-            new_password = generate_password_hash(password)
-            conn.execute(
-                "UPDATE users SET password = ? WHERE id = ?",
-                (new_password, user["id"])
-            )
-            conn.commit()
 
         conn.close()
         session["user_id"] = user["id"]
@@ -2253,8 +2223,8 @@ def register():
         if len(username) < 3 or len(username) > 30:
             return render_auth_page("register", error="Логин должен быть от 3 до 30 символов.")
 
-        if len(password) < 4:
-            return render_auth_page("register", error="Пароль слишком короткий (минимум 4 символа).")
+        if len(password) < 8:
+            return render_auth_page("register", error="Пароль слишком короткий (минимум 8 символов).")
 
         conn = get_db()
 
@@ -2303,8 +2273,8 @@ def profile():
 
         if row is None or not check_password_hash(row["password"], old_password):
             error = "Старый пароль введён неверно."
-        elif len(new_password) < 4:
-            error = "Новый пароль слишком короткий (минимум 4 символа)."
+        elif len(new_password) < 8:
+            error = "Новый пароль слишком короткий (минимум 8 символов)."
         elif new_password != repeat_password:
             error = "Новые пароли не совпадают."
         else:
@@ -2323,7 +2293,7 @@ def profile():
     message_html = f'<div class="ok">{message}</div>' if message else ""
     error_html = f'<div class="error">{error}</div>' if error else ""
 
-    return render_template_string(
+    return render_page(
         PAGE_STYLE
         + f"""
         <div class="container">
@@ -2547,7 +2517,7 @@ def index():
     )
 
 
-    return render_template_string(
+    return render_page(
         PAGE_STYLE
         + f"""
 
@@ -2580,6 +2550,7 @@ def index():
                         {avatar}
                     </div>
 
+                    {teacher_nav(user)}
                     <a
                         href="/profile"
                         class="logout"
@@ -3486,7 +3457,7 @@ def project(project_id):
     # PROJECT PAGE
     # =====================================================
 
-    return render_template_string(
+    return render_page(
         PAGE_STYLE
         + f"""
 
@@ -3519,6 +3490,7 @@ def project(project_id):
                         {current_avatar}
                     </div>
 
+                    {teacher_nav(current_user)}
                     <a
                         href="/profile"
                         class="logout"
@@ -3877,6 +3849,16 @@ def remove_member(
         )
     )
 
+    conn.execute(
+        """
+        UPDATE tasks
+        SET assignee_id = NULL
+        WHERE project_id = ?
+        AND assignee_id = ?
+        """,
+        (project_id, user_id)
+    )
+
 
     conn.commit()
     conn.close()
@@ -4116,41 +4098,6 @@ def change_task_priority(project_id):
 
 
 # =========================================================
-# OLD TOGGLE ROUTE
-# =========================================================
-
-@app.route(
-    "/project/<int:project_id>/toggle/<int:task_id>",
-    methods=["POST"]
-)
-@login_required
-def toggle_project_task(
-    project_id,
-    task_id
-):
-
-    if not user_has_project_access(
-        project_id
-    ):
-
-        return (
-            "Проект не найден или у вас нет доступа.",
-            403
-        )
-
-
-    toggle_task(
-        project_id,
-        task_id
-    )
-
-
-    return redirect(
-        f"/project/{project_id}"
-    )
-
-
-# =========================================================
 # DELETE TASK
 # =========================================================
 
@@ -4184,12 +4131,424 @@ def delete_project_task(
 
 
 # =========================================================
+# TEACHER CABINET
+# =========================================================
+
+TEACHER_STYLE = """
+<style>
+.t-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 22px 0; }
+.t-stat { background: white; border: 1px solid #e5e9f0; border-radius: 16px; padding: 16px 18px; }
+.t-stat strong { display: block; font-size: 26px; }
+.t-stat span { color: #8a94a6; font-size: 13px; }
+.t-stat.warn strong { color: #c0392b; }
+.t-project { background: white; border: 1px solid #e5e9f0; border-radius: 18px; padding: 22px; margin-bottom: 18px; }
+.t-project-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.t-project-head h2 { margin: 0; font-size: 20px; }
+.t-chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.t-chip { background: #f5f7fb; border-radius: 8px; padding: 5px 10px; font-size: 12px; color: #475467; }
+.t-chip.bad { background: #fff1f2; color: #be123c; }
+.t-bar { height: 8px; background: #e9edf4; border-radius: 20px; overflow: hidden; }
+.t-bar div { height: 100%; background: #2563eb; border-radius: 20px; }
+.t-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+.t-table th { text-align: left; color: #8a94a6; font-size: 12px; font-weight: 600; padding: 6px 8px; }
+.t-table td { padding: 9px 8px; border-top: 1px solid #edf0f5; vertical-align: middle; }
+.t-table .t-bar { width: 120px; }
+.t-sub { margin: 20px 0 8px; font-size: 14px; font-weight: 700; }
+.t-edit { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid #edf0f5; }
+.t-edit .t-title { flex: 1; min-width: 160px; font-weight: 600; font-size: 14px; word-break: break-word; }
+.t-edit .t-reason { font-size: 12px; color: #c0392b; min-width: 140px; }
+.t-edit input[type=date], .t-edit select { width: auto; padding: 7px 9px; font-size: 13px; }
+.t-muted { color: #8a94a6; font-size: 13px; }
+@media (max-width: 850px) { .t-stats { grid-template-columns: repeat(2, 1fr); } }
+</style>
+"""
+
+
+def percent(done, total):
+    return round(done / total * 100) if total else 0
+
+
+def render_header(user):
+    nav = teacher_nav(user)
+    return f"""
+    <header class="main-header">
+        <a href="/" class="brand">M<span>-</span>Flow</a>
+        <div class="account">
+            <div class="account-text">
+                <strong>{escape(user["username"])}</strong>
+                <small>{"Учитель" if user["role"] == "teacher" else "Ученик"}</small>
+            </div>
+            <div class="avatar">{escape(user["username"][0].upper())}</div>
+            {nav}
+            <a href="/profile" class="logout">Профиль</a>
+            <a href="/logout" class="logout">Выйти</a>
+        </div>
+    </header>
+    """
+
+
+def build_teacher_overview(teacher):
+
+    conn = get_db()
+    projects = conn.execute(
+        """
+        SELECT id, name
+        FROM projects
+        WHERE owner_id = ?
+        ORDER BY id DESC
+        """,
+        (teacher["id"],)
+    ).fetchall()
+    conn.close()
+
+    today = date.today()
+    overview = []
+
+    for project_row in projects:
+
+        pid = project_row["id"]
+        tasks = get_tasks(pid)
+        students = [
+            member for member in get_project_members(pid)
+            if member["role"] == "student"
+        ]
+
+        stats = {
+            student["id"]: {
+                "id": student["id"],
+                "name": student["username"],
+                "total": 0,
+                "done": 0,
+                "overdue": 0,
+            }
+            for student in students
+        }
+
+        counts = {"todo": 0, "progress": 0, "done": 0, "overdue": 0}
+        attention = []
+
+        for task in tasks:
+
+            status = task["status"] if task["status"] in counts else "todo"
+            counts[status] += 1
+
+            days_left = None
+
+            if task["deadline"]:
+                try:
+                    days_left = (
+                        date.fromisoformat(task["deadline"]) - today
+                    ).days
+                except ValueError:
+                    days_left = None
+
+            is_overdue = (
+                status != "done"
+                and days_left is not None
+                and days_left < 0
+            )
+
+            if is_overdue:
+                counts["overdue"] += 1
+
+            student_stat = stats.get(task["assignee_id"])
+
+            if student_stat is not None:
+                student_stat["total"] += 1
+                if status == "done":
+                    student_stat["done"] += 1
+                if is_overdue:
+                    student_stat["overdue"] += 1
+
+            if status == "done":
+                continue
+
+            reasons = []
+
+            if is_overdue:
+                reasons.append(f"просрочено на {-days_left} дн.")
+            elif days_left is not None and days_left <= 3:
+                reasons.append(
+                    "срок сегодня" if days_left == 0
+                    else f"срок через {days_left} дн."
+                )
+
+            if task["assignee_id"] is None:
+                reasons.append("нет ответственного")
+
+            if reasons:
+                attention.append({
+                    "task": task,
+                    "reasons": reasons,
+                    "sort": days_left if days_left is not None else 9999,
+                })
+
+        attention.sort(key=lambda item: item["sort"])
+
+        overview.append({
+            "id": pid,
+            "name": project_row["name"],
+            "total": len(tasks),
+            "counts": counts,
+            "progress": percent(counts["done"], len(tasks)),
+            "students": list(stats.values()),
+            "attention": attention,
+        })
+
+    return overview
+
+
+def render_attention_task(project_id, item, students):
+
+    task = item["task"]
+
+    options = '<option value="">Не назначена</option>'
+
+    for student in students:
+        chosen = "selected" if student["id"] == task["assignee_id"] else ""
+        options += (
+            f'<option value="{student["id"]}" {chosen}>'
+            f'{escape(student["name"])}</option>'
+        )
+
+    return f"""
+    <form method="post" action="/project/{project_id}/edit/{task["id"]}" class="t-edit">
+        <input type="hidden" name="next" value="/teacher">
+        <span class="t-title">{escape(task["title"])}</span>
+        <span class="t-reason">{escape(" · ".join(item["reasons"]))}</span>
+        <input type="date" name="deadline" value="{escape(task["deadline"] or "")}">
+        <select name="assignee_id">{options}</select>
+        <button type="submit">Сохранить</button>
+    </form>
+    """
+
+
+def render_teacher_project(project):
+
+    counts = project["counts"]
+    overdue_chip = (
+        f'<span class="t-chip bad">Просрочено: {counts["overdue"]}</span>'
+        if counts["overdue"] else
+        '<span class="t-chip">Просроченных нет</span>'
+    )
+
+    rows = ""
+
+    for student in project["students"]:
+
+        student_percent = percent(student["done"], student["total"])
+        note = (
+            "нет задач" if student["total"] == 0
+            else f'{student["done"]} из {student["total"]}'
+        )
+        overdue = (
+            f'<span class="t-chip bad">{student["overdue"]}</span>'
+            if student["overdue"] else "—"
+        )
+
+        rows += f"""
+        <tr>
+            <td><b>{escape(student["name"])}</b></td>
+            <td><div class="t-bar"><div style="width: {student_percent}%"></div></div></td>
+            <td>{note} · {student_percent}%</td>
+            <td>{overdue}</td>
+        </tr>
+        """
+
+    students_html = (
+        f"""
+        <table class="t-table">
+            <tr><th>Ученик</th><th>Прогресс</th><th>Выполнено</th><th>Просрочено</th></tr>
+            {rows}
+        </table>
+        """
+        if rows else
+        '<p class="t-muted">В проекте пока нет учеников. '
+        'Добавьте их на странице проекта.</p>'
+    )
+
+    attention_html = ""
+
+    if project["attention"]:
+        items = "".join(
+            render_attention_task(project["id"], item, project["students"])
+            for item in project["attention"]
+        )
+        attention_html = f'<div class="t-sub">Требуют внимания</div>{items}'
+
+    return f"""
+    <section class="t-project">
+        <div class="t-project-head">
+            <h2>{escape(project["name"])}</h2>
+            <a href="/project/{project["id"]}"><button type="button" class="secondary">Открыть доску</button></a>
+        </div>
+        <div class="t-chips">
+            <span class="t-chip">Новые: {counts["todo"]}</span>
+            <span class="t-chip">В работе: {counts["progress"]}</span>
+            <span class="t-chip">Готово: {counts["done"]}</span>
+            {overdue_chip}
+        </div>
+        <div class="t-bar"><div style="width: {project["progress"]}%"></div></div>
+        <p class="t-muted">{counts["done"]} из {project["total"]} задач · {project["progress"]}%</p>
+        {students_html}
+        {attention_html}
+    </section>
+    """
+
+
+@app.route("/teacher")
+@login_required
+def teacher_cabinet():
+
+    user = get_current_user()
+
+    if user["role"] != "teacher":
+        return render_error_page(
+            "Нет доступа",
+            "Кабинет доступен только учителям.",
+            403
+        )
+
+    overview = build_teacher_overview(user)
+
+    total_tasks = sum(p["total"] for p in overview)
+    done_tasks = sum(p["counts"]["done"] for p in overview)
+    overdue_tasks = sum(p["counts"]["overdue"] for p in overview)
+    student_ids = {
+        s["id"] for p in overview for s in p["students"]
+    }
+
+    messages = ""
+
+    for category, text in session.pop("_flashes", []):
+        messages += f'<div class="{category}">{escape(text)}</div>'
+
+    projects_html = "".join(
+        render_teacher_project(project) for project in overview
+    ) or """
+        <div class="empty">
+            <h3>Проектов пока нет</h3>
+            <p>Создайте проект на главной странице — он появится здесь.</p>
+        </div>
+    """
+
+    overdue_class = "warn" if overdue_tasks else ""
+
+    return render_page(
+        PAGE_STYLE
+        + TEACHER_STYLE
+        + f"""
+        <div class="container">
+            {render_header(user)}
+            <main>
+                <div class="project-header">
+                    <a href="/" class="back">← Все проекты</a>
+                    <h1>Кабинет учителя</h1>
+                </div>
+                {messages}
+                <div class="t-stats">
+                    <div class="t-stat"><strong>{len(overview)}</strong><span>Проектов</span></div>
+                    <div class="t-stat"><strong>{len(student_ids)}</strong><span>Учеников</span></div>
+                    <div class="t-stat"><strong>{total_tasks}</strong><span>Всего задач</span></div>
+                    <div class="t-stat"><strong>{percent(done_tasks, total_tasks)}%</strong><span>Выполнено</span></div>
+                    <div class="t-stat {overdue_class}"><strong>{overdue_tasks}</strong><span>Просрочено</span></div>
+                </div>
+                {projects_html}
+            </main>
+        </div>
+        """
+    )
+
+
+@app.route(
+    "/project/<int:project_id>/edit/<int:task_id>",
+    methods=["POST"]
+)
+@login_required
+def edit_project_task(project_id, task_id):
+
+    if not is_project_owner(project_id):
+        return (
+            "Проект не найден или у вас нет доступа.",
+            403
+        )
+
+    target = (
+        "/teacher"
+        if request.form.get("next") == "/teacher"
+        else f"/project/{project_id}"
+    )
+
+    title = request.form.get("title", "").strip()
+    deadline = request.form.get("deadline", "").strip()
+    assignee_id = request.form.get("assignee_id", type=int)
+
+    if len(title) > 160:
+        flash("Название задачи должно быть не длиннее 160 символов.", "error")
+        return redirect(target)
+
+    if not is_valid_date(deadline):
+        flash("Укажите корректную дату дедлайна.", "error")
+        return redirect(target)
+
+    conn = get_db()
+
+    task = conn.execute(
+        "SELECT title FROM tasks WHERE id = ? AND project_id = ?",
+        (task_id, project_id)
+    ).fetchone()
+
+    if task is None:
+        conn.close()
+        flash("Задача не найдена.", "error")
+        return redirect(target)
+
+    if assignee_id is not None:
+        member = conn.execute(
+            """
+            SELECT 1
+            FROM project_members
+            JOIN users ON users.id = project_members.user_id
+            WHERE project_members.project_id = ?
+            AND project_members.user_id = ?
+            AND users.role = 'student'
+            """,
+            (project_id, assignee_id)
+        ).fetchone()
+
+        if member is None:
+            assignee_id = None
+
+    conn.execute(
+        """
+        UPDATE tasks
+        SET title = ?, deadline = ?, assignee_id = ?
+        WHERE id = ? AND project_id = ?
+        """,
+        (
+            title or task["title"],
+            deadline or None,
+            assignee_id,
+            task_id,
+            project_id
+        )
+    )
+
+    conn.commit()
+    conn.close()
+
+    flash("Задача обновлена.", "success")
+
+    return redirect(target)
+
+
+# =========================================================
 # ERROR PAGES
 # =========================================================
 
 def render_error_page(title, message, status_code):
 
-    return render_template_string(
+    return render_page(
         PAGE_STYLE
         + f"""
         <div class="login-page">
