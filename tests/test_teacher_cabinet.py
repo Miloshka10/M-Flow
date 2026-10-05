@@ -8,6 +8,7 @@ import sys
 import sqlite3
 from datetime import date, timedelta
 from werkzeug.security import generate_password_hash
+from unittest.mock import patch
 
 
 class TeacherCabinetTests(unittest.TestCase):
@@ -62,6 +63,95 @@ class TeacherCabinetTests(unittest.TestCase):
             session["assessment_csrf"] = "test-form-token"
             session["stages_csrf"] = "test-stage-token"
             session["collaboration_csrf"] = "test-collaboration-token"
+
+    def count_page_queries(self, path):
+        statements = []
+        original = self.module.get_db
+
+        def traced_db():
+            conn = original()
+            conn.set_trace_callback(lambda sql: statements.append(sql)
+                                    if sql.lstrip().upper().startswith(('SELECT', 'WITH')) else None)
+            return conn
+
+        with patch.object(self.module, 'get_db', traced_db):
+            response = self.client.get(path)
+        self.assertEqual(response.status_code, 200)
+        return len(statements)
+
+    def test_page_query_counts_do_not_grow_with_projects_or_cards(self):
+        self.sign_in(1)
+        paths = ('/', '/teacher', '/project/1')
+        before = {path: self.count_page_queries(path) for path in paths}
+        conn = self.module.get_db()
+        for pid in range(10, 30):
+            conn.execute('INSERT INTO projects(id,name,owner_id) VALUES(?,?,1)', (pid, f'Project {pid}'))
+            conn.executemany('INSERT INTO project_members VALUES(?,?)', [(pid, 1), (pid, 3)])
+            conn.executemany('INSERT INTO tasks(project_id,title,assignee_id) VALUES(?,?,3)',
+                             [(pid, f'Task {n}') for n in range(20)])
+        conn.executemany('INSERT INTO tasks(project_id,title,assignee_id) VALUES(1,?,3)',
+                         [(f'Card {n}',) for n in range(30)])
+        conn.commit()
+        conn.close()
+        for path, budget in zip(paths, (2, 7, 8)):
+            with self.subTest(path=path):
+                self.assertEqual(self.count_page_queries(path), before[path])
+                self.assertLessEqual(before[path], budget)
+
+    def test_current_user_cache_is_request_scoped_and_tracks_session_changes(self):
+        with self.module.app.test_request_context('/'):
+            self.module.session['user_id'] = 1
+            with patch.object(self.module, 'get_db', wraps=self.module.get_db) as db:
+                self.assertEqual(self.module.get_current_user()['id'], 1)
+                self.assertEqual(self.module.get_current_user()['id'], 1)
+                self.assertEqual(db.call_count, 1)
+                self.module.session['user_id'] = 2
+                self.assertEqual(self.module.get_current_user()['id'], 2)
+                self.assertEqual(db.call_count, 2)
+                self.module.session.clear()
+                self.assertIsNone(self.module.get_current_user())
+        self.sign_in(1)
+        self.assertNotIn('Private project', self.client.get('/teacher').text)
+        self.sign_in(2)
+        page = self.client.get('/teacher').text
+        self.assertIn('Private project', page)
+        self.assertNotIn('Owned project', page)
+        conn = self.module.get_db()
+        conn.execute("UPDATE users SET role='student' WHERE id=2")
+        conn.commit()
+        conn.close()
+        self.assertEqual(self.client.get('/teacher').status_code, 403)
+
+    def test_batched_overview_loads_only_latest_authorized_reports(self):
+        conn = self.module.get_db()
+        conn.execute("INSERT INTO task_updates(task_id,user_id,body,created_at) VALUES(1,3,'Latest report','2000-01-01')")
+        conn.execute("INSERT INTO tasks(id,project_id,title,assignee_id) VALUES(9,3,'Private task',2)")
+        conn.execute("INSERT INTO task_updates(task_id,user_id,body) VALUES(9,2,'Private report')")
+        conn.commit()
+        teacher = conn.execute('SELECT * FROM users WHERE id=1').fetchone()
+        conn.close()
+        overview = self.module.build_teacher_overview(teacher)
+        reports = [item for project in overview for item in project['reports']]
+        self.assertEqual(len(reports), 1)
+        self.assertEqual(reports[0]['report']['body'], 'Latest report')
+        self.sign_in(1)
+        # The project board still shows full history, unlike the summary cabinet.
+        board = self.client.get('/project/1').text
+        self.assertIn('Latest report', board)
+        self.assertIn('alert', board)
+
+    def test_home_aggregates_preserve_empty_and_overdue_project_counts(self):
+        conn = self.module.get_db()
+        conn.execute("INSERT INTO projects(id,name,owner_id) VALUES(4,'Empty',1)")
+        conn.commit()
+        conn.close()
+        with self.module.app.test_request_context('/'):
+            self.module.session['user_id'] = 1
+            projects = {p['id']: dict(p) for p in self.module.get_projects(with_counts=True)}
+        self.assertEqual((projects[1]['total'], projects[1]['done'], projects[1]['active'], projects[1]['overdue']), (2, 0, 1, 1))
+        self.assertEqual((projects[2]['total'], projects[2]['done'], projects[2]['overdue']), (1, 1, 0))
+        self.assertEqual((projects[4]['total'], projects[4]['done'], projects[4]['active'], projects[4]['overdue']), (0, 0, 0, 0))
+        self.assertNotIn(3, projects)
 
     def test_mobile_styles_are_loaded_on_auth_and_application_pages(self):
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):

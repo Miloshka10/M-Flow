@@ -5,7 +5,9 @@ from flask import (
     session,
     flash,
     jsonify,
-    get_flashed_messages
+    get_flashed_messages,
+    g,
+    has_request_context
 )
 import sqlite3
 import os
@@ -18,8 +20,9 @@ from werkzeug.security import (
 from html import escape
 import json
 import secrets
+from collections import defaultdict
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
-from project_stages import initialize_stages, get_stages, stage_summary, change_stage, render_stages, STATE_LABELS
+from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, change_stage, render_stages, STATE_LABELS
 from teamwork import (initialize_teamwork, profile_for, save_profile, directory, invite_student,
                       respond_to_invitation, change_team, render_profile as render_skill_profile,
                       render_directory, render_team)
@@ -248,6 +251,11 @@ def prepare_database():
         """
     )
 
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_task_updates_task_id
+        ON task_updates(task_id, id DESC)
+    """)
+
     if os.environ.get("M_FLOW_DEBUG") == "1":
         for username, role in (("milosh", "student"), ("uchitel", "teacher")):
             conn.execute(
@@ -303,6 +311,11 @@ def get_current_user():
     if "user_id" not in session:
         return None
 
+    # Cache only within this request, never across accounts or requests.
+    user_id = session["user_id"]
+    if has_request_context() and getattr(g, "current_user_id", None) == user_id:
+        return g.current_user
+
     conn = get_db()
 
     user = conn.execute(
@@ -315,6 +328,10 @@ def get_current_user():
     ).fetchone()
 
     conn.close()
+
+    if has_request_context():
+        g.current_user_id = user_id
+        g.current_user = user
 
     return user
 
@@ -390,7 +407,7 @@ def is_project_owner(project_id):
 # PROJECTS
 # =========================================================
 
-def get_projects():
+def get_projects(with_counts=False):
 
     user = get_current_user()
 
@@ -399,23 +416,25 @@ def get_projects():
 
     conn = get_db()
 
-    projects = conn.execute(
-        """
-        SELECT DISTINCT
-            projects.id,
-            projects.name
-        FROM projects
-        LEFT JOIN project_members
-            ON project_members.project_id = projects.id
-        WHERE projects.owner_id = ?
-        OR project_members.user_id = ?
-        ORDER BY projects.id DESC
-        """,
-        (
-            user["id"],
-            user["id"]
+    columns = ""
+    join = ""
+    params = [user["id"], user["id"]]
+    if with_counts:
+        columns = """, COUNT(t.id) AS total,
+            COALESCE(SUM(t.status='done'), 0) AS done,
+            COALESCE(SUM(t.status='progress'), 0) AS active,
+            COALESCE(SUM(t.status!='done' AND t.deadline!='' AND t.deadline<?), 0) AS overdue"""
+        join = "LEFT JOIN tasks t ON t.project_id=projects.id"
+        params.insert(0, date.today().isoformat())
+    projects = conn.execute(f"""
+        SELECT projects.id, projects.name {columns}
+        FROM projects {join}
+        WHERE projects.owner_id=? OR EXISTS (
+            SELECT 1 FROM project_members m
+            WHERE m.project_id=projects.id AND m.user_id=?
         )
-    ).fetchall()
+        GROUP BY projects.id ORDER BY projects.id DESC
+        """, params).fetchall()
 
     conn.close()
 
@@ -1207,14 +1226,13 @@ def logout():
 def index():
 
     user = get_current_user()
-    projects = get_projects()
+    projects = get_projects(with_counts=True)
 
     total_projects = len(projects)
     total_tasks = 0
     completed_tasks = 0
     active_tasks = 0
     overdue_tasks = 0
-    today = date.today().isoformat()
 
     projects_html = ""
 
@@ -1226,30 +1244,13 @@ def index():
             project["name"]
         )
 
-        tasks = get_tasks(
-            project_id
-        )
-
-        project_total = len(tasks)
-
-        project_done = sum(
-            task["status"] == "done"
-            for task in tasks
-        )
+        project_total = project["total"]
+        project_done = project["done"]
 
         total_tasks += project_total
         completed_tasks += project_done
-        active_tasks += sum(
-            task["status"] == "progress"
-            for task in tasks
-        )
-        overdue_tasks += sum(
-            1
-            for task in tasks
-            if task["deadline"]
-            and task["deadline"] < today
-            and task["status"] != "done"
-        )
+        active_tasks += project["active"]
+        overdue_tasks += project["overdue"]
 
 
         if project_total:
@@ -1893,7 +1894,9 @@ def project(project_id):
 
         task_id = task["id"]
 
-        can_update = user_can_update_task(project_id, task_id)
+        # Access to this project has already been checked; use loaded card data.
+        # Mutation routes still perform their own database permission checks.
+        can_update = owner or task["assignee_id"] == current_user["id"]
         draggable = "true" if can_update else "false"
         assignee_name = escape(task["assignee_name"] or "Не назначена")
 
@@ -3475,7 +3478,51 @@ def build_teacher_overview(teacher):
         """,
         (teacher["id"], teacher["id"])
     ).fetchall()
-    conn.close()
+    # A fixed number of queries for all accessible projects, not per project.
+    # Repeat the access scope in SQL so private projects cannot enter a batch.
+    scope = """WITH visible_projects AS (
+        SELECT id FROM projects WHERE owner_id=? OR EXISTS (
+            SELECT 1 FROM project_members m
+            WHERE m.project_id=projects.id AND m.user_id=?
+        )
+    ) """
+    params = (teacher["id"], teacher["id"])
+
+    def grouped(sql):
+        result = defaultdict(list)
+        for row in conn.execute(scope + sql, params):
+            result[row["project_id"]].append(row)
+        return result
+
+    try:
+        tasks_by_project = grouped("""
+            SELECT t.*, u.username AS assignee_name FROM tasks t
+            JOIN visible_projects v ON v.id=t.project_id
+            LEFT JOIN users u ON u.id=t.assignee_id
+            ORDER BY CASE t.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2
+                WHEN 'normal' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, t.id""")
+        students_by_project = grouped("""
+            SELECT m.project_id, u.id, u.username, u.role FROM project_members m
+            JOIN visible_projects v ON v.id=m.project_id
+            JOIN users u ON u.id=m.user_id WHERE u.role='student'
+            ORDER BY u.username""")
+        stages_by_project = grouped("""
+            SELECT s.*, author.username AS author_name, reviewer.username AS reviewer_name
+            FROM project_stages s JOIN visible_projects v ON v.id=s.project_id
+            LEFT JOIN users author ON author.id=s.submitted_by
+            LEFT JOIN users reviewer ON reviewer.id=s.reviewed_by""")
+        defenses_by_project = grouped("""
+            SELECT d.project_id, d.state, d.revision FROM project_defenses d
+            JOIN visible_projects v ON v.id=d.project_id""")
+        reports_by_project = grouped("""
+            SELECT t.project_id, r.task_id, r.body, r.created_at, u.username
+            FROM tasks t JOIN visible_projects v ON v.id=t.project_id
+            JOIN task_updates r ON r.id=(
+                SELECT MAX(latest.id) FROM task_updates latest WHERE latest.task_id=t.id
+            )
+            JOIN users u ON u.id=r.user_id ORDER BY r.id DESC""")
+    finally:
+        conn.close()
 
     today = date.today()
     overview = []
@@ -3483,15 +3530,11 @@ def build_teacher_overview(teacher):
     for project_row in projects:
 
         pid = project_row["id"]
-        stage_conn = get_db()
-        completed_stages, current_stage = stage_summary(get_stages(stage_conn, pid))
-        video_defense = defense_for(stage_conn, pid)
-        stage_conn.close()
-        tasks = get_tasks(pid)
-        students = [
-            member for member in get_project_members(pid)
-            if member["role"] == "student"
-        ]
+        completed_stages, current_stage = stage_summary(stages_from_rows(stages_by_project[pid]))
+        video_defense = (defenses_by_project[pid][0] if defenses_by_project[pid]
+                         else {"revision": 0})
+        tasks = tasks_by_project[pid]
+        students = students_by_project[pid]
 
         stats = {
             student["id"]: {
@@ -3590,8 +3633,8 @@ def build_teacher_overview(teacher):
                 "empty" if not tasks else "normal"
             ),
             "reports": [
-                {"task_id": task_id, "task_title": task_titles[task_id], "report": updates[0]}
-                for task_id, updates in get_task_update_history(pid).items()
+                {"task_id": report["task_id"], "task_title": task_titles[report["task_id"]], "report": report}
+                for report in reports_by_project[pid]
             ],
         })
 

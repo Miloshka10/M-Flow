@@ -30,11 +30,16 @@ def initialize_stages(conn):
 
 
 def get_stages(conn, project_id):
-    stored = {row["number"]: dict(row) for row in conn.execute("""
+    return stages_from_rows(conn.execute("""
         SELECT s.*, author.username AS author_name, reviewer.username AS reviewer_name
         FROM project_stages s LEFT JOIN users author ON author.id=s.submitted_by
         LEFT JOIN users reviewer ON reviewer.id=s.reviewed_by
-        WHERE s.project_id=? ORDER BY s.number""", (project_id,))}
+        WHERE s.project_id=? ORDER BY s.number""", (project_id,)))
+
+
+def stages_from_rows(rows):
+    """Complete the five stages from either single-project or batched rows."""
+    stored = {row["number"]: dict(row) for row in rows}
     stages = []
     for number, title in STAGES:
         stage = dict(number=number, title=title, state="todo", result="", presentation_url="",
