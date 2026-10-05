@@ -3,6 +3,9 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+import subprocess
+import sys
+import sqlite3
 from datetime import date, timedelta
 from werkzeug.security import generate_password_hash
 
@@ -96,6 +99,61 @@ class TeacherCabinetTests(unittest.TestCase):
         cabinet = self.client.get('/teacher').text
         for label in ('Ученик', 'Прогресс', 'Выполнено', 'Просрочено'):
             self.assertIn(f'data-label="{label}"', cabinet)
+
+    def test_malformed_task_api_requests_do_not_raise_server_errors(self):
+        self.sign_in(1)
+        for endpoint, field in (('status', 'status'), ('priority', 'priority')):
+            for payload in ([1], 'bad', 1, {'task_id': True, field: 'done'},
+                            {'task_id': 2**80, field: 'done'},
+                            {'task_id': 1, field: []}, {'task_id': 1, field: {}}):
+                with self.subTest(endpoint=endpoint, payload=payload):
+                    response = self.client.post('/project/1/' + endpoint, json=payload)
+                    self.assertEqual(response.status_code, 400)
+                    self.assertFalse(response.json['success'])
+
+    def test_huge_route_ids_return_validation_error(self):
+        self.sign_in(1)
+        for path in (f'/project/{2**80}', '/project/0', f'/teams/invitations/{2**80}/respond'):
+            response = self.client.post(path) if path.endswith('respond') else self.client.get(path)
+            self.assertEqual(response.status_code, 400)
+
+    def test_anonymous_task_api_returns_json_not_login_html(self):
+        response = self.client.post('/project/1/status', json={'task_id': 1, 'status': 'done'})
+        self.assertEqual(response.status_code, 401)
+        self.assertFalse(response.json['success'])
+
+    def test_status_response_has_full_metrics_even_with_filtered_board(self):
+        self.sign_in(1)
+        response = self.client.post('/project/1/status?q=Overdue', json={'task_id': 1, 'status': 'done'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json['metrics'], dict(todo=0, progress=1, done=1, total=2, overdue=0, percent=50))
+        self.assertEqual(response.json['students'], [dict(id=3, done=1, total=1)])
+
+    def test_oversized_request_is_rejected(self):
+        response = self.client.post('/register', data={'username': 'x' * (1024 * 1024 + 1)})
+        self.assertEqual(response.status_code, 413)
+        self.assertIn('Слишком много данных', response.text)
+
+    def test_legacy_initializer_uses_configured_database_without_demo_seed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            database = str(Path(folder) / 'production.db')
+            env = dict(os.environ, M_FLOW_DEBUG='0', M_FLOW_SECRET_KEY='initializer-test-only', M_FLOW_DATABASE=database)
+            result = subprocess.run([sys.executable, 'init_db.py'], cwd=Path(__file__).resolve().parents[1], env=env, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            conn = sqlite3.connect(database)
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM users').fetchone()[0], 0)
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM projects').fetchone()[0], 0)
+            self.assertIsNotNone(conn.execute("SELECT name FROM sqlite_master WHERE name='project_defenses'").fetchone())
+            conn.close()
+
+    def test_profile_rejects_oversized_new_password(self):
+        self.sign_in(1)
+        response = self.client.post('/profile', data=dict(old_password='test-password', new_password='x' * 257, repeat_password='x' * 257))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('не длиннее 256', response.text)
+        conn = self.module.get_db()
+        self.assertEqual(conn.execute('SELECT password FROM users WHERE id=1').fetchone()[0], self.password)
+        conn.close()
 
     def test_access_is_limited_to_teacher_projects(self):
         self.sign_in(1)

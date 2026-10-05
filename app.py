@@ -45,6 +45,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=not DEBUG_MODE,
+    MAX_CONTENT_LENGTH=1024 * 1024,
 )
 
 
@@ -86,6 +87,19 @@ def get_db():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def valid_database_id(value):
+    return type(value) is int and 0 < value <= 9223372036854775807
+
+
+@app.before_request
+def validate_route_ids():
+    if any(type(value) is int and not valid_database_id(value)
+           for value in (request.view_args or {}).values()):
+        if request.is_json:
+            return jsonify(success=False, error="Некорректный номер записи."), 400
+        return render_error_page("Некорректный адрес", "Проверьте номер проекта или задачи в адресе.", 400)
 
 
 def prepare_database():
@@ -275,6 +289,8 @@ def login_required(func):
 
         if "user_id" not in session or get_current_user() is None:
             session.clear()
+            if request.is_json:
+                return jsonify(success=False, error="Сессия завершена. Войдите в аккаунт заново."), 401
             return redirect("/teacher/login" if request.path.startswith("/teacher") else "/login")
 
         return func(*args, **kwargs)
@@ -555,8 +571,11 @@ def add_task(
         "urgent"
     }
 
-    if priority not in allowed_priorities:
+    if not isinstance(priority, str) or priority not in allowed_priorities:
         priority = "normal"
+
+    if assignee_id is not None and not valid_database_id(assignee_id):
+        assignee_id = None
 
     if assignee_id is not None:
         conn = get_db()
@@ -691,7 +710,7 @@ def update_task_status(
         "done"
     }
 
-    if status not in allowed_statuses:
+    if not isinstance(status, str) or status not in allowed_statuses:
         return False
 
     conn = get_db()
@@ -780,7 +799,7 @@ def update_task_priority(
         "urgent"
     }
 
-    if priority not in allowed_priorities:
+    if not isinstance(priority, str) or priority not in allowed_priorities:
         return False
 
     conn = get_db()
@@ -891,346 +910,7 @@ def get_student_progress(project_id):
 # STYLE + JAVASCRIPT
 # =========================================================
 
-PAGE_STYLE = """
-
-
-<script>
-
-
-// =========================================================
-// KANBAN
-// =========================================================
-
-function setupKanban() {
-
-    const cards =
-        document.querySelectorAll(".task-card");
-
-    const columns =
-        document.querySelectorAll(".kanban-column");
-
-
-    cards.forEach(card => {
-
-        card.addEventListener(
-            "dragstart",
-            () => {
-
-                card.classList.add("dragging");
-
-            }
-        );
-
-
-        card.addEventListener(
-            "dragend",
-            () => {
-
-                card.classList.remove("dragging");
-
-                columns.forEach(column => {
-
-                    column.classList.remove(
-                        "drag-over"
-                    );
-
-                });
-
-            }
-        );
-
-    });
-
-
-    columns.forEach(column => {
-
-        column.addEventListener(
-            "dragover",
-            event => {
-
-                event.preventDefault();
-
-                column.classList.add(
-                    "drag-over"
-                );
-
-            }
-        );
-
-
-        column.addEventListener(
-            "dragleave",
-            event => {
-
-                if (
-                    !column.contains(
-                        event.relatedTarget
-                    )
-                ) {
-
-                    column.classList.remove(
-                        "drag-over"
-                    );
-
-                }
-
-            }
-        );
-
-
-        column.addEventListener(
-            "drop",
-            async event => {
-
-                event.preventDefault();
-
-                column.classList.remove(
-                    "drag-over"
-                );
-
-
-                const card =
-                    document.querySelector(
-                        ".dragging"
-                    );
-
-
-                if (!card) {
-                    return;
-                }
-
-
-                const taskId =
-                    card.dataset.taskId;
-
-                const newStatus =
-                    column.dataset.status;
-
-
-                const cardsContainer =
-                    column.querySelector(
-                        ".kanban-cards"
-                    );
-
-
-                cardsContainer.appendChild(
-                    card
-                );
-
-
-                const response =
-                    await fetch(
-                        window.location.pathname
-                        + "/status",
-                        {
-                            method: "POST",
-
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            },
-
-                            body: JSON.stringify({
-                                task_id:
-                                    Number(taskId),
-
-                                status:
-                                    newStatus
-                            })
-                        }
-                    );
-
-
-                if (!response.ok) {
-
-                    alert(
-                        "Не удалось изменить статус"
-                    );
-
-                    location.reload();
-
-                    return;
-                }
-
-
-                const statusSelect = card.querySelector('.task-status-select');
-                if (statusSelect) statusSelect.value = newStatus;
-                card.classList.toggle('done-card', newStatus === 'done');
-                updateKanbanCounts();
-
-            }
-        );
-
-    });
-
-
-    updateKanbanCounts();
-}
-
-
-// =========================================================
-// CHANGE PRIORITY
-// =========================================================
-
-// Touch and keyboard controls use the same permission-checked endpoint as dragging.
-async function changeTaskStatus(select) {
-    const card = select.closest('.task-card');
-    const previous = card.closest('.kanban-column').dataset.status;
-    const target = select.value;
-    select.disabled = true;
-    try {
-        const response = await fetch(window.location.pathname + '/status', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({task_id: Number(card.dataset.taskId), status: target})
-        });
-        if (!response.ok || response.redirected) throw new Error('status');
-        document.querySelector('.kanban-column[data-status="' + target + '"] .kanban-cards').appendChild(card);
-        card.classList.toggle('done-card', target === 'done');
-        updateKanbanCounts();
-    } catch (error) {
-        select.value = previous;
-        alert('Не удалось сохранить статус. Проверьте соединение и повторите попытку.');
-    } finally {
-        select.disabled = false;
-    }
-}
-
-async function changePriority(select) {
-
-    const taskId =
-        Number(select.dataset.taskId);
-
-    const priority =
-        select.value;
-
-
-    const response =
-        await fetch(
-            window.location.pathname
-            + "/priority",
-            {
-                method: "POST",
-
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-
-                body: JSON.stringify({
-                    task_id: taskId,
-                    priority: priority
-                })
-            }
-        );
-
-
-    if (!response.ok) {
-
-        alert(
-            "Не удалось изменить приоритет"
-        );
-
-        location.reload();
-
-        return;
-    }
-
-
-    location.reload();
-}
-
-
-// =========================================================
-// KANBAN COUNTS
-// =========================================================
-
-function updateKanbanCounts() {
-
-    const columns =
-        document.querySelectorAll(
-            ".kanban-column"
-        );
-
-
-    columns.forEach(column => {
-
-        const count =
-            column.querySelectorAll(
-                ".task-card"
-            ).length;
-
-
-        const counter =
-            column.querySelector(
-                ".kanban-count"
-            );
-
-
-        if (counter) {
-
-            counter.textContent =
-                count;
-
-        }
-
-
-        const cardsContainer =
-            column.querySelector(
-                ".kanban-cards"
-            );
-
-
-        const empty =
-            cardsContainer.querySelector(
-                ".kanban-empty"
-            );
-
-
-        if (
-            count === 0
-            && !empty
-        ) {
-
-            const placeholder =
-                document.createElement(
-                    "div"
-                );
-
-            placeholder.className =
-                "kanban-empty";
-
-            placeholder.textContent =
-                    "Пока нет задач";
-
-
-            cardsContainer.appendChild(
-                placeholder
-            );
-
-        }
-
-
-        if (
-            count > 0
-            && empty
-        ) {
-
-            empty.remove();
-
-        }
-
-    });
-}
-
-
-document.addEventListener(
-    "DOMContentLoaded",
-    setupKanban
-);
-
-</script>
-"""
+PAGE_STYLE = '<script src="/static/kanban.js?v=20261005-review" defer></script>'
 
 
 # =========================================================
@@ -1448,6 +1128,8 @@ def profile():
             error = "Старый пароль введён неверно."
         elif len(new_password) < 8:
             error = "Новый пароль слишком короткий (минимум 8 символов)."
+        elif len(new_password) > 256:
+            error = "Новый пароль должен быть не длиннее 256 символов."
         elif new_password != repeat_password:
             error = "Новые пароли не совпадают."
         else:
@@ -1488,9 +1170,12 @@ def profile():
                 {message_html}
                 {error_html}
                 <form method="post">
-                    <input type="password" name="old_password" placeholder="Старый пароль" required>
-                    <input type="password" name="new_password" placeholder="Новый пароль" required>
-                    <input type="password" name="repeat_password" placeholder="Повтори новый пароль" required>
+                    <label for="old-password">Старый пароль</label>
+                    <input id="old-password" type="password" name="old_password" autocomplete="current-password" required>
+                    <label for="new-password">Новый пароль</label>
+                    <input id="new-password" type="password" name="new_password" autocomplete="new-password" minlength="8" maxlength="256" required>
+                    <label for="repeat-password">Повторите новый пароль</label>
+                    <input id="repeat-password" type="password" name="repeat_password" autocomplete="new-password" minlength="8" maxlength="256" required>
                     <button type="submit">Сменить пароль</button>
                 </form>
             </div>
@@ -2337,6 +2022,7 @@ def project(project_id):
             id="task-{task_id}"
             draggable="{draggable}"
             data-task-id="{task_id}"
+            data-deadline="{escape(task['deadline'] or '', quote=True)}"
         >
 
             <div class="task-title">
@@ -2557,7 +2243,7 @@ def project(project_id):
             student_progress_html += f"""
             <div class="member">
                 <b>{escape(student['username'])}</b>
-                <span class="role">{completed_count} из {task_count} задач · {student_percent}%</span>
+                <span class="role" data-student-progress="{student['id']}">{completed_count} из {task_count} задач · {student_percent}%</span>
             </div>
             """
 
@@ -2774,7 +2460,7 @@ def project(project_id):
                                 Прогресс проекта
                             </h2>
 
-                            <p>
+                            <p data-project-progress-text>
                                 {completed_tasks}
                                 из
                                 {total_tasks}
@@ -2783,7 +2469,7 @@ def project(project_id):
 
                         </div>
 
-                        <strong
+                        <strong data-project-progress
                             style="
                                 font-size: 28px;
                             "
@@ -2796,7 +2482,7 @@ def project(project_id):
 
                     <div class="project-progress">
 
-                        <div
+                        <div data-project-progress-fill
                             style="
                                 width: {progress}%;
                             "
@@ -2853,6 +2539,8 @@ def project(project_id):
                     {hot_html}
 
                     {filters_html}
+
+                    <p id="board-status" role="status" aria-live="polite" hidden></p>
 
                     {kanban_html}
 
@@ -3207,7 +2895,7 @@ def change_task_status(project_id):
     )
 
 
-    if not data:
+    if not isinstance(data, dict) or not data:
 
         return jsonify({
             "success": False,
@@ -3219,10 +2907,7 @@ def change_task_status(project_id):
     status = data.get("status")
 
 
-    if not isinstance(
-        task_id,
-        int
-    ):
+    if not valid_database_id(task_id) or not isinstance(status, str):
 
         return jsonify({
             "success": False,
@@ -3252,9 +2937,16 @@ def change_task_status(project_id):
         }), 400
 
 
-    return jsonify({
-        "success": True
-    })
+    tasks = get_tasks(project_id)
+    counts = {state: sum(task['status'] == state for task in tasks) for state in ('todo', 'progress', 'done')}
+    counts['total'] = len(tasks)
+    counts['overdue'] = sum(task['status'] != 'done' and bool(task['deadline']) and
+                            is_valid_date(task['deadline']) and task['deadline'] < date.today().isoformat()
+                            for task in tasks)
+    counts['percent'] = percent(counts['done'], counts['total'])
+    students = [dict(id=student['id'], done=student['completed_count'], total=student['task_count'])
+                for student in get_student_progress(project_id)]
+    return jsonify(success=True, metrics=counts, students=students)
 
 
 @app.route(
@@ -3324,7 +3016,7 @@ def change_task_priority(project_id):
     )
 
 
-    if not data:
+    if not isinstance(data, dict) or not data:
 
         return jsonify({
             "success": False,
@@ -3341,10 +3033,7 @@ def change_task_priority(project_id):
     )
 
 
-    if not isinstance(
-        task_id,
-        int
-    ):
+    if not valid_database_id(task_id) or not isinstance(priority, str):
 
         return jsonify({
             "success": False,
@@ -4216,6 +3905,9 @@ def edit_project_task(project_id, task_id):
     title = request.form.get("title", "").strip()
     deadline = request.form.get("deadline", "").strip()
     assignee_id = request.form.get("assignee_id", type=int)
+    if assignee_id is not None and not valid_database_id(assignee_id):
+        flash("Укажите корректного ответственного.", "error")
+        return redirect(target)
 
     if len(title) > 160:
         flash("Название задачи должно быть не длиннее 160 символов.", "error")
@@ -4318,6 +4010,13 @@ def internal_server_error(error):
         "Мы уже зафиксировали ошибку. Обновите страницу или вернитесь на главную.",
         500
     )
+
+
+@app.errorhandler(413)
+def request_too_large(error):
+    if request.is_json:
+        return jsonify(success=False, error="Слишком большой запрос."), 413
+    return render_error_page("Слишком много данных", "Сократите текст или ссылку и повторите отправку.", 413)
 
 
 # =========================================================
