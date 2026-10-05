@@ -55,7 +55,8 @@ def render_page(html):
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             '<title>M-Flow — проекты и задачи</title>'
-            '<link rel="stylesheet" href="/static/mflow-theme.css?v=20261005">'
+        '<link rel="stylesheet" href="/static/mflow-theme.css?v=20261005-mobile">'
+        '<link rel="stylesheet" href="/static/mobile.css?v=20261005">'
             '</head><body>' + html + '</body></html>')
 
 
@@ -1047,6 +1048,9 @@ function setupKanban() {
                 }
 
 
+                const statusSelect = card.querySelector('.task-status-select');
+                if (statusSelect) statusSelect.value = newStatus;
+                card.classList.toggle('done-card', newStatus === 'done');
                 updateKanbanCounts();
 
             }
@@ -1062,6 +1066,30 @@ function setupKanban() {
 // =========================================================
 // CHANGE PRIORITY
 // =========================================================
+
+// Touch and keyboard controls use the same permission-checked endpoint as dragging.
+async function changeTaskStatus(select) {
+    const card = select.closest('.task-card');
+    const previous = card.closest('.kanban-column').dataset.status;
+    const target = select.value;
+    select.disabled = true;
+    try {
+        const response = await fetch(window.location.pathname + '/status', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({task_id: Number(card.dataset.taskId), status: target})
+        });
+        if (!response.ok || response.redirected) throw new Error('status');
+        document.querySelector('.kanban-column[data-status="' + target + '"] .kanban-cards').appendChild(card);
+        card.classList.toggle('done-card', target === 'done');
+        updateKanbanCounts();
+    } catch (error) {
+        select.value = previous;
+        alert('Не удалось сохранить статус. Проверьте соединение и повторите попытку.');
+    } finally {
+        select.disabled = false;
+    }
+}
 
 async function changePriority(select) {
 
@@ -1168,7 +1196,7 @@ function updateKanbanCounts() {
                 "kanban-empty";
 
             placeholder.textContent =
-                "Перетащи задачу сюда";
+                    "Пока нет задач";
 
 
             cardsContainer.appendChild(
@@ -2278,6 +2306,15 @@ def project(project_id):
             else ""
         )
 
+        status_options = ''.join(
+            f'<option value="{value}" {"selected" if task["status"] == value else ""}>{label}</option>'
+            for value, label in (("todo", "К выполнению"), ("progress", "В работе"), ("done", "Готово"))
+        )
+        status_control = f'''<label class="task-status-control" for="task-status-{task_id}">Статус задачи
+            <select id="task-status-{task_id}" class="task-status-select" onchange="changeTaskStatus(this)">
+                {status_options}
+            </select></label>''' if can_update else ''
+
         priority_control = f"""
             <select class="task-priority-select" data-task-id="{task_id}" onchange="changePriority(this)">
                 <option value="low" {low_selected}>Низкий</option>
@@ -2307,6 +2344,8 @@ def project(project_id):
 
 
             {priority_control}
+
+            {status_control}
 
             {latest_update_html}
 
@@ -2353,7 +2392,7 @@ def project(project_id):
 
             cards = """
             <div class="kanban-empty">
-                Перетащи задачу сюда
+                Пока нет задач
             </div>
             """
 
@@ -2798,8 +2837,7 @@ def project(project_id):
                             </h2>
 
                             <p>
-                                Перетаскивай задачи
-                                между колонками
+                                Меняй статус в карточке или перетаскивай задачи между колонками
                             </p>
 
                         </div>
@@ -3656,7 +3694,7 @@ def project_assessment(project_id):
         for key, label, maximum in CRITERIA:
             options = '<option value="">Не оценено</option>' + "".join(
                 f'<option value="{v}" {"selected" if scores.get(key) == v else ""}>{v}</option>' for v in range(maximum + 1))
-            fields += f'<tr><td>{key}. {escape(label)}</td><td>{maximum}</td><td><select name="criterion_{key}" aria-label="{escape(label)}">{options}</select></td></tr>'
+            fields += f'<tr><td data-label="Критерий">{key}. {escape(label)}</td><td data-label="Максимум">{maximum}</td><td data-label="Баллы"><select name="criterion_{key}" aria-label="{escape(label)}">{options}</select></td></tr>'
         total, grade = summarize(scores)
         state = ("Опубликована" if row["state"] == "published" else "Черновик") if row else "Ещё не сохранена"
         saved = f'{state} · {escape(row["updated_at"])}' if row else state
@@ -3684,7 +3722,7 @@ def project_assessment(project_id):
         for row in rows:
             scores = load_scores(row)
             total, grade = summarize(scores)
-            fields = "".join(f'<tr><td>{escape(label)}</td><td>{scores.get(key)} / {maximum}</td></tr>' for key, label, maximum in CRITERIA)
+            fields = "".join(f'<tr><td data-label="Критерий">{escape(label)}</td><td data-label="Баллы">{scores.get(key)} / {maximum}</td></tr>' for key, label, maximum in CRITERIA)
             content += f'''<section class="card"><h2>{escape(row['student_name'])}</h2>
                 <p>Учитель: {escape(row['teacher_name'])} · {escape(row['updated_at'])}</p>
                 <div class="assessment-table"><table><thead><tr><th>Критерий</th><th>Баллы</th></tr></thead><tbody>{fields}</tbody></table></div>
@@ -3906,10 +3944,10 @@ def render_teacher_project(project):
 
         rows += f"""
         <tr>
-            <td><b>{escape(student["name"])}</b></td>
-            <td><div class="t-bar"><div style="width: {student_percent}%"></div></div></td>
-            <td>{note} · {student_percent}%</td>
-            <td>{overdue}</td>
+            <td data-label="Ученик"><b>{escape(student["name"])}</b></td>
+            <td data-label="Прогресс"><div class="t-bar"><div style="width: {student_percent}%"></div></div></td>
+            <td data-label="Выполнено">{note} · {student_percent}%</td>
+            <td data-label="Просрочено">{overdue}</td>
         </tr>
         """
 

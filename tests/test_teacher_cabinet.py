@@ -60,6 +60,43 @@ class TeacherCabinetTests(unittest.TestCase):
             session["stages_csrf"] = "test-stage-token"
             session["collaboration_csrf"] = "test-collaboration-token"
 
+    def test_mobile_styles_are_loaded_on_auth_and_application_pages(self):
+        for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
+            page = self.client.get(path)
+            self.assertEqual(page.text.count('/static/mobile.css'), 1)
+        self.sign_in(1)
+        for path in ('/', '/teacher', '/project/1', '/project/1/assessment',
+                     '/project/1/stages', '/project/1/team', '/project/1/defense', '/teams', '/profile'):
+            page = self.client.get(path)
+            self.assertEqual(page.status_code, 200)
+            self.assertEqual(page.text.count('/static/mobile.css'), 1)
+        with self.client.get('/static/mobile.css') as response:
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('safe-area-inset', response.text)
+
+    def test_touch_status_control_respects_task_permissions_and_saves(self):
+        self.sign_in(3)
+        page = self.client.get('/project/1')
+        self.assertIn('id="task-status-1"', page.text)
+        self.assertNotIn('id="task-status-2"', page.text)
+        response = self.client.post('/project/1/status', json={'task_id': 1, 'status': 'done'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.post('/project/1/status', json={'task_id': 2, 'status': 'done'}).status_code, 403)
+        self.assertEqual(self.client.post('/project/3/status', json={'task_id': 1, 'status': 'done'}).status_code, 403)
+        conn = self.module.get_db()
+        self.assertEqual(conn.execute('SELECT status FROM tasks WHERE id=1').fetchone()[0], 'done')
+        conn.close()
+        self.assertEqual(self.client.post('/project/1/status', json={'task_id': 1, 'status': 'invalid'}).status_code, 400)
+
+    def test_mobile_tables_include_field_labels(self):
+        self.sign_in(1)
+        assessment = self.client.get('/project/1/assessment').text
+        for label in ('Критерий', 'Максимум', 'Баллы'):
+            self.assertIn(f'data-label="{label}"', assessment)
+        cabinet = self.client.get('/teacher').text
+        for label in ('Ученик', 'Прогресс', 'Выполнено', 'Просрочено'):
+            self.assertIn(f'data-label="{label}"', cabinet)
+
     def test_access_is_limited_to_teacher_projects(self):
         self.sign_in(1)
         response = self.client.get("/teacher")

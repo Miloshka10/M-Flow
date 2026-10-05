@@ -1,0 +1,70 @@
+/* Shared touch/keyboard controls are useful on desktop too. */
+.task-status-control { display: grid; gap: 6px; margin: 0 0 14px; color: var(--mf-muted); font-size: 12px; }
+.task-card[draggable="false"] { cursor: default; }
+body { overflow-wrap: anywhere; }
+img, video { max-width: 100%; height: auto; }
+.hero > *, .teacher-hero > *, .project-info > *, .section-title > * { min-width: 0; }
+
+@media (max-width: 800px), (pointer: coarse) {
+  /* 16px prevents Safari from zooming the page when focusing a form. */
+  body input:not([type="checkbox"]), body select, body textarea { font-size: 16px; }
+  .logout, .teacher-board-link, .project-feature-links a, .back, .filter-reset {
+    display: inline-flex; align-items: center; min-height: 44px;
+  }
+  .task-report-compose summary, .task-report-history summary, .teacher-students summary {
+    min-height: 44px; padding: 10px 0;
+  }
+  .delete-task { min-height: 44px; padding: 10px; }
+  .task-status-select { min-height: 48px; }
+}
+
+@media (max-width: 650px) {
+  .container, .app { width: auto; margin-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right)); }
+  main { padding-bottom: max(32px, env(safe-area-inset-bottom)); }
+  .main-header { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 0; }
+  .main-header .brand { align-self: flex-start; }
+  .account { justify-content: flex-start; gap: 4px 8px; }
+  .account .logout { padding: 8px 10px; border-radius: 8px; background: var(--mf-card); border: 1px solid var(--mf-line); font-size: 13px; }
+  .hero, .teacher-hero { margin-top: 20px; padding: 20px; gap: 16px; }
+  .hero h1, .teacher-hero h1, .project-header h1 { font-size: 28px; }
+  .overall-progress { min-width: 0; padding: 16px; }
+  .card, .t-project, .teacher-panel { padding: 16px; }
+  .stats-line, .project-metrics, .t-stats { gap: 8px; margin: 16px 0; }
+  .stats-line > div, .metric-card, .t-stat { padding: 12px; }
+  .stats-line strong, .metric-card strong, .t-stat strong { font-size: 25px; }
+  .focus-strip { padding: 14px; gap: 10px; margin-bottom: 24px; }
+  .project-feature-links { gap: 8px; }
+  .project-feature-links a { padding: 8px 12px; background: var(--mf-accent-soft); border-radius: 8px; }
+  .project-row { flex-wrap: wrap; }
+  .project-info { flex: 1 1 180px; }
+  .project-status { margin-left: auto; }
+  .kanban { gap: 16px; }
+  .kanban-column { padding: 10px; }
+  .task-card { padding: 14px; cursor: default; }
+  .task-title { font-size: 16px; }
+  .task-filters input[type="search"], .teacher-filters input { flex-basis: 100%; }
+  .task-filters label { min-height: 44px; }
+  .t-edit .t-title { flex-basis: 100%; }
+  .t-edit button, .teacher-create-form button, .member-add-form button { width: 100%; }
+  .assessment-page .assessment-actions, .stage-actions, .team-actions { flex-direction: column; align-items: stretch; }
+  .team-actions > *, .stage-actions > * { max-width: 100%; }
+  .auth-form-side { padding: 24px 20px 32px; justify-content: flex-start; }
+  .auth-form-brand { margin-bottom: 24px; }
+  .auth-hero { padding: 24px 20px; }
+  .auth-hero-content { margin: 20px 0; }
+  .auth-logo { font-size: clamp(48px, 16vw, 72px); }
+  .auth-byline { margin: 12px 0 20px; font-size: 18px; }
+  .login-page { padding: 16px; }
+  .login-box { padding: 20px; }
+  /* Tables become labelled records: no sideways scrolling to enter scores. */
+  .assessment-page .assessment-table table, .t-table { display: block; }
+  .assessment-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .t-table tr:has(th) { display: none; }
+  .assessment-table tbody, .t-table tbody { display: block; }
+  .assessment-page .assessment-table tr, .t-table tr:has(td) { display: grid; margin-bottom: 12px; padding: 12px; border: 1px solid var(--mf-line); border-radius: 10px; }
+  .assessment-page .assessment-table td, .t-table td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border: 0; min-width: 0; }
+  .assessment-page .assessment-table td:first-child { display: block; font-weight: 600; }
+  .assessment-table td:not(:first-child)::before, .t-table td::before { content: attr(data-label); flex-shrink: 0; color: var(--mf-muted); font-size: 12px; font-weight: 400; }
+  .assessment-page .assessment-table select { width: 120px; max-width: 100%; }
+  .t-table .t-bar { width: 100px; max-width: 100%; }
+}
