@@ -20,6 +20,10 @@ import json
 import secrets
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
 from project_stages import initialize_stages, get_stages, stage_summary, change_stage, render_stages, STATE_LABELS
+from teamwork import (initialize_teamwork, profile_for, save_profile, directory, invite_student,
+                      respond_to_invitation, change_team, render_profile as render_skill_profile,
+                      render_directory, render_team)
+from video_defense import initialize_defenses, defense_for, change_defense, render_defense, DEFENSE_STATES
 
 
 app = Flask(__name__)
@@ -56,9 +60,10 @@ def render_page(html):
 
 
 def teacher_nav(user):
+    team_link = '<a href="/teams" class="logout">Команды</a>'
     if user["role"] == "teacher":
-        return '<a href="/teacher" class="logout">Кабинет учителя</a>'
-    return ""
+        return '<a href="/teacher" class="logout">Кабинет учителя</a>' + team_link
+    return team_link
 
 DATABASE_PATH = os.environ.get(
     "M_FLOW_DATABASE",
@@ -147,6 +152,8 @@ def prepare_database():
     )
 
     initialize_stages(conn)
+    initialize_teamwork(conn)
+    initialize_defenses(conn)
 
     project_columns = {
         column["name"]
@@ -1422,6 +1429,7 @@ def profile():
 
     role_name = "Учитель" if user["role"] == "teacher" else "Ученик"
     projects_count = len(get_projects())
+    skills_link = '<p><a class="teacher-primary-link" href="/skills">Мой класс, направление и навыки</a></p>' if user["role"] == "student" else ''
 
     message_html = f'<div class="ok">{message}</div>' if message else ""
     error_html = f'<div class="error">{error}</div>' if error else ""
@@ -1441,6 +1449,7 @@ def profile():
                     <dt>Проектов</dt>
                     <dd>{projects_count}</dd>
                 </dl>
+                {skills_link}
                 <h3>Смена пароля</h3>
                 {message_html}
                 {error_html}
@@ -2700,6 +2709,7 @@ def project(project_id):
                         {safe_project_name}
                     </h1>
                     <a href="/project/{project_id}/assessment" class="back">Оценивание проекта →</a>
+                    <div class="project-feature-links"><a href="/project/{project_id}/team">Команда проекта →</a><a href="/project/{project_id}/defense">Видеозащита →</a></div>
                     <a href="/project/{project_id}/stages" class="project-stage-summary">Этапы проекта: принято {completed_stages} из 5 · {escape(stage_hint)} →</a>
                     <link rel="stylesheet" href="/static/project-stages.css">
 
@@ -3381,6 +3391,165 @@ def render_header(user):
     """
 
 
+def collaboration_token():
+    return session.setdefault("collaboration_csrf", secrets.token_urlsafe(32))
+
+
+def valid_collaboration_form(token):
+    return secrets.compare_digest(request.form.get("csrf_token", "").encode(), token.encode())
+
+
+def render_collaboration_page(user, title, body, project_id=None, error="", status=200):
+    messages = ''.join(f'<div class="success" role="status">{escape(message)}</div>' for message in get_flashed_messages())
+    back = f'<a class="back" href="/project/{project_id}">← К задачам проекта</a>' if project_id else '<a class="back" href="/">← К моим проектам</a>'
+    error_html = f'<div class="error" role="alert">{escape(error)}</div>' if error else ''
+    return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/teamwork.css"><div class="container">{render_header(user)}
+        <main class="team-page">{back}<h1>{escape(title)}</h1>{messages}{error_html}{body}</main></div>'''), status
+
+
+@app.route('/skills', methods=['GET','POST'])
+@login_required
+def skill_profile():
+    user = get_current_user()
+    if user['role'] != 'student':
+        return render_error_page('Нет доступа', 'Учебный профиль предназначен для учеников.', 403)
+    token = collaboration_token()
+    if request.method == 'POST' and not valid_collaboration_form(token):
+        return render_error_page('Форма устарела', 'Обновите страницу профиля и повторите сохранение.', 400)
+    conn = get_db()
+    error, status = '', 200
+    try:
+        if request.method == 'POST':
+            try:
+                save_profile(conn, user['id'], request.form)
+                flash('Учебный профиль сохранён.')
+                return redirect('/skills')
+            except ValueError as exc:
+                error, status = str(exc), 400
+        body = render_skill_profile(profile_for(conn, user['id']), token, request.form if error else None)
+    finally:
+        conn.close()
+    return render_collaboration_page(user, 'Мои навыки и направление', body, error=error, status=status)
+
+
+@app.route('/teams')
+@login_required
+def teams_directory():
+    user = get_current_user()
+    token = collaboration_token()
+    filters = {key: request.args.get(key,'').strip()[:100] for key in ('q','skill','direction','class_name')}
+    conn = get_db()
+    try:
+        candidates = directory(conn,user['id'],query=filters['q'],direction=filters['direction'],class_name=filters['class_name'],skill=filters['skill'])
+        projects = conn.execute('SELECT id,name FROM projects WHERE owner_id=? ORDER BY id DESC',(user['id'],)).fetchall()
+        invitations = conn.execute("""SELECT i.*,p.name AS project_name,u.username AS sender_name FROM team_invitations i
+            JOIN projects p ON p.id=i.project_id JOIN users u ON u.id=i.sender_id
+            WHERE i.invitee_id=? AND i.state='pending' ORDER BY i.id DESC""",(user['id'],)).fetchall()
+        body = render_directory(candidates,projects,invitations,token,filters,user['role']=='student')
+    finally:
+        conn.close()
+    return render_collaboration_page(user,'Команды и участники',body)
+
+
+@app.route('/teams/invite', methods=['POST'])
+@login_required
+def send_team_invitation():
+    user = get_current_user()
+    if not valid_collaboration_form(collaboration_token()):
+        return render_error_page('Форма устарела','Откройте каталог участников заново.',400)
+    conn = get_db()
+    try:
+        try:
+            invite_student(conn,user['id'],request.form)
+        except ValueError as exc:
+            return render_collaboration_page(user,'Приглашение не отправлено','<a class="back" href="/teams">← В каталог участников</a>',error=str(exc),status=400)
+    finally:
+        conn.close()
+    flash('Приглашение отправлено. Ученик получит доступ к проекту после принятия.')
+    return redirect('/teams')
+
+
+@app.route('/teams/invitations/<int:invitation_id>/respond',methods=['POST'])
+@login_required
+def answer_team_invitation(invitation_id):
+    user = get_current_user()
+    if user['role'] != 'student':
+        return render_error_page('Нет доступа','Приглашения в команды адресованы ученикам.',403)
+    if not valid_collaboration_form(collaboration_token()):
+        return render_error_page('Форма устарела','Обновите страницу приглашений.',400)
+    conn = get_db()
+    try:
+        try:
+            pid = respond_to_invitation(conn,invitation_id,user['id'],request.form.get('action'))
+        except PermissionError as exc:
+            return render_error_page('Нет доступа',str(exc),403)
+        except ValueError as exc:
+            return render_collaboration_page(user,'Приглашение не обработано','<a class="back" href="/teams">← К приглашениям</a>',error=str(exc),status=400)
+    finally:
+        conn.close()
+    accepted = request.form.get('action') == 'accept'
+    flash('Вы присоединились к команде проекта.' if accepted else 'Приглашение отклонено.')
+    return redirect(f'/project/{pid}/team' if accepted else '/teams')
+
+
+@app.route('/project/<int:project_id>/team',methods=['GET','POST'])
+@login_required
+def project_team(project_id):
+    user = get_current_user()
+    name = get_project_name(project_id)
+    if name is None:
+        return render_error_page('Нет доступа','Вы не участвуете в этом проекте.',403)
+    owner = is_project_owner(project_id)
+    if request.method == 'POST' and not owner:
+        return render_error_page('Нет доступа','Управлять составом и ролями может только владелец проекта.',403)
+    token = collaboration_token()
+    if request.method == 'POST' and not valid_collaboration_form(token):
+        return render_error_page('Форма устарела','Обновите страницу команды.',400)
+    conn = get_db()
+    error, status = '',200
+    try:
+        if request.method == 'POST':
+            try:
+                change_team(conn,project_id,request.form)
+                flash('Команда обновлена.')
+                return redirect(f'/project/{project_id}/team')
+            except ValueError as exc:
+                conn.rollback()
+                error,status = str(exc),400
+        body = render_team(conn,project_id,owner,token)
+    finally:
+        conn.close()
+    return render_collaboration_page(user,f'Команда · {name}',body,project_id,error,status)
+
+
+@app.route('/project/<int:project_id>/defense',methods=['GET','POST'])
+@login_required
+def project_video_defense(project_id):
+    user = get_current_user()
+    name = get_project_name(project_id)
+    if name is None:
+        return render_error_page('Нет доступа','Вы не участвуете в этом проекте.',403)
+    token = collaboration_token()
+    if request.method == 'POST' and not valid_collaboration_form(token):
+        return render_error_page('Форма устарела','Обновите страницу видеозащиты.',400)
+    conn = get_db()
+    error,status,submitted = '',200,None
+    try:
+        if request.method == 'POST':
+            try:
+                flash(change_defense(conn,project_id,user,request.form))
+                return redirect(f'/project/{project_id}/defense')
+            except ValueError as exc:
+                error,status = str(exc),400
+        record = defense_for(conn,project_id)
+        if error and request.form.get('revision') == str(record['revision']):
+            submitted = request.form
+        body = render_defense(record,user,token,submitted)
+    finally:
+        conn.close()
+    return render_collaboration_page(user,f'Видеозащита · {name}',body,project_id,error,status)
+
+
 @app.route("/project/<int:project_id>/stages", methods=["GET", "POST"])
 @login_required
 def project_stage_page(project_id):
@@ -3559,6 +3728,7 @@ def build_teacher_overview(teacher):
         pid = project_row["id"]
         stage_conn = get_db()
         completed_stages, current_stage = stage_summary(get_stages(stage_conn, pid))
+        video_defense = defense_for(stage_conn, pid)
         stage_conn.close()
         tasks = get_tasks(pid)
         students = [
@@ -3647,6 +3817,7 @@ def build_teacher_overview(teacher):
         overview.append({
             "id": pid,
             "completed_stages": completed_stages,
+            "defense_state": DEFENSE_STATES[video_defense['state']] if video_defense['revision'] else 'Запись ещё не добавлена',
             "current_stage": current_stage,
             "name": project_row["name"],
             "total": len(tasks),
@@ -3771,9 +3942,12 @@ def render_teacher_project(project):
             <a href="/project/{project["id"]}" class="teacher-board-link">Открыть доску →</a>
             <a href="/project/{project["id"]}/assessment" class="teacher-board-link">Оценивание →</a>
             <a href="/project/{project["id"]}/stages" class="teacher-board-link">Этапы: {project["completed_stages"]}/5 приняты →</a>
+            <a href="/project/{project["id"]}/team" class="teacher-board-link">Команда →</a>
+            <a href="/project/{project["id"]}/defense" class="teacher-board-link">Видеозащита →</a>
         </div>
         {access_note}
         <p class="t-muted">{stage_note}</p>
+        <p class="t-muted">Видеозащита: {project['defense_state']}</p>
         <div class="t-chips">
             <span class="t-chip">Новые: {counts["todo"]}</span>
             <span class="t-chip">В работе: {counts["progress"]}</span>

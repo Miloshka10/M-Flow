@@ -90,6 +90,7 @@ main { padding-bottom: 48px; }
 .empty p { margin: 0; color: var(--mf-muted); }
 .project-header { margin: 28px 0 24px; }
 .project-header h1 { margin: 12px 0 16px; }
+.project-feature-links { display: flex; gap: 20px; flex-wrap: wrap; margin: 16px 0; color: var(--mf-accent); font-size: 13px; }
 .back { display: inline-block; color: var(--mf-muted); font-size: 13px; }
 .card, .profile-card, .teacher-panel, .t-project { padding: 24px; margin: 20px 0; background: var(--mf-card); border: 1px solid var(--mf-line); border-radius: var(--mf-radius); box-shadow: var(--mf-shadow); }
 .card h2 { margin-top: 0; }

@@ -33,7 +33,7 @@ class TeacherCabinetTests(unittest.TestCase):
 
     def setUp(self):
         conn = self.module.get_db()
-        for table in ("project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
+        for table in ("project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
             conn.execute(f"DELETE FROM {table}")
         conn.executemany("INSERT INTO users(id, username, password, role) VALUES(?, ?, ?, ?)", [
             (1, "teacher-one", self.password, "teacher"),
@@ -58,6 +58,7 @@ class TeacherCabinetTests(unittest.TestCase):
             session["user_id"] = user_id
             session["assessment_csrf"] = "test-form-token"
             session["stages_csrf"] = "test-stage-token"
+            session["collaboration_csrf"] = "test-collaboration-token"
 
     def test_access_is_limited_to_teacher_projects(self):
         self.sign_in(1)
@@ -223,6 +224,223 @@ class TeacherCabinetTests(unittest.TestCase):
         from grading import CRITERIA
         return dict(student_id="3", student_name="Иванов Иван", note="Хорошая работа", csrf_token="test-form-token",
                     action=action, **{f"criterion_{key}": str(maximum) for key, _, maximum in CRITERIA})
+
+    def add_candidate(self, discoverable=1):
+        conn = self.module.get_db()
+        conn.execute("INSERT INTO users(id,username,password,role) VALUES(4,'candidate-engineer',?,'student')",(self.password,))
+        conn.execute("""INSERT INTO student_profiles(user_id,class_name,direction,skills_json,bio,discoverable)
+            VALUES(4,'11Б','Инженерное',?, 'Собираю прототипы',?)""", ('["3D-моделирование", "Arduino"]', discoverable))
+        conn.commit()
+        conn.close()
+
+    def invitation_post(self, user_id=3, project_id=2, student_id=4):
+        self.sign_in(user_id)
+        return self.client.post('/teams/invite',data=dict(csrf_token='test-collaboration-token',project_id=str(project_id),
+                                student_id=str(student_id),role_text='Инженер прототипа',message='Давай сделаем общий проект'))
+
+    def invitation_id(self):
+        conn = self.module.get_db()
+        iid = conn.execute('SELECT id FROM team_invitations').fetchone()[0]
+        conn.close()
+        return iid
+
+    def invitation_answer(self,user_id,action='accept'):
+        self.sign_in(user_id)
+        return self.client.post(f'/teams/invitations/{self.invitation_id()}/respond',
+                               data=dict(csrf_token='test-collaboration-token',action=action))
+
+    def test_student_profile_saves_skills_without_changing_another_user(self):
+        self.add_candidate()
+        self.sign_in(3)
+        data=dict(csrf_token='test-collaboration-token',user_id='4',class_name='10А',direction='ИТ',
+                  skills='Python, python,  Презентации ',bio='Люблю код',discoverable='1')
+        self.assertEqual(self.client.post('/skills',data=data).status_code,302)
+        conn = self.module.get_db()
+        from teamwork import profile_for
+        profile = profile_for(conn,3)
+        self.assertEqual(profile['skills_json'],'["Python", "Презентации"]')
+        self.assertEqual(profile_for(conn,4)['class_name'],'11Б')
+        conn.close()
+        self.sign_in(1)
+        self.assertEqual(self.client.post('/skills',data=data).status_code,403)
+
+    def test_profile_visibility_requires_explicit_opt_in(self):
+        self.add_candidate(discoverable=0)
+        self.sign_in(3)
+        self.assertNotIn('candidate-engineer',self.client.get('/teams').text)
+        self.assertEqual(self.invitation_post().status_code,400)
+        self.sign_in(4)
+        data=dict(csrf_token='test-collaboration-token',class_name='11Б',direction='Инженерное',skills='Arduino',discoverable='1')
+        self.assertEqual(self.client.post('/skills',data=data).status_code,302)
+        self.sign_in(3)
+        self.assertIn('candidate-engineer',self.client.get('/teams').text)
+        self.sign_in(4)
+        data.pop('discoverable')
+        self.client.post('/skills',data=data)
+        self.sign_in(3)
+        self.assertNotIn('candidate-engineer',self.client.get('/teams').text)
+
+    def test_incomplete_or_excessive_skills_profile_is_rejected(self):
+        self.sign_in(3)
+        data=dict(csrf_token='test-collaboration-token',discoverable='1')
+        self.assertEqual(self.client.post('/skills',data=data).status_code,400)
+        for fields in ({'class_name':'x'*31},{'skills':','.join(f'skill{i}' for i in range(13))},{'skills':'x'*41},{'bio':'x'*501}):
+            self.assertEqual(self.client.post('/skills',data=dict(csrf_token='test-collaboration-token',**fields)).status_code,400)
+
+    def test_directory_filters_skills_direction_and_class(self):
+        self.add_candidate()
+        self.sign_in(3)
+        for query in ('?skill=arduino','?direction=инженер','?class_name=11Б','?q=прототип'):
+            self.assertIn('candidate-engineer',self.client.get('/teams'+query).text)
+        for query in ('?skill=Python','?direction=ИТ','?class_name=10А'):
+            self.assertNotIn('candidate-engineer',self.client.get('/teams'+query).text)
+
+    def test_cross_class_team_requires_invitation_acceptance(self):
+        self.add_candidate()
+        self.assertEqual(self.invitation_post().status_code,302)
+        self.sign_in(4)
+        self.assertEqual(self.client.get('/project/2/team').status_code,403)
+        self.assertIn('Observed project',self.client.get('/teams').text)
+        self.assertEqual(self.invitation_answer(4).status_code,302)
+        page = self.client.get('/project/2/team')
+        self.assertEqual(page.status_code,200)
+        self.assertIn('Инженер прототипа',page.text)
+        self.assertIn('11Б',page.text)
+        self.assertEqual(self.client.get('/project/2').status_code,200)
+        self.sign_in(3)
+        self.assertIn('candidate-engineer',self.client.get('/project/2').text)
+
+    def test_invites_require_owner_and_discoverable_student(self):
+        self.add_candidate()
+        self.assertEqual(self.invitation_post(project_id=1).status_code,400)
+        self.assertEqual(self.invitation_post(user_id=1,project_id=1,student_id=2).status_code,400)
+        self.assertEqual(self.invitation_post(user_id=1,project_id=1,student_id=3).status_code,400)
+        self.assertEqual(self.invitation_post(student_id=3).status_code,400)
+
+    def test_invitation_cannot_be_answered_by_another_student_or_twice(self):
+        self.add_candidate()
+        self.invitation_post()
+        self.assertEqual(self.invitation_post().status_code,400)
+        self.assertEqual(self.invitation_answer(3).status_code,403)
+        self.assertEqual(self.invitation_answer(1).status_code,403)
+        self.assertEqual(self.invitation_answer(4).status_code,302)
+        self.assertEqual(self.invitation_answer(4).status_code,400)
+        conn = self.module.get_db()
+        self.assertEqual(conn.execute('SELECT COUNT(*) FROM project_members WHERE project_id=2 AND user_id=4').fetchone()[0],1)
+        conn.close()
+
+    def test_declining_or_cancelling_invitation_does_not_grant_access(self):
+        self.add_candidate()
+        self.invitation_post()
+        self.assertEqual(self.invitation_answer(4,'decline').status_code,302)
+        self.assertEqual(self.client.get('/project/2/team').status_code,403)
+        self.invitation_post()
+        self.sign_in(3)
+        self.assertEqual(self.client.post('/project/2/team',data=dict(csrf_token='test-collaboration-token',action='cancel',invitation_id=self.invitation_id())).status_code,302)
+        self.assertEqual(self.invitation_answer(4).status_code,400)
+        self.assertEqual(self.client.get('/project/2/team').status_code,403)
+
+    def test_team_roles_are_owner_only_and_removed_with_membership(self):
+        self.sign_in(3)
+        data=dict(csrf_token='test-collaboration-token',action='role',student_id='3',role_text='Разработчик')
+        self.assertEqual(self.client.post('/project/1/team',data=data).status_code,403)
+        self.sign_in(1)
+        self.assertEqual(self.client.post('/project/1/team',data=data).status_code,302)
+        self.assertIn('Разработчик',self.client.get('/project/1/team').text)
+        data['student_id']='2'
+        self.assertEqual(self.client.post('/project/1/team',data=data).status_code,400)
+        conn = self.module.get_db()
+        conn.execute('DELETE FROM project_members WHERE project_id=1 AND user_id=3')
+        conn.commit()
+        self.assertEqual(conn.execute('SELECT COUNT(*) FROM team_member_roles').fetchone()[0],0)
+        conn.close()
+
+    def defense_post(self,user_id=3,revision=0,action='submit',url='https://example.com/defense',comment='',description='Защита проекта'):
+        self.sign_in(user_id)
+        return self.client.post('/project/1/defense',data=dict(csrf_token='test-collaboration-token',revision=str(revision),
+                                action=action,video_url=url,description=description,teacher_comment=comment))
+
+    def test_video_defense_submission_return_and_acceptance(self):
+        self.assertEqual(self.defense_post().status_code,302)
+        self.assertEqual(self.defense_post(user_id=1,revision=1,action='return').status_code,400)
+        self.assertEqual(self.defense_post(user_id=1,revision=1,action='return',comment='Улучшите звук').status_code,302)
+        self.sign_in(3)
+        self.assertIn('Улучшите звук',self.client.get('/project/1/defense').text)
+        self.assertEqual(self.defense_post(revision=2,url='https://example.com/new-video').status_code,302)
+        self.assertEqual(self.defense_post(user_id=1,revision=3,action='accept',comment='Принято').status_code,302)
+        self.assertIn('Защита принята',self.client.get('/project/1/defense').text)
+        self.assertIn('Видеозащита: Защита принята',self.client.get('/teacher').text)
+        self.assertEqual(self.defense_post(revision=4,action='save').status_code,400)
+
+    def test_video_defense_roles_and_project_access(self):
+        self.assertEqual(self.defense_post(user_id=1).status_code,400)
+        self.assertEqual(self.defense_post(user_id=2).status_code,403)
+        self.assertEqual(self.client.get('/project/1/defense').status_code,403)
+        self.assertEqual(self.defense_post(action='accept').status_code,400)
+        self.defense_post()
+        self.assertEqual(self.defense_post(revision=1,action='save').status_code,400)
+        self.assertEqual(self.defense_post(revision=1,action='accept').status_code,400)
+
+    def test_video_defense_validates_urls_and_handles_stale_tabs(self):
+        for url in ('','javascript:alert(1)','https://','https://[bad','https://example.com/ bad','https://user:secret@example.com'):
+            self.assertEqual(self.defense_post(url=url).status_code,400)
+        self.assertEqual(self.defense_post(action='save',url='').status_code,302)
+        self.assertEqual(self.defense_post().status_code,400)
+        self.assertEqual(self.defense_post(revision=1).status_code,302)
+
+    def test_team_profile_and_video_content_are_escaped(self):
+        self.add_candidate()
+        conn = self.module.get_db()
+        conn.execute("UPDATE student_profiles SET bio='<script>alert(1)</script>' WHERE user_id=4")
+        conn.commit()
+        conn.close()
+        self.sign_in(3)
+        self.assertIn('&lt;script&gt;',self.client.get('/teams').text)
+        self.defense_post(description='<script>alert(2)</script>')
+        page = self.client.get('/project/1/defense').text
+        self.assertIn('&lt;script&gt;',page)
+        self.assertNotIn('<script>alert',page)
+        self.assertNotIn('<iframe',page)
+
+    def test_collaboration_forms_require_csrf(self):
+        self.sign_in(3)
+        for url in ('/skills','/teams/invite','/project/2/team','/project/1/defense'):
+            self.assertEqual(self.client.post(url,data={}).status_code,400)
+
+    def test_collaboration_pages_follow_shared_design(self):
+        self.sign_in(3)
+        for url in ('/skills','/teams','/project/1/team','/project/1/defense'):
+            response=self.client.get(url)
+            self.assertEqual(response.status_code,200)
+            self.assertEqual(response.text.count('/static/mflow-theme.css'),1)
+            self.assertIn('/static/teamwork.css',response.text)
+
+    def test_hidden_profile_can_still_accept_existing_invitation(self):
+        self.add_candidate()
+        self.invitation_post()
+        conn=self.module.get_db()
+        conn.execute('UPDATE student_profiles SET discoverable=0 WHERE user_id=4')
+        conn.commit()
+        conn.close()
+        self.assertEqual(self.invitation_answer(4).status_code,302)
+        self.sign_in(3)
+        page=self.client.get('/project/2/team').text
+        self.assertIn('candidate-engineer',page)
+        self.assertNotIn('3D-моделирование',page)
+
+    def test_collaboration_schema_repeated_initialization_preserves_data(self):
+        self.add_candidate()
+        self.invitation_post()
+        self.defense_post()
+        from teamwork import initialize_teamwork
+        from video_defense import initialize_defenses
+        conn=self.module.get_db()
+        initialize_teamwork(conn)
+        initialize_defenses(conn)
+        conn.commit()
+        self.assertEqual(conn.execute('SELECT COUNT(*) FROM team_invitations').fetchone()[0],1)
+        self.assertEqual(conn.execute('SELECT state FROM project_defenses WHERE project_id=1').fetchone()[0],'submitted')
+        conn.close()
 
     def test_assessment_publication_and_student_visibility(self):
         self.sign_in(1)
