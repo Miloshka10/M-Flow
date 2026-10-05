@@ -189,6 +189,17 @@ textarea:focus {
 }
 
 /* M-Flow dashboard upgrade */
+.auth-role-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+.auth-role-switch a { padding: 12px 8px; text-align: center; border: 1px solid #e6e6e2; border-radius: 12px; font-size: 14px; color: #777; font-weight: 600; }
+.auth-role-switch a.active { background: #fff4b8; border-color: #ffcc00; color: #171717; }
+.auth-role-switch a:hover { color: #171717; border-color: #b4b4ad; }
+.auth-role-badge { display: inline-block; margin: 18px 0 6px; padding: 6px 12px; border-radius: 20px; background: rgba(255,255,255,.13); color: white; font-size: 12px; font-weight: 700; }
+.auth-form-side label { display: block; margin: 12px 0 7px; color: #444; font-size: 13px; font-weight: 600; }
+.auth-hint { display: block; margin: -2px 0 10px; color: #777; font-size: 12px; }
+.auth-role-teacher .auth-hero { background: #171717; }
+.auth-role-teacher .auth-logo span { color: #ffcc00; }
+.auth-role-teacher .auth-hero::after { background: #ffcc00; opacity: .18; }
+
 .teacher-hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 24px 0; padding: 32px; background: #171717; color: white; border-radius: 24px; }
 .teacher-hero h1 { margin: 8px 0; font-size: clamp(26px, 4vw, 38px); letter-spacing: -1px; }
 .teacher-hero p { margin: 0; color: #c7c7c2; line-height: 1.6; }

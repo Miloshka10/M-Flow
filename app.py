@@ -235,7 +235,7 @@ def login_required(func):
 
         if "user_id" not in session or get_current_user() is None:
             session.clear()
-            return redirect("/login")
+            return redirect("/teacher/login" if request.path.startswith("/teacher") else "/login")
 
         return func(*args, **kwargs)
 
@@ -2284,8 +2284,14 @@ document.addEventListener(
 # LOGIN
 # =========================================================
 
-def render_auth_page(mode, error=None):
+def render_auth_page(mode, error=None, role="student"):
     is_login = mode == "login"
+    is_teacher = role == "teacher"
+    prefix = "/teacher" if is_teacher else ""
+    role_title = "Для учителей" if is_teacher else "Для учеников"
+    student_url = f'/{mode}'
+    teacher_url = f'/teacher/{mode}'
+    username = escape(request.form.get("username", "")[:30])
 
     error_html = (
         f'<div class="error">{escape(error)}</div>'
@@ -2294,21 +2300,34 @@ def render_auth_page(mode, error=None):
     )
 
     if is_login:
-        form_fields = """
-            <input name="username" placeholder="Логин" required>
-            <input name="password" type="password" placeholder="Пароль" required>
+        form_fields = f"""
+            <label for="auth-username">Логин</label>
+            <input id="auth-username" name="username" value="{username}" autocomplete="username" maxlength="30" required>
+            <label for="auth-password">Пароль</label>
+            <input id="auth-password" name="password" type="password" autocomplete="current-password" required>
         """
         submit_label = "Войти"
-        hero_title = "С возвращением"
-        hero_text = "Заходи в своё рабочее пространство — задачи и дедлайны на месте."
+        hero_title = "Проекты класса под контролем" if is_teacher else "Твои проекты и задачи"
+        hero_text = (
+            "Следите за прогрессом учеников, назначайте задачи и читайте отчёты."
+            if is_teacher else "Работай над задачами, следи за дедлайнами и рассказывай о прогрессе."
+        )
     else:
-        form_fields = """
-            <input name="username" placeholder="Придумай логин" required>
-            <input name="password" type="password" placeholder="Придумай пароль" required>
+        form_fields = f"""
+            <label for="auth-username">Придумайте логин</label>
+            <input id="auth-username" name="username" value="{username}" minlength="3" maxlength="30" autocomplete="username" required>
+            <label for="auth-password">Пароль</label>
+            <input id="auth-password" name="password" type="password" minlength="8" maxlength="256" autocomplete="new-password" required>
+            <small class="auth-hint">Минимум 8 символов</small>
+            <label for="auth-repeat-password">Повторите пароль</label>
+            <input id="auth-repeat-password" name="repeat_password" type="password" minlength="8" maxlength="256" autocomplete="new-password" required>
         """
         submit_label = "Зарегистрироваться"
-        hero_title = "Начни работу с M-Flow"
-        hero_text = "Создай аккаунт ученика, чтобы вести свои проекты и задачи."
+        hero_title = "Ваш кабинет учителя" if is_teacher else "Начни работу с M-Flow"
+        hero_text = (
+            "Создайте свой аккаунт учителя с собственным логином. Первый проект можно начать сразу после регистрации."
+            if is_teacher else "Создай аккаунт ученика и сообщи свой логин учителю, чтобы он добавил тебя в проект."
+        )
 
     login_active = "active" if is_login else ""
     register_active = "" if is_login else "active"
@@ -2316,19 +2335,24 @@ def render_auth_page(mode, error=None):
     return render_page(
         PAGE_STYLE
         + f"""
-        <div class="auth-page">
+        <div class="auth-page auth-role-{role}">
             <div class="auth-card">
                 <div class="auth-hero">
                     <div class="auth-hero-content">
                         <div class="auth-logo">M<span>-</span>Flow</div>
+                        <span class="auth-role-badge">{role_title}</span>
                         <h2>{hero_title}</h2>
                         <p>{hero_text}</p>
                     </div>
                 </div>
                 <div class="auth-form-side">
+                    <nav class="auth-role-switch" aria-label="Выбор роли">
+                        <a href="{student_url}" class="{"active" if not is_teacher else ""}" {"aria-current='page'" if not is_teacher else ""}>Я ученик</a>
+                        <a href="{teacher_url}" class="{"active" if is_teacher else ""}" {"aria-current='page'" if is_teacher else ""}>Я учитель</a>
+                    </nav>
                     <div class="auth-tabs">
-                        <a href="/login" class="auth-tab {login_active}">Вход</a>
-                        <a href="/register" class="auth-tab {register_active}">Регистрация</a>
+                        <a href="{prefix}/login" class="auth-tab {login_active}">Вход</a>
+                        <a href="{prefix}/register" class="auth-tab {register_active}">Регистрация</a>
                     </div>
                     {error_html}
                     <form method="post">
@@ -2342,8 +2366,7 @@ def render_auth_page(mode, error=None):
     )
 
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
+def login_for_role(role):
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
@@ -2354,35 +2377,41 @@ def login():
             (username,)
         ).fetchone()
 
-        if user is None:
-            conn.close()
-            return render_auth_page("login", error="Неверный логин или пароль.")
-
-        if not check_password_hash(user["password"], password):
-            conn.close()
-            return render_auth_page("login", error="Неверный логин или пароль.")
-
         conn.close()
+        if user is None or not check_password_hash(user["password"], password):
+            return render_auth_page("login", error="Неверный логин или пароль.", role=role)
+
+        if user["role"] != role:
+            role_name = "учителя" if user["role"] == "teacher" else "ученика"
+            switch_name = "Я учитель" if user["role"] == "teacher" else "Я ученик"
+            return render_auth_page(
+                "login", error=f'Это аккаунт {role_name}. Выберите «{switch_name}» для входа.', role=role
+            )
+
+        session.clear()
         session["user_id"] = user["id"]
         return redirect("/teacher" if user["role"] == "teacher" else "/")
 
-    return render_auth_page("login")
+    return render_auth_page("login", role=role)
 
 
-@app.route("/register", methods=["GET", "POST"])
-def register():
+def register_for_role(role):
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
+        repeat_password = request.form.get("repeat_password", "")
 
         if not username or not password:
-            return render_auth_page("register", error="Заполни оба поля.")
+            return render_auth_page("register", error="Заполните все поля.", role=role)
 
         if len(username) < 3 or len(username) > 30:
-            return render_auth_page("register", error="Логин должен быть от 3 до 30 символов.")
+            return render_auth_page("register", error="Логин должен быть от 3 до 30 символов.", role=role)
 
-        if len(password) < 8:
-            return render_auth_page("register", error="Пароль слишком короткий (минимум 8 символов).")
+        if not 8 <= len(password) <= 256:
+            return render_auth_page("register", error="Пароль должен быть от 8 до 256 символов.", role=role)
+
+        if password != repeat_password:
+            return render_auth_page("register", error="Пароли не совпадают.", role=role)
 
         conn = get_db()
 
@@ -2393,21 +2422,46 @@ def register():
 
         if existing is not None:
             conn.close()
-            return render_auth_page("register", error="Такой логин уже занят.")
+            return render_auth_page("register", error="Такой логин уже занят. Выберите другой или войдите в существующий аккаунт.", role=role)
 
-        cursor = conn.execute(
-            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-            (username, generate_password_hash(password), "student")
-        )
-
-        conn.commit()
+        try:
+            cursor = conn.execute(
+                "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                (username, generate_password_hash(password), role)
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            conn.close()
+            return render_auth_page("register", error="Такой логин уже занят.", role=role)
         new_user_id = cursor.lastrowid
         conn.close()
 
+        session.clear()
         session["user_id"] = new_user_id
-        return redirect("/")
+        return redirect("/teacher" if role == "teacher" else "/")
 
-    return render_auth_page("register")
+    return render_auth_page("register", role=role)
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    return login_for_role("student")
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    return register_for_role("student")
+
+
+@app.route("/teacher/login", methods=["GET", "POST"])
+def teacher_login():
+    return login_for_role("teacher")
+
+
+@app.route("/teacher/register", methods=["GET", "POST"])
+def teacher_register():
+    return register_for_role("teacher")
 
 
 @app.route("/profile", methods=["GET", "POST"])
@@ -2488,9 +2542,11 @@ def profile():
 @app.route("/logout")
 def logout():
 
+    user = get_current_user()
+    target = "/teacher/login" if user is not None and user["role"] == "teacher" else "/login"
     session.clear()
 
-    return redirect("/login")
+    return redirect(target)
 
 
 # =========================================================

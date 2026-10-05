@@ -93,7 +93,7 @@ class TeacherCabinetTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_teacher_can_create_project_and_login_lands_in_cabinet(self):
-        response = self.client.post("/login", data={"username": "teacher-one", "password": "test-password"})
+        response = self.client.post("/teacher/login", data={"username": "teacher-one", "password": "test-password"})
         self.assertEqual(response.location, "/teacher")
         response = self.client.post("/teacher/projects", data={"name": "New project"})
         self.assertEqual(response.status_code, 302)
@@ -103,6 +103,64 @@ class TeacherCabinetTests(unittest.TestCase):
         self.assertIsNotNone(conn.execute("SELECT 1 FROM project_members WHERE project_id=? AND user_id=1", (project["id"],)).fetchone())
         conn.close()
         self.assertEqual(self.client.get(response.location).status_code, 200)
+
+    def test_teacher_registration_supports_custom_login(self):
+        response = self.client.post("/teacher/register", data={
+            "username": "my-new-teacher", "password": "my-password-123",
+            "repeat_password": "my-password-123"})
+        self.assertEqual(response.location, "/teacher")
+        self.assertEqual(self.client.get("/teacher").status_code, 200)
+        conn = self.module.get_db()
+        user = conn.execute("SELECT role FROM users WHERE username=?", ("my-new-teacher",)).fetchone()
+        self.assertEqual(user["role"], "teacher")
+        conn.close()
+        self.assertEqual(self.client.get("/logout").location, "/teacher/login")
+        response = self.client.post("/teacher/login", data={
+            "username": "my-new-teacher", "password": "my-password-123"})
+        self.assertEqual(response.location, "/teacher")
+
+    def test_registration_role_is_selected_by_route(self):
+        response = self.client.post("/register", data={
+            "username": "new-student", "password": "my-password-123",
+            "repeat_password": "my-password-123", "role": "teacher"})
+        self.assertEqual(response.location, "/")
+        self.assertEqual(self.client.get("/teacher").status_code, 403)
+        conn = self.module.get_db()
+        self.assertEqual(conn.execute("SELECT role FROM users WHERE username='new-student'").fetchone()[0], "student")
+        conn.close()
+
+    def test_wrong_login_portal_does_not_sign_in(self):
+        for path, username in (("/login", "teacher-one"), ("/teacher/login", "student-one")):
+            response = self.client.post(path, data={"username": username, "password": "test-password"})
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("Это аккаунт", response.text)
+            with self.client.session_transaction() as session:
+                self.assertNotIn("user_id", session)
+
+    def test_teacher_registration_cannot_replace_existing_student(self):
+        response = self.client.post("/teacher/register", data={
+            "username": "student-one", "password": "my-password-123",
+            "repeat_password": "my-password-123"})
+        self.assertIn("Такой логин уже занят", response.text)
+        conn = self.module.get_db()
+        self.assertEqual(conn.execute("SELECT role FROM users WHERE id=3").fetchone()[0], "student")
+        conn.close()
+
+    def test_mismatched_passwords_do_not_create_account(self):
+        response = self.client.post("/teacher/register", data={
+            "username": "mismatch", "password": "my-password-123", "repeat_password": "different-123"})
+        self.assertIn("Пароли не совпадают", response.text)
+        conn = self.module.get_db()
+        self.assertIsNone(conn.execute("SELECT id FROM users WHERE username='mismatch'").fetchone())
+        conn.close()
+
+    def test_anonymous_teacher_is_sent_to_teacher_login(self):
+        self.assertEqual(self.client.get("/teacher").location, "/teacher/login")
+        for path in ("/login", "/register", "/teacher/login", "/teacher/register"):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("Я учитель", response.text)
+            self.assertIn("Я ученик", response.text)
 
 
 if __name__ == "__main__":
