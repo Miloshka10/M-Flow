@@ -33,7 +33,7 @@ class TeacherCabinetTests(unittest.TestCase):
 
     def setUp(self):
         conn = self.module.get_db()
-        for table in ("project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
+        for table in ("project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
             conn.execute(f"DELETE FROM {table}")
         conn.executemany("INSERT INTO users(id, username, password, role) VALUES(?, ?, ?, ?)", [
             (1, "teacher-one", self.password, "teacher"),
@@ -57,6 +57,7 @@ class TeacherCabinetTests(unittest.TestCase):
         with self.client.session_transaction() as session:
             session["user_id"] = user_id
             session["assessment_csrf"] = "test-form-token"
+            session["stages_csrf"] = "test-stage-token"
 
     def test_access_is_limited_to_teacher_projects(self):
         self.sign_in(1)
@@ -73,6 +74,115 @@ class TeacherCabinetTests(unittest.TestCase):
         self.assertEqual(projects[1]["counts"]["unassigned"], 1)
         self.assertFalse(projects[2]["can_manage"])
         self.assertEqual(projects[2]["health"], "done")
+
+    def stage_post(self, user_id, number=1, revision=0, action="submit", **fields):
+        self.sign_in(user_id)
+        data = dict(csrf_token="test-stage-token", number=str(number), revision=str(revision),
+                    action=action, result="Результат этапа", **fields)
+        return self.client.post("/project/1/stages", data=data)
+
+    def stage_rows(self):
+        conn = self.module.get_db()
+        from project_stages import get_stages
+        rows = get_stages(conn, 1)
+        conn.close()
+        return rows
+
+    def test_five_stages_exist_without_changing_existing_project(self):
+        self.sign_in(3)
+        response = self.client.get("/project/1/stages")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.text.count('class="stage-number"'), 5)
+        self.assertIn("Выбор темы и согласование", response.text)
+        self.assertIn("Подготовка документации", response.text)
+        self.assertEqual([row["state"] for row in self.stage_rows()], ["todo"] * 5)
+        conn = self.module.get_db()
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM project_stages").fetchone()[0], 0)
+        conn.close()
+        self.assertIn("/project/1/stages", self.client.get("/project/1").text)
+
+    def test_all_five_stages_can_be_completed(self):
+        for number in range(1, 6):
+            fields = {"presentation_url": "https://example.com/slides"} if number == 5 else {}
+            self.assertEqual(self.stage_post(3, number=number, **fields).status_code, 302)
+            self.assertEqual(self.stage_post(1, number=number, revision=1, action="accept").status_code, 302)
+        self.assertEqual([row["state"] for row in self.stage_rows()], ["done"] * 5)
+        response = self.client.get("/project/1/stages")
+        self.assertIn("Принято 5 из 5 этапов · 100%", response.text)
+        self.assertIn("Открыть презентацию", response.text)
+        self.assertEqual(self.stage_post(3, number=5, revision=2).status_code, 400)
+
+    def test_stage_order_and_role_permissions(self):
+        self.assertEqual(self.stage_post(3, number=2).status_code, 400)
+        self.assertEqual(self.stage_post(1).status_code, 400)
+        self.assertEqual(self.stage_post(3, action="accept").status_code, 400)
+        self.assertEqual(self.stage_post(3).status_code, 302)
+        self.assertEqual(self.stage_post(3, revision=1, action="save").status_code, 400)
+        self.assertEqual(self.stage_post(3, revision=1, action="accept").status_code, 400)
+        self.assertEqual(self.stage_post(3, number=2).status_code, 400)
+        self.assertEqual(self.stage_rows()[0]["state"], "review")
+
+    def test_return_to_revision_requires_comment(self):
+        self.stage_post(3)
+        self.assertEqual(self.stage_post(1, revision=1, action="return").status_code, 400)
+        self.assertEqual(self.stage_post(1, revision=1, action="return", teacher_comment="Уточните тему").status_code, 302)
+        self.assertEqual(self.stage_rows()[0]["state"], "progress")
+        self.sign_in(3)
+        self.assertIn("Уточните тему", self.client.get("/project/1/stages").text)
+        self.assertEqual(self.stage_post(3, revision=2).status_code, 302)
+        self.assertEqual(self.stage_post(1, revision=3, action="accept").status_code, 302)
+
+    def test_stages_reject_stale_forms(self):
+        self.assertEqual(self.stage_post(3, action="save").status_code, 302)
+        self.assertEqual(self.stage_post(3, action="submit").status_code, 400)
+        self.assertEqual(self.stage_rows()[0]["state"], "progress")
+        self.assertEqual(self.stage_post(3, revision=1).status_code, 302)
+
+    def test_stages_access_and_csrf(self):
+        self.sign_in(2)
+        self.assertEqual(self.client.get("/project/1/stages").status_code, 403)
+        self.assertEqual(self.stage_post(2).status_code, 403)
+        self.sign_in(3)
+        self.assertEqual(self.client.get("/project/3/stages").status_code, 403)
+        self.assertEqual(self.client.post("/project/1/stages", data={"action": "submit"}).status_code, 400)
+        self.client.get("/logout")
+        self.assertEqual(self.client.get("/project/1/stages").status_code, 302)
+
+    def test_last_stage_requires_documentation_and_safe_presentation_url(self):
+        for number in range(1, 5):
+            self.stage_post(3, number=number)
+            self.stage_post(1, number=number, revision=1, action="accept")
+        self.assertEqual(self.stage_post(3, number=5).status_code, 400)
+        for url in ("javascript:alert(1)", "https://", "https://[broken", "https://example.com/ bad"):
+            self.assertEqual(self.stage_post(3, number=5, presentation_url=url).status_code, 400)
+        self.sign_in(3)
+        data = dict(csrf_token="test-stage-token", number="5", revision="0", action="submit",
+                    result="", presentation_url="https://example.com/slides")
+        self.assertEqual(self.client.post("/project/1/stages", data=data).status_code, 400)
+        self.assertEqual(self.stage_rows()[4]["state"], "todo")
+
+    def test_stage_content_is_escaped_and_draft_can_be_empty(self):
+        self.sign_in(3)
+        data = dict(csrf_token="test-stage-token", number="1", revision="0", action="save", result="")
+        self.assertEqual(self.client.post("/project/1/stages", data=data).status_code, 302)
+        data.update(revision="1", action="submit")
+        self.assertEqual(self.client.post("/project/1/stages", data=data).status_code, 400)
+        data["result"] = "<script>alert('topic')</script>"
+        self.assertEqual(self.client.post("/project/1/stages", data=data).status_code, 302)
+        self.sign_in(1)
+        response = self.client.get("/project/1/stages")
+        self.assertIn("&lt;script&gt;", response.text)
+        self.assertNotIn("<script>alert", response.text)
+
+    def test_stages_schema_creation_is_idempotent(self):
+        self.stage_post(3)
+        from project_stages import initialize_stages
+        conn = self.module.get_db()
+        initialize_stages(conn)
+        initialize_stages(conn)
+        conn.commit()
+        conn.close()
+        self.assertEqual(self.stage_rows()[0]["state"], "review")
 
     def assessment_data(self, action="published"):
         from grading import CRITERIA

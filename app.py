@@ -19,6 +19,7 @@ from html import escape
 import json
 import secrets
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
+from project_stages import initialize_stages, get_stages, stage_summary, change_stage, render_stages, STATE_LABELS
 
 
 app = Flask(__name__)
@@ -140,6 +141,8 @@ def prepare_database():
         );
         """
     )
+
+    initialize_stages(conn)
 
     project_columns = {
         column["name"]
@@ -3076,6 +3079,11 @@ def project(project_id):
     current_user = get_current_user()
 
 
+    stage_conn = get_db()
+    completed_stages, current_stage = stage_summary(get_stages(stage_conn, project_id))
+    stage_conn.close()
+    stage_hint = f'Этап {current_stage["number"]}: {current_stage["title"]}' if current_stage else 'Все этапы приняты учителем'
+
     # ---------- фильтры (поиск, приоритет, только мои) ----------
 
     search_query = request.args.get("q", "").strip()
@@ -3812,6 +3820,8 @@ def project(project_id):
                         {safe_project_name}
                     </h1>
                     <a href="/project/{project_id}/assessment" class="back">Оценивание проекта →</a>
+                    <a href="/project/{project_id}/stages" class="project-stage-summary">Этапы проекта: принято {completed_stages} из 5 · {escape(stage_hint)} →</a>
+                    <link rel="stylesheet" href="/static/project-stages.css">
 
                 </div>
 
@@ -4518,6 +4528,43 @@ def render_header(user):
     """
 
 
+@app.route("/project/<int:project_id>/stages", methods=["GET", "POST"])
+@login_required
+def project_stage_page(project_id):
+    user = get_current_user()
+    project_name = get_project_name(project_id)
+    if project_name is None:
+        return render_error_page("Нет доступа", "Вы не участвуете в этом проекте.", 403)
+    token = session.setdefault("stages_csrf", secrets.token_urlsafe(32))
+    if request.method == "POST" and not secrets.compare_digest(request.form.get("csrf_token", "").encode(), token.encode()):
+        return render_error_page("Форма устарела", "Обновите страницу этапов и повторите сохранение.", 400)
+    conn = get_db()
+    error, status, submitted = "", 200, None
+    try:
+        if request.method == "POST":
+            try:
+                message = change_stage(conn, project_id, user, request.form)
+                flash(message)
+                return redirect(f"/project/{project_id}/stages")
+            except ValueError as exc:
+                error, status, submitted = str(exc), 400, request.form
+        stages = get_stages(conn, project_id)
+        _, current = stage_summary(stages)
+        if submitted is not None and (current is None or submitted.get("number") != str(current["number"])
+                                      or submitted.get("revision") != str(current["revision"])):
+            submitted = None
+    finally:
+        conn.close()
+    messages = "".join(f'<p role="status">{escape(message)}</p>' for message in get_flashed_messages())
+    return render_page('<meta name="viewport" content="width=device-width, initial-scale=1">' + PAGE_STYLE + f'''
+        <link rel="stylesheet" href="/static/project-stages.css"><div class="container">{render_header(user)}
+        <main class="stages-page"><a class="back" href="/project/{project_id}">← К задачам проекта</a>
+        <h1>Пять этапов · {escape(project_name)}</h1>
+        <p>Ученики сохраняют результат и отправляют его учителю. После принятия открывается следующий этап.
+        Этапы общие для участников проекта; их прохождение не меняет статусы задач и итоговые баллы.</p>
+        {messages}<p role="alert">{escape(error)}</p>{render_stages(stages, user, token, submitted)}</main></div>'''), status
+
+
 @app.route("/project/<int:project_id>/assessment", methods=["GET", "POST"])
 @login_required
 def project_assessment(project_id):
@@ -4657,6 +4704,9 @@ def build_teacher_overview(teacher):
     for project_row in projects:
 
         pid = project_row["id"]
+        stage_conn = get_db()
+        completed_stages, current_stage = stage_summary(get_stages(stage_conn, pid))
+        stage_conn.close()
         tasks = get_tasks(pid)
         students = [
             member for member in get_project_members(pid)
@@ -4743,6 +4793,8 @@ def build_teacher_overview(teacher):
         task_titles = {task["id"]: task["title"] for task in tasks}
         overview.append({
             "id": pid,
+            "completed_stages": completed_stages,
+            "current_stage": current_stage,
             "name": project_row["name"],
             "total": len(tasks),
             "counts": counts,
@@ -4802,8 +4854,11 @@ def render_teacher_project(project):
 
     counts = project["counts"]
     health_labels = {"overdue": "Есть просрочки", "attention": "Требует внимания",
-                     "done": "Завершён", "normal": "Всё по плану", "empty": "Нет задач"}
+                     "done": "Задачи завершены", "normal": "Всё по плану", "empty": "Нет задач"}
     health = project["health"]
+    stage = project["current_stage"]
+    stage_note = (f'Текущий этап {stage["number"]}: {escape(stage["title"])} · {STATE_LABELS[stage["state"]]}'
+                  if stage else 'Все пять этапов приняты учителем')
     access_note = "" if project["can_manage"] else '<span class="t-muted">Наблюдение · управляет владелец проекта</span>'
     overdue_chip = (
         f'<span class="t-chip bad">Просрочено: {counts["overdue"]}</span>'
@@ -4862,8 +4917,10 @@ def render_teacher_project(project):
             <span class="teacher-health {health}">{health_labels[health]}</span>
             <a href="/project/{project["id"]}" class="teacher-board-link">Открыть доску →</a>
             <a href="/project/{project["id"]}/assessment" class="teacher-board-link">Оценивание →</a>
+            <a href="/project/{project["id"]}/stages" class="teacher-board-link">Этапы: {project["completed_stages"]}/5 приняты →</a>
         </div>
         {access_note}
+        <p class="t-muted">{stage_note}</p>
         <div class="t-chips">
             <span class="t-chip">Новые: {counts["todo"]}</span>
             <span class="t-chip">В работе: {counts["progress"]}</span>
