@@ -4,7 +4,8 @@ from flask import (
     redirect,
     session,
     flash,
-    jsonify
+    jsonify,
+    get_flashed_messages
 )
 import sqlite3
 import os
@@ -15,6 +16,9 @@ from werkzeug.security import (
     generate_password_hash
 )
 from html import escape
+import json
+import secrets
+from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
 
 
 app = Flask(__name__)
@@ -117,6 +121,22 @@ def prepare_database():
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE,
             FOREIGN KEY (user_id) REFERENCES users (id)
+        );
+
+        CREATE TABLE IF NOT EXISTS project_assessments (
+            project_id INTEGER NOT NULL,
+            student_id INTEGER NOT NULL,
+            teacher_id INTEGER NOT NULL,
+            student_name TEXT NOT NULL,
+            rubric_version TEXT NOT NULL,
+            scores_json TEXT NOT NULL,
+            note TEXT NOT NULL DEFAULT '',
+            state TEXT NOT NULL CHECK(state IN ('draft', 'published')),
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, student_id, teacher_id),
+            FOREIGN KEY (project_id) REFERENCES projects(id),
+            FOREIGN KEY (student_id) REFERENCES users(id),
+            FOREIGN KEY (teacher_id) REFERENCES users(id)
         );
         """
     )
@@ -3791,6 +3811,7 @@ def project(project_id):
                     <h1>
                         {safe_project_name}
                     </h1>
+                    <a href="/project/{project_id}/assessment" class="back">Оценивание проекта →</a>
 
                 </div>
 
@@ -4497,6 +4518,121 @@ def render_header(user):
     """
 
 
+@app.route("/project/<int:project_id>/assessment", methods=["GET", "POST"])
+@login_required
+def project_assessment(project_id):
+    user = get_current_user()
+    project_name = get_project_name(project_id)
+    if project_name is None:
+        return render_error_page("Нет доступа", "Вы не участвуете в этом проекте.", 403)
+    is_teacher = user["role"] == "teacher"
+    if request.method == "POST" and not is_teacher:
+        return render_error_page("Нет доступа", "Оценивать проекты может только учитель.", 403)
+    csrf_token = session.setdefault("assessment_csrf", secrets.token_urlsafe(32))
+    if request.method == "POST" and not secrets.compare_digest(request.form.get("csrf_token", "").encode(), csrf_token.encode()):
+        return render_error_page("Форма устарела", "Обновите страницу оценивания и повторите сохранение.", 400)
+    conn = get_db()
+    students = conn.execute("""
+        SELECT id, username FROM users WHERE role = 'student' AND (
+            id IN (SELECT user_id FROM project_members WHERE project_id = ?)
+            OR id = (SELECT owner_id FROM projects WHERE id = ?)) ORDER BY username
+        """, (project_id, project_id)).fetchall()
+    error = ""
+    status = 200
+    content = ""
+    if is_teacher and students:
+        raw_id = request.form.get("student_id") if request.method == "POST" else request.args.get("student_id", str(students[0]["id"]))
+        selected = next((student for student in students if str(student["id"]) == raw_id), None)
+        if selected is None:
+            conn.close()
+            return render_error_page("Ученик не найден", "Выберите ученика этого проекта.", 400)
+        row = conn.execute("SELECT * FROM project_assessments WHERE project_id=? AND student_id=? AND teacher_id=?",
+                           (project_id, selected["id"], user["id"])).fetchone()
+        scores = load_scores(row)
+        student_name = row["student_name"] if row else selected["username"]
+        note = row["note"] if row else ""
+        if request.method == "POST":
+            student_name = request.form.get("student_name", "").strip()
+            note = request.form.get("note", "").strip()
+            action = request.form.get("action", "")
+            try:
+                if action not in ("draft", "published"):
+                    raise ValueError("Выберите сохранение черновика или публикацию.")
+                if not student_name or len(student_name) > 100:
+                    raise ValueError("Укажите ФИО ученика (до 100 символов).")
+                if len(note) > 1000:
+                    raise ValueError("Примечание должно содержать не больше 1000 символов.")
+                scores = parse_scores(request.form, publish=action == "published")
+                conn.execute("""INSERT INTO project_assessments
+                    (project_id, student_id, teacher_id, student_name, rubric_version, scores_json, note, state)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(project_id, student_id, teacher_id) DO UPDATE SET
+                    student_name=excluded.student_name, rubric_version=excluded.rubric_version,
+                    scores_json=excluded.scores_json, note=excluded.note, state=excluded.state,
+                    updated_at=CURRENT_TIMESTAMP""",
+                    (project_id, selected["id"], user["id"], student_name, RUBRIC_VERSION,
+                     json.dumps(scores), note, action))
+                conn.commit()
+                conn.close()
+                flash("Оценка опубликована." if action == "published" else "Черновик сохранён. Ученику он не виден.")
+                return redirect(f"/project/{project_id}/assessment?student_id={selected['id']}")
+            except ValueError as exc:
+                error = str(exc)
+                status = 400
+                # Keep valid entered values without treating missing criteria as zero.
+                scores = {key: int(request.form[f"criterion_{key}"]) if request.form.get(f"criterion_{key}") in
+                          {str(v) for v in range(maximum + 1)} else None for key, _, maximum in CRITERIA}
+        links = " ".join(f'<a class="assessment-person" href="?student_id={s["id"]}" aria-current="{str(s["id"] == selected["id"]).lower()}">{escape(s["username"])}</a>' for s in students)
+        fields = ""
+        for key, label, maximum in CRITERIA:
+            options = '<option value="">Не оценено</option>' + "".join(
+                f'<option value="{v}" {"selected" if scores.get(key) == v else ""}>{v}</option>' for v in range(maximum + 1))
+            fields += f'<tr><td>{key}. {escape(label)}</td><td>{maximum}</td><td><select name="criterion_{key}" aria-label="{escape(label)}">{options}</select></td></tr>'
+        total, grade = summarize(scores)
+        state = ("Опубликована" if row["state"] == "published" else "Черновик") if row else "Ещё не сохранена"
+        saved = f'{state} · {escape(row["updated_at"])}' if row else state
+        content = f"""<nav class="assessment-people">{links}</nav><section class="card">
+            <h2>Оценивание: {escape(selected['username'])}</h2><p>{saved}</p>
+            <form method="post" id="assessment-form">
+                <input type="hidden" name="student_id" value="{selected['id']}">
+                <input type="hidden" name="csrf_token" value="{csrf_token}">
+                <label>ФИО ученика<input name="student_name" maxlength="100" required value="{escape(student_name, quote=True)}"></label>
+                <div class="assessment-table"><table><thead><tr><th>Критерий</th><th>Максимум</th><th>Баллы</th></tr></thead><tbody>{fields}</tbody></table></div>
+                <p id="assessment-total" aria-live="polite">Итого: {total} / {MAX_SCORE} · Оценка: {grade if grade is not None else 'не все критерии заполнены'}</p>
+                <label>Примечание учителя<textarea name="note" maxlength="1000" rows="4">{escape(note)}</textarea></label>
+                <p>Черновик виден только вам. Публикация открывает оценку ученику. Сохранение опубликованной оценки как черновика снова скроет её.</p>
+                <div class="assessment-actions"><button name="action" value="draft" type="submit">Сохранить черновик</button><button name="action" value="published" type="submit">Опубликовать оценку</button></div>
+            </form></section>"""
+    elif is_teacher:
+        if request.method == "POST":
+            conn.close()
+            return render_error_page("Ученик не найден", "В проекте нет учеников для оценивания.", 400)
+        content = '<section class="card"><h2>Пока нет учеников</h2><p>Добавьте учеников в участники проекта, чтобы выставлять им баллы.</p></section>'
+    else:
+        rows = conn.execute("""SELECT a.*, u.username AS teacher_name FROM project_assessments a
+            JOIN users u ON u.id=a.teacher_id WHERE a.project_id=? AND a.student_id=? AND a.state='published'
+            ORDER BY a.updated_at DESC, a.teacher_id""", (project_id, user["id"])).fetchall()
+        for row in rows:
+            scores = load_scores(row)
+            total, grade = summarize(scores)
+            fields = "".join(f'<tr><td>{escape(label)}</td><td>{scores.get(key)} / {maximum}</td></tr>' for key, label, maximum in CRITERIA)
+            content += f'''<section class="card"><h2>{escape(row['student_name'])}</h2>
+                <p>Учитель: {escape(row['teacher_name'])} · {escape(row['updated_at'])}</p>
+                <div class="assessment-table"><table><thead><tr><th>Критерий</th><th>Баллы</th></tr></thead><tbody>{fields}</tbody></table></div>
+                <h3>Итого: {total} / {MAX_SCORE} · Оценка: {grade}</h3><p class="assessment-note">{escape(row['note'])}</p></section>'''
+        if not rows:
+            content = '<section class="card"><h2>Оценка ещё не опубликована</h2><p>Здесь появятся ваши баллы и примечание учителя.</p></section>'
+    conn.close()
+    messages = "".join(f'<p role="status">{escape(message)}</p>' for message in get_flashed_messages())
+    return render_page('<meta name="viewport" content="width=device-width, initial-scale=1">' + PAGE_STYLE + f'''<link rel="stylesheet" href="/static/assessment.css">
+        <div class="app">{render_header(user)}<main class="main-content assessment-page">
+        <a class="back" href="/project/{project_id}">← К задачам проекта</a>
+        <h1>Оценивание · {escape(project_name)}</h1>
+        <p>12 критериев · максимум 45 баллов. Шкала: «5» — 39–45, «4» — 30–38, «3» — 21–29, «2» — 0–20.</p>
+        {messages}<p role="alert">{escape(error)}</p>{content}</main></div>
+        <script src="/static/assessment.js"></script>'''), status
+
+
 def build_teacher_overview(teacher):
 
     conn = get_db()
@@ -4725,6 +4861,7 @@ def render_teacher_project(project):
             <h2>{escape(project["name"])}</h2>
             <span class="teacher-health {health}">{health_labels[health]}</span>
             <a href="/project/{project["id"]}" class="teacher-board-link">Открыть доску →</a>
+            <a href="/project/{project["id"]}/assessment" class="teacher-board-link">Оценивание →</a>
         </div>
         {access_note}
         <div class="t-chips">

@@ -1,0 +1,18 @@
+.assessment-page { max-width: 1100px; margin: 0 auto; padding: 28px 20px; }
+.assessment-page .card { margin-top: 24px; padding: 28px; }
+.assessment-people { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+.assessment-person { padding: 10px 16px; border: 1px solid #cad5db; border-radius: 12px; color: #24434b; background: white; }
+.assessment-person[aria-current="true"] { background: #d6eeea; border-color: #39897d; }
+.assessment-table { overflow-x: auto; margin: 20px 0; }
+.assessment-table table { width: 100%; border-collapse: collapse; }
+.assessment-table th, .assessment-table td { text-align: left; padding: 12px; border-bottom: 1px solid #dce5e7; }
+.assessment-table th { background: #eff6f5; }
+.assessment-page label { display: block; margin: 18px 0; }
+.assessment-page input, .assessment-page textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 8px; padding: 12px; border: 1px solid #b8c9cf; border-radius: 10px; font: inherit; }
+.assessment-page select { padding: 9px; border: 1px solid #b8c9cf; border-radius: 8px; font: inherit; min-width: 120px; }
+.assessment-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.assessment-actions button { padding: 12px 18px; border: 1px solid #2b7369; border-radius: 10px; background: #e8f4f1; color: #194e46; font: inherit; cursor: pointer; }
+.assessment-actions button[value="published"] { background: #266f63; color: white; }
+#assessment-total { padding: 16px; background: #eff6f5; border-radius: 10px; font-weight: 700; }
+.assessment-note { white-space: pre-wrap; }
+@media (max-width: 600px) { .assessment-page .card { padding: 16px; } .assessment-table td, .assessment-table th { padding: 8px; } }
