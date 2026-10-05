@@ -57,13 +57,15 @@ def render_page(html):
             '<title>M-Flow — проекты и задачи</title>'
         '<link rel="stylesheet" href="/static/mflow-theme.css?v=20261005-mobile">'
         '<link rel="stylesheet" href="/static/mobile.css?v=20261005">'
-        '<link rel="stylesheet" href="/static/motion.css?v=20261005">'
-        '<script src="/static/motion.js?v=20261005"></script>'
+        '<link rel="stylesheet" href="/static/motion.css?v=20261005-controls">'
+        '<link rel="stylesheet" href="/static/preferences.css?v=20261005">'
+        '<script src="/static/preferences.js?v=20261005"></script>'
+        '<script src="/static/motion.js?v=20261005-controls"></script>'
             '</head><body>' + html + '</body></html>')
 
 
 def teacher_nav(user):
-    team_link = '<a href="/teams" class="logout">Команды</a>'
+    team_link = '<a href="/teams" class="logout">Команды</a><a href="/settings" class="logout">Настройки</a>'
     if user["role"] == "teacher":
         return '<a href="/teacher" class="logout">Кабинет учителя</a>' + team_link
     return team_link
@@ -1305,7 +1307,7 @@ def render_auth_page(mode, error=None, role="student"):
                         {form_fields}
                         <button type="submit">{submit_label}</button>
                     </form>
-                    <p class="auth-footer">{"Ваши проекты, этапы и отчёты — в одном кабинете." if is_teacher else "Учитель сможет добавить вас в проект по вашему логину."}</p>
+                    <p class="auth-footer">{"Ваши проекты, этапы и отчёты — в одном кабинете." if is_teacher else "Учитель сможет добавить вас в проект по вашему логину."}<br><a href="/settings">Настройки оформления</a></p>
                     </div>
                 </div>
                 <aside class="auth-hero" aria-label="О проекте M-Flow">
@@ -1480,6 +1482,7 @@ def profile():
                     <dd>{projects_count}</dd>
                 </dl>
                 {skills_link}
+                <p><a class="back" href="/settings">Настройки оформления и анимаций →</a></p>
                 <h3>Смена пароля</h3>
                 {message_html}
                 {error_html}
@@ -3429,6 +3432,30 @@ def render_header(user):
         </div>
     </header>
     """
+
+
+@app.route('/settings')
+def site_settings():
+    user = get_current_user()
+    header = render_header(user) if user else '<header class="main-header"><a class="brand" href="/login">M<span>-</span>Flow</a><a class="back" href="/login">← К входу</a></header>'
+    return render_page(f'''<div class="container">{header}<main class="settings-page">
+        <h1>Настройки сайта</h1>
+        <p class="settings-intro">Оформление сохраняется в этом браузере и действует на всех страницах. Настройки аккаунта остаются в профиле.</p>
+        <section class="card settings-card" aria-labelledby="appearance-heading">
+            <h2 id="appearance-heading">Оформление</h2>
+            <form id="site-preferences" onsubmit="return false">
+                <label for="site-theme">Тема сайта</label>
+                <select id="site-theme" name="theme">
+                    <option value="system">Как в системе</option><option value="light">Светлая</option><option value="dark">Тёмная</option>
+                </select>
+                <p class="settings-hint">Системная тема автоматически подстраивается под настройки устройства.</p>
+                <label class="settings-checkbox" for="site-animations"><input id="site-animations" name="animations" type="checkbox" checked>Плавные анимации интерфейса</label>
+                <p class="settings-hint">Если на устройстве включено уменьшение движения, анимации отключены независимо от этого переключателя.</p>
+                <button type="button" class="secondary" id="reset-preferences">Сбросить настройки</button>
+                <p id="preferences-status" role="status" aria-live="polite">Изменения применяются сразу.</p>
+                <noscript><p class="error">Для изменения и сохранения оформления включите JavaScript в браузере.</p></noscript>
+            </form>
+        </section></main></div>''')
 
 
 def collaboration_token():

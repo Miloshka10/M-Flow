@@ -1,0 +1,72 @@
+.settings-page { max-width: 720px; margin: 28px auto; }
+.settings-intro, .settings-hint { color: var(--mf-muted); }
+.settings-card label { display: block; margin: 20px 0 8px; font-weight: 600; }
+.settings-card .settings-checkbox { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.settings-hint { font-size: 13px; margin: 8px 0 20px; }
+#preferences-status { font-size: 13px; min-height: 40px; color: var(--mf-accent); }
+html[data-animations="off"] *, html[data-animations="off"] *::before,
+html[data-animations="off"] *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+html[data-animations="off"] button:active, html[data-animations="off"] a:active,
+html[data-animations="off"] summary:active, html[data-animations="off"] .project-row:hover { transform: none !important; }
+html[data-animations="off"] .auth-shimmer { background: none; -webkit-text-fill-color: currentColor; }
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --mf-accent: #80cabe; --mf-accent-hover: #a1dfd5; --mf-accent-soft: #203d38;
+  --mf-text: #e3eeeb; --mf-muted: #afc3bd; --mf-bg: #111c1a;
+  --mf-card: #1b2a26; --mf-line: #3a5149; --mf-danger: #f4ad9f; --mf-warning: #ecc487;
+  --mf-shadow: none;
+}
+html[data-theme="dark"] body { background: var(--mf-bg); color: var(--mf-text); }
+html[data-theme="dark"] button, html[data-theme="dark"] .btn,
+html[data-theme="dark"] input[type="submit"], html[data-theme="dark"] .teacher-primary-link { color: #102a24; }
+html[data-theme="dark"] button.secondary,
+html[data-theme="dark"] .stage-actions button[value="save"],
+html[data-theme="dark"] .stage-actions button[value="return"],
+html[data-theme="dark"] .assessment-actions button[value="draft"] { background: var(--mf-accent-soft); color: var(--mf-accent); border-color: var(--mf-line); }
+html[data-theme="dark"] input:not([type="checkbox"]), html[data-theme="dark"] select,
+html[data-theme="dark"] textarea { background: var(--mf-card); color: var(--mf-text); border-color: var(--mf-line); }
+html[data-theme="dark"] input::placeholder, html[data-theme="dark"] textarea::placeholder { color: var(--mf-muted); }
+html[data-theme="dark"] .hero, html[data-theme="dark"] .teacher-hero,
+html[data-theme="dark"] .focus-strip, html[data-theme="dark"] .kanban-column,
+html[data-theme="dark"] .auth-hero { background: #192f29; border-color: var(--mf-line); }
+html[data-theme="dark"] .hero p, html[data-theme="dark"] .teacher-hero p,
+html[data-theme="dark"] .auth-hero p, html[data-theme="dark"] .auth-hero-top,
+html[data-theme="dark"] .auth-hero-footer { color: var(--mf-muted); }
+html[data-theme="dark"] .overall-progress { background: var(--mf-card); border-color: var(--mf-line); }
+html[data-theme="dark"] .task-card, html[data-theme="dark"] .login-box,
+html[data-theme="dark"] .auth-page { background: var(--mf-card); border-color: var(--mf-line); }
+html[data-theme="dark"] .main-progress, html[data-theme="dark"] .mini-progress,
+html[data-theme="dark"] .project-progress, html[data-theme="dark"] .t-bar { background: #344d43; }
+html[data-theme="dark"] .focus-icon, html[data-theme="dark"] .focus-mark,
+html[data-theme="dark"] .kanban-count, html[data-theme="dark"] .t-chip,
+html[data-theme="dark"] .task-priority, html[data-theme="dark"] .task-deadline,
+html[data-theme="dark"] .task-report, html[data-theme="dark"] .auth-role-switch,
+html[data-theme="dark"] .stage-summary, html[data-theme="dark"] .stage-number,
+html[data-theme="dark"] .project-stage-summary, html[data-theme="dark"] .assessment-table th,
+html[data-theme="dark"] #assessment-total { background: var(--mf-accent-soft); color: var(--mf-text); border-color: var(--mf-line); }
+html[data-theme="dark"] .done-card .task-title { color: var(--mf-muted); }
+html[data-theme="dark"] .auth-role-switch a { color: var(--mf-muted); }
+html[data-theme="dark"] .auth-role-switch a.active { color: var(--mf-accent); }
+html[data-theme="dark"] .auth-tabs, html[data-theme="dark"] .auth-hero-footer,
+html[data-theme="dark"] .assessment-table td, html[data-theme="dark"] .assessment-table th { border-color: var(--mf-line); }
+html[data-theme="dark"] .auth-shimmer { background-image: linear-gradient(110deg,#80cabe 0%,#80cabe 30%,#c2eee5 49%,#80cabe 70%,#80cabe 100%); color: var(--mf-accent); }
+html[data-theme="dark"][data-animations="off"] .auth-shimmer { background: none; }
+html[data-theme="dark"] .success, html[data-theme="dark"] .teacher-health { background: #203d31; color: #b1dfc5; border-color: #426c53; }
+html[data-theme="dark"] .error, html[data-theme="dark"] .t-chip.bad,
+html[data-theme="dark"] .teacher-health.overdue, html[data-theme="dark"] .priority-urgent { background: #422a26; color: var(--mf-danger); border-color: #815449; }
+html[data-theme="dark"] .hot-strip, html[data-theme="dark"] .stage-comment,
+html[data-theme="dark"] .teacher-health.attention, html[data-theme="dark"] .priority-high { background: #3c3424; color: var(--mf-warning); border-color: #716044; }
+html[data-theme="dark"] .stage-card.locked { background: #18251f; }
+html[data-theme="dark"] .assessment-person[aria-current="true"] { background: var(--mf-accent-soft); border-color: var(--mf-accent); }
+html[data-theme="dark"] .delete-task { background: transparent; color: var(--mf-muted); }
+html[data-theme="dark"] .delete-task:hover { background: #422a26; color: var(--mf-danger); }
+html[data-theme="dark"] .kanban-column.drag-over { background: var(--mf-accent-soft); }
+html[data-theme="dark"] .deadline-overdue { color: var(--mf-danger); }
+html[data-theme="dark"] .deadline-soon { color: var(--mf-warning); }
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme="dark"] .auth-shimmer { background: none; color: var(--mf-accent); }
+}
+@media (forced-colors: active) {
+  html[data-theme] .auth-shimmer { background: none; -webkit-text-fill-color: CanvasText; color: CanvasText; }
+  .auth-role-switch::before { border: 1px solid Highlight; }
+}

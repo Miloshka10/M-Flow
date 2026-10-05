@@ -5,12 +5,12 @@ const path = require('node:path');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../static/motion.js'), 'utf8');
 
-function setup({reduced = false, blocked = false, entry = null} = {}) {
+function setup({reduced = false, blocked = false, animations = 'on', entry = null} = {}) {
   const events = {}, windowEvents = {}, timers = [];
   const classes = new Set();
   const panel = {classList: {add: c => classes.add(c), remove: (...cs) => cs.forEach(c => classes.delete(c))}};
   const switcher = {dataset: {}};
-  const root = {dataset: {}};
+  const root = {dataset: {animations}};
   let stored = entry && JSON.stringify(entry), destination;
   const location = {pathname: '/login', href: 'https://mflow.test/login', origin: 'https://mflow.test', assign: url => destination = url};
   const storage = {
@@ -43,13 +43,13 @@ function setup({reduced = false, blocked = false, entry = null} = {}) {
 const normal = setup();
 assert.equal(normal.click('https://mflow.test/teacher/login').prevented, true);
 assert.equal(normal.switcher.dataset.pendingRole, 'teacher');
-assert.ok(normal.classes.has('mf-leave-next'));
+assert.equal(normal.classes.size, 0, 'The form must never move or fade');
 normal.click('https://mflow.test/teacher/register');
 assert.equal(normal.click('https://mflow.test/login').prevented, true);
 assert.equal(normal.timers.length, 1, 'Repeated presses must not create extra navigations');
 normal.timers[0]();
 assert.equal(normal.destination(), 'https://mflow.test/teacher/login');
-assert.deepEqual(Object.keys(JSON.parse(normal.stored())).sort(), ['direction', 'path', 'time']);
+assert.equal(normal.stored(), null, 'Role animation must not use storage');
 normal.windowEvents.pageshow({persisted: true});
 assert.equal(normal.classes.size, 0, 'Back/Forward must restore visible, usable form');
 assert.equal(normal.switcher.dataset.pendingRole, undefined);
@@ -68,8 +68,8 @@ const blocked = setup({blocked: true});
 blocked.click('https://mflow.test/teacher/login');
 blocked.timers[0]();
 assert.equal(blocked.destination(), 'https://mflow.test/teacher/login');
-assert.equal(setup({entry: {path: '/login', direction: 'prev', time: Date.now()}}).root.dataset.mfEntry, 'prev');
+assert.equal(setup({animations: 'off'}).click('https://mflow.test/teacher/login').prevented, undefined);
 assert.equal(setup({entry: {path: '/login', direction: 'prev', time: Date.now() - 6000}}).root.dataset.mfEntry, undefined);
 assert.equal(setup({entry: {path: '/register', direction: 'next', time: Date.now()}}).root.dataset.mfEntry, undefined);
 assert.equal(setup({reduced: true, entry: {path: '/login', direction: 'prev', time: Date.now()}}).root.dataset.mfEntry, undefined);
-console.log('Motion checks passed: navigation, reduced motion, modifiers, storage, cache recovery.');
+console.log('Motion checks passed: highlight-only, navigation, motion settings, modifiers, cache recovery.');

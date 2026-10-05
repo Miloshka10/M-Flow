@@ -178,12 +178,28 @@ class TeacherCabinetTests(unittest.TestCase):
         with self.client.get('/static/motion.css') as response:
             self.assertEqual(response.status_code, 200)
             self.assertIn('prefers-reduced-motion: reduce', response.text)
-            self.assertIn('mf-enter-next', response.text)
-            self.assertIn('mf-enter-prev', response.text)
+            self.assertIn('data-pending-role="teacher"', response.text)
+            self.assertNotIn('mf-enter-', response.text)
+            self.assertNotIn('mf-leave-', response.text)
         with self.client.get('/static/motion.js') as response:
             self.assertEqual(response.status_code, 200)
             self.assertIn('reduced.matches', response.text)
             self.assertIn("window.addEventListener('pageshow'", response.text)
+
+    def test_site_settings_available_with_and_without_account(self):
+        for user_id in (None, 1, 3):
+            if user_id is not None:
+                self.sign_in(user_id)
+            page = self.client.get('/settings')
+            self.assertEqual(page.status_code, 200)
+            self.assertIn('id="site-theme"', page.text)
+            self.assertIn('id="site-animations"', page.text)
+            self.assertIn('id="reset-preferences"', page.text)
+            self.assertEqual(page.text.count('/static/preferences.js'), 1)
+        self.assertIn('/settings', self.client.get('/profile').text)
+        for asset in ('preferences.js', 'preferences.css'):
+            with self.client.get('/static/' + asset) as response:
+                self.assertEqual(response.status_code, 200)
 
     def test_theme_supports_reduced_motion_and_accessible_focus(self):
         with self.client.get('/static/mflow-theme.css') as response:
