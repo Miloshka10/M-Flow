@@ -48,7 +48,7 @@ def render_page(html):
 
 def teacher_nav(user):
     if user["role"] == "teacher":
-        return '<a href="/teacher" class="logout">Кабинет</a>'
+        return '<a href="/teacher" class="logout">Кабинет учителя</a>'
     return ""
 
 DATABASE_PATH = os.environ.get(
@@ -106,6 +106,16 @@ def prepare_database():
             user_id INTEGER NOT NULL,
             PRIMARY KEY (project_id, user_id),
             FOREIGN KEY (project_id) REFERENCES projects (id),
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        );
+
+        CREATE TABLE IF NOT EXISTS task_updates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            body TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE,
             FOREIGN KEY (user_id) REFERENCES users (id)
         );
         """
@@ -174,6 +184,13 @@ def prepare_database():
         """
         CREATE INDEX IF NOT EXISTS idx_project_members_user
         ON project_members(user_id)
+        """
+    )
+
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_task_updates_task_created
+        ON task_updates(task_id, created_at DESC)
         """
     )
 
@@ -566,6 +583,60 @@ def delete_task(project_id, task_id):
 
     conn.commit()
     conn.close()
+
+
+def add_task_update(project_id, task_id, user_id, body):
+
+    conn = get_db()
+
+    task = conn.execute(
+        """
+        SELECT id
+        FROM tasks
+        WHERE id = ? AND project_id = ?
+        """,
+        (task_id, project_id)
+    ).fetchone()
+
+    if task is None:
+        conn.close()
+        return False
+
+    conn.execute(
+        """
+        INSERT INTO task_updates (task_id, user_id, body)
+        VALUES (?, ?, ?)
+        """,
+        (task_id, user_id, body)
+    )
+
+    conn.commit()
+    conn.close()
+    return True
+
+
+def get_task_update_history(project_id):
+
+    conn = get_db()
+    rows = conn.execute(
+        """
+        SELECT task_updates.task_id, task_updates.body,
+               task_updates.created_at, users.username
+        FROM task_updates
+        JOIN tasks ON tasks.id = task_updates.task_id
+        JOIN users ON users.id = task_updates.user_id
+        WHERE tasks.project_id = ?
+        ORDER BY task_updates.id DESC
+        """,
+        (project_id,)
+    ).fetchall()
+    conn.close()
+
+    history = {}
+    for row in rows:
+        history.setdefault(row["task_id"], []).append(row)
+
+    return history
 
 
 def update_task_status(
@@ -2293,7 +2364,7 @@ def login():
 
         conn.close()
         session["user_id"] = user["id"]
-        return redirect("/")
+        return redirect("/teacher" if user["role"] == "teacher" else "/")
 
     return render_auth_page("login")
 
@@ -2912,6 +2983,8 @@ def project(project_id):
         project_id
     )
 
+    task_update_history = get_task_update_history(project_id)
+
     members = get_project_members(
         project_id
     )
@@ -3128,6 +3201,52 @@ def project(project_id):
         draggable = "true" if can_update else "false"
         assignee_name = escape(task["assignee_name"] or "Не назначена")
 
+        updates = task_update_history.get(task_id, [])
+        latest_update_html = ""
+        if updates:
+            latest_update = updates[0]
+            update_author = escape(latest_update["username"] or "Участник")
+            update_timestamp = escape(latest_update["created_at"] or "")
+            update_body = escape(latest_update["body"])
+
+            history_items = "".join(
+                f'''<article class="task-report-entry">
+                    <div class="task-report-head">
+                        <strong>{escape(update["username"])}</strong>
+                        <span>{escape(update["created_at"])}</span>
+                    </div>
+                    <p>{escape(update["body"])}</p>
+                </article>'''
+                for update in updates
+            )
+
+            latest_update_html = f"""
+                <div class="task-report">
+                    <div class="task-report-head">
+                        <strong>Последний отчёт · {update_author}</strong>
+                        <span>{update_timestamp}</span>
+                    </div>
+                    <p>{update_body}</p>
+                    <details class="task-report-history">
+                        <summary>История отчётов ({len(updates)})</summary>
+                        <div>{history_items}</div>
+                    </details>
+                </div>
+            """
+
+        report_form = ""
+        if current_user["role"] == "student" and task["assignee_id"] == current_user["id"]:
+            report_form = f"""
+                <details class="task-report-compose">
+                    <summary>Добавить отчёт</summary>
+                    <form method="post" action="/project/{project_id}/task/{task_id}/update">
+                        <textarea name="body" maxlength="500" rows="3" required
+                            placeholder="Что уже сделано? Что мешает двигаться дальше?"></textarea>
+                        <button type="submit">Отправить учителю</button>
+                    </form>
+                </details>
+            """
+
         delete_control = f"""
             <form action="/project/{project_id}/delete/{task_id}" method="post">
                 <button type="submit" class="delete-task" title="Удалить задачу">Удалить</button>
@@ -3195,6 +3314,7 @@ def project(project_id):
         return f"""
         <div
             class="task-card {done_class}"
+            id="task-{task_id}"
             draggable="{draggable}"
             data-task-id="{task_id}"
         >
@@ -3211,6 +3331,10 @@ def project(project_id):
 
 
             {priority_control}
+
+            {latest_update_html}
+
+            {report_form}
 
 
             <div class="task-footer">
@@ -4112,6 +4236,49 @@ def change_task_status(project_id):
     })
 
 
+@app.route(
+    "/project/<int:project_id>/task/<int:task_id>/update",
+    methods=["POST"]
+)
+@login_required
+def submit_task_update(project_id, task_id):
+
+    user = get_current_user()
+
+    if user["role"] != "student" or not user_has_project_access(project_id):
+        return (
+            "Отчёт может отправить только ученик, которому назначена задача.",
+            403
+        )
+
+    body = request.form.get("body", "").strip()
+
+    if not body:
+        flash("Напишите короткий отчёт перед отправкой.", "error")
+        return redirect(f"/project/{project_id}")
+
+    if len(body) > 500:
+        flash("Отчёт должен быть не длиннее 500 символов.", "error")
+        return redirect(f"/project/{project_id}")
+
+    conn = get_db()
+    assigned = conn.execute(
+        "SELECT 1 FROM tasks WHERE id = ? AND project_id = ? AND assignee_id = ?",
+        (task_id, project_id, user["id"])
+    ).fetchone()
+    conn.close()
+
+    if assigned is None:
+        return (
+            "Отчёт можно отправить только по назначенной вам задаче.",
+            403
+        )
+
+    add_task_update(project_id, task_id, user["id"], body)
+    flash("Отчёт отправлен учителю.", "success")
+    return redirect(f"/project/{project_id}")
+
+
 # =========================================================
 # CHANGE TASK PRIORITY
 # =========================================================
@@ -4279,12 +4446,16 @@ def build_teacher_overview(teacher):
     conn = get_db()
     projects = conn.execute(
         """
-        SELECT id, name
+        SELECT id, name, owner_id
         FROM projects
-        WHERE owner_id = ?
+        WHERE owner_id = ? OR EXISTS (
+            SELECT 1 FROM project_members
+            WHERE project_members.project_id = projects.id
+            AND project_members.user_id = ?
+        )
         ORDER BY id DESC
         """,
-        (teacher["id"],)
+        (teacher["id"], teacher["id"])
     ).fetchall()
     conn.close()
 
@@ -4311,12 +4482,13 @@ def build_teacher_overview(teacher):
             for student in students
         }
 
-        counts = {"todo": 0, "progress": 0, "done": 0, "overdue": 0}
+        counts = {"todo": 0, "progress": 0, "done": 0, "overdue": 0,
+                  "soon": 0, "unassigned": 0}
         attention = []
 
         for task in tasks:
 
-            status = task["status"] if task["status"] in counts else "todo"
+            status = task["status"] if task["status"] in ("todo", "progress", "done") else "todo"
             counts[status] += 1
 
             days_left = None
@@ -4337,6 +4509,10 @@ def build_teacher_overview(teacher):
 
             if is_overdue:
                 counts["overdue"] += 1
+            if status != "done" and days_left is not None and 0 <= days_left <= 3:
+                counts["soon"] += 1
+            if status != "done" and task["assignee_id"] not in stats:
+                counts["unassigned"] += 1
 
             student_stat = stats.get(task["assignee_id"])
 
@@ -4360,7 +4536,7 @@ def build_teacher_overview(teacher):
                     else f"срок через {days_left} дн."
                 )
 
-            if task["assignee_id"] is None:
+            if task["assignee_id"] not in stats:
                 reasons.append("нет ответственного")
 
             if reasons:
@@ -4372,6 +4548,7 @@ def build_teacher_overview(teacher):
 
         attention.sort(key=lambda item: item["sort"])
 
+        task_titles = {task["id"]: task["title"] for task in tasks}
         overview.append({
             "id": pid,
             "name": project_row["name"],
@@ -4380,14 +4557,33 @@ def build_teacher_overview(teacher):
             "progress": percent(counts["done"], len(tasks)),
             "students": list(stats.values()),
             "attention": attention,
+            "can_manage": project_row["owner_id"] == teacher["id"],
+            "health": (
+                "overdue" if counts["overdue"] else
+                "attention" if counts["soon"] or counts["unassigned"] else
+                "done" if tasks and counts["done"] == len(tasks) else
+                "empty" if not tasks else "normal"
+            ),
+            "reports": [
+                {"task_id": task_id, "task_title": task_titles[task_id], "report": updates[0]}
+                for task_id, updates in get_task_update_history(pid).items()
+            ],
         })
 
     return overview
 
 
-def render_attention_task(project_id, item, students):
+def render_attention_task(project_id, item, students, can_manage=True):
 
     task = item["task"]
+
+    if not can_manage:
+        return f'''
+        <div class="t-edit">
+            <span class="t-title">{escape(task["title"])}</span>
+            <span class="t-reason">{escape(" · ".join(item["reasons"]))}</span>
+            <a class="back" href="/project/{project_id}#task-{task['id']}">Открыть задачу →</a>
+        </div>'''
 
     options = '<option value="">Не назначена</option>'
 
@@ -4403,8 +4599,8 @@ def render_attention_task(project_id, item, students):
         <input type="hidden" name="next" value="/teacher">
         <span class="t-title">{escape(task["title"])}</span>
         <span class="t-reason">{escape(" · ".join(item["reasons"]))}</span>
-        <input type="date" name="deadline" value="{escape(task["deadline"] or "")}">
-        <select name="assignee_id">{options}</select>
+        <input type="date" name="deadline" aria-label="Дедлайн задачи" value="{escape(task["deadline"] or "")}">
+        <select name="assignee_id" aria-label="Ответственный ученик">{options}</select>
         <button type="submit">Сохранить</button>
     </form>
     """
@@ -4413,6 +4609,10 @@ def render_attention_task(project_id, item, students):
 def render_teacher_project(project):
 
     counts = project["counts"]
+    health_labels = {"overdue": "Есть просрочки", "attention": "Требует внимания",
+                     "done": "Завершён", "normal": "Всё по плану", "empty": "Нет задач"}
+    health = project["health"]
+    access_note = "" if project["can_manage"] else '<span class="t-muted">Наблюдение · управляет владелец проекта</span>'
     overdue_chip = (
         f'<span class="t-chip bad">Просрочено: {counts["overdue"]}</span>'
         if counts["overdue"] else
@@ -4458,7 +4658,7 @@ def render_teacher_project(project):
 
     if project["attention"]:
         items = "".join(
-            render_attention_task(project["id"], item, project["students"])
+            render_attention_task(project["id"], item, project["students"], project["can_manage"])
             for item in project["attention"]
         )
         attention_html = f'<div class="t-sub">Требуют внимания</div>{items}'
@@ -4467,17 +4667,22 @@ def render_teacher_project(project):
     <section class="t-project">
         <div class="t-project-head">
             <h2>{escape(project["name"])}</h2>
-            <a href="/project/{project["id"]}"><button type="button" class="secondary">Открыть доску</button></a>
+            <span class="teacher-health {health}">{health_labels[health]}</span>
+            <a href="/project/{project["id"]}" class="teacher-board-link">Открыть доску →</a>
         </div>
+        {access_note}
         <div class="t-chips">
             <span class="t-chip">Новые: {counts["todo"]}</span>
             <span class="t-chip">В работе: {counts["progress"]}</span>
             <span class="t-chip">Готово: {counts["done"]}</span>
             {overdue_chip}
+            <span class="t-chip">Без ответственного: {counts["unassigned"]}</span>
         </div>
         <div class="t-bar"><div style="width: {project["progress"]}%"></div></div>
         <p class="t-muted">{counts["done"]} из {project["total"]} задач · {project["progress"]}%</p>
-        {students_html}
+        <details class="teacher-students"><summary>Прогресс учеников ({len(project["students"])})</summary>
+            <div class="teacher-table-scroll">{students_html}</div>
+        </details>
         {attention_html}
     </section>
     """
@@ -4498,9 +4703,24 @@ def teacher_cabinet():
 
     overview = build_teacher_overview(user)
 
+    query = request.args.get("q", "").strip()[:100]
+    focus = request.args.get("focus", "all")
+    if focus not in ("all", "overdue", "attention", "done"):
+        focus = "all"
+    visible_projects = [
+        project for project in overview
+        if (not query or query.casefold() in project["name"].casefold()
+            or any(query.casefold() in student["name"].casefold()
+                   for student in project["students"]))
+        and (focus == "all" or project["health"] == focus
+             or focus == "attention" and bool(project["attention"]))
+    ]
+
     total_tasks = sum(p["total"] for p in overview)
     done_tasks = sum(p["counts"]["done"] for p in overview)
     overdue_tasks = sum(p["counts"]["overdue"] for p in overview)
+    soon_tasks = sum(p["counts"]["soon"] for p in overview)
+    unassigned_tasks = sum(p["counts"]["unassigned"] for p in overview)
     student_ids = {
         s["id"] for p in overview for s in p["students"]
     }
@@ -4511,13 +4731,49 @@ def teacher_cabinet():
         messages += f'<div class="{category}">{escape(text)}</div>'
 
     projects_html = "".join(
-        render_teacher_project(project) for project in overview
-    ) or """
+        render_teacher_project(project) for project in visible_projects
+    ) or ("""
         <div class="empty">
-            <h3>Проектов пока нет</h3>
-            <p>Создайте проект на главной странице — он появится здесь.</p>
+            <h3>Ничего не найдено</h3>
+            <p>Измените запрос или <a href="/teacher">сбросьте фильтры</a>.</p>
         </div>
-    """
+    """ if overview else """
+        <div class="empty">
+            <h3>Ваше рабочее пространство готово</h3>
+            <p>Создайте первый проект, добавьте учеников и назначьте им задачи.</p>
+        </div>
+    """)
+
+    focus_options = "".join(
+        f'<option value="{value}" {"selected" if focus == value else ""}>{label}</option>'
+        for value, label in (("all", "Все проекты"), ("overdue", "Есть просрочки"),
+                             ("attention", "Требуют внимания"), ("done", "Завершённые"))
+    )
+    reports = sorted(
+        [(project, entry) for project in visible_projects for entry in project["reports"]],
+        key=lambda pair: pair[1]["report"]["created_at"], reverse=True
+    )[:6]
+    reports_html = "".join(
+        f'''<article class="teacher-report-item">
+            <div class="teacher-report-meta"><strong>{escape(entry["report"]["username"])}</strong>
+                <time>{escape(entry["report"]["created_at"])} UTC</time></div>
+            <a href="/project/{project["id"]}#task-{entry["task_id"]}">{escape(project["name"])} · {escape(entry["task_title"])}</a>
+            <p>{escape(entry["report"]["body"])}</p>
+        </article>'''
+        for project, entry in reports
+    ) or '<p class="t-muted">Здесь появятся отчёты учеников по назначенным задачам.</p>'
+
+    attention_items = sorted(
+        [(project, item) for project in visible_projects for item in project["attention"]],
+        key=lambda pair: pair[1]["sort"]
+    )[:6]
+    attention_html = "".join(
+        f'''<a class="teacher-attention-item" href="/project/{project["id"]}#task-{item["task"]["id"]}">
+            <strong>{escape(item["task"]["title"])}</strong>
+            <span>{escape(project["name"])} · {escape(" · ".join(item["reasons"]))}</span>
+        </a>'''
+        for project, item in attention_items
+    ) or '<p class="t-muted">В выбранных проектах нет задач, требующих внимания.</p>'
 
     overdue_class = "warn" if overdue_tasks else ""
 
@@ -4528,10 +4784,13 @@ def teacher_cabinet():
         <div class="container">
             {render_header(user)}
             <main>
-                <div class="project-header">
-                    <a href="/" class="back">← Все проекты</a>
-                    <h1>Кабинет учителя</h1>
-                </div>
+                <section class="teacher-hero">
+                    <div><span class="teacher-eyebrow">КОНТРОЛЬ ПРОЕКТОВ</span>
+                        <h1>Кабинет учителя</h1>
+                        <p>{escape(user["username"])}, здесь видно, как движутся проекты вашей команды.</p>
+                    </div>
+                    <a href="#teacher-new-project" class="teacher-primary-link">+ Создать проект</a>
+                </section>
                 {messages}
                 <div class="t-stats">
                     <div class="t-stat"><strong>{len(overview)}</strong><span>Проектов</span></div>
@@ -4540,11 +4799,54 @@ def teacher_cabinet():
                     <div class="t-stat"><strong>{percent(done_tasks, total_tasks)}%</strong><span>Выполнено</span></div>
                     <div class="t-stat {overdue_class}"><strong>{overdue_tasks}</strong><span>Просрочено</span></div>
                 </div>
+                <div class="teacher-signal-strip">
+                    <span>В ближайшие 3 дня: <b>{soon_tasks}</b></span>
+                    <span>Без ответственного: <b>{unassigned_tasks}</b></span>
+                </div>
+                <form class="teacher-filters" method="get">
+                    <input type="search" name="q" value="{escape(query)}"
+                        aria-label="Поиск проекта или ученика" placeholder="Найти проект или ученика">
+                    <select name="focus" aria-label="Состояние проектов">{focus_options}</select>
+                    <button type="submit">Показать</button>
+                    <a href="/teacher" class="back">Сбросить</a>
+                </form>
+                <div class="teacher-dashboard-grid">
+                    <section class="teacher-panel"><h2>Требуют внимания</h2>{attention_html}</section>
+                    <section class="teacher-panel"><h2>Последние отчёты</h2>{reports_html}</section>
+                </div>
+                <div class="section-title"><h2>Проекты</h2>
+                    <span class="t-muted">Показано {len(visible_projects)} из {len(overview)}</span></div>
                 {projects_html}
+                <section class="teacher-panel" id="teacher-new-project">
+                    <h2>Новый проект</h2>
+                    <p class="t-muted">После создания добавьте участников на доске проекта.</p>
+                    <form class="teacher-create-form" method="post" action="/teacher/projects">
+                        <input name="name" maxlength="80" required aria-label="Название проекта"
+                            placeholder="Например: Исследование качества воды">
+                        <button type="submit">Создать проект</button>
+                    </form>
+                </section>
             </main>
         </div>
         """
     )
+
+
+@app.route("/teacher/projects", methods=["POST"])
+@login_required
+def create_teacher_project():
+    user = get_current_user()
+    if user["role"] != "teacher":
+        return render_error_page("Нет доступа", "Создание проекта в кабинете доступно учителю.", 403)
+
+    name = request.form.get("name", "").strip()
+    if not name or len(name) > 80:
+        flash("Введите название проекта от 1 до 80 символов.", "error")
+        return redirect("/teacher")
+
+    project_id = add_project(name)
+    flash("Проект создан. Добавьте учеников и задачи.", "success")
+    return redirect(f"/project/{project_id}")
 
 
 @app.route(
