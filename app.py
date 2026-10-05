@@ -57,6 +57,8 @@ def render_page(html):
             '<title>M-Flow — проекты и задачи</title>'
         '<link rel="stylesheet" href="/static/mflow-theme.css?v=20261005-mobile">'
         '<link rel="stylesheet" href="/static/mobile.css?v=20261005">'
+        '<link rel="stylesheet" href="/static/motion.css?v=20261005">'
+        '<script src="/static/motion.js?v=20261005"></script>'
             '</head><body>' + html + '</body></html>')
 
 

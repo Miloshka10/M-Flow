@@ -1,0 +1,49 @@
+/* Small, consistent feedback. No looping effects or delayed form submissions. */
+:root { --mf-motion: 180ms; --mf-ease: cubic-bezier(.22, .61, .36, 1); }
+button, .btn, a, summary, input[type="submit"], [role="button"] {
+  transition: background-color var(--mf-motion) ease, color var(--mf-motion) ease,
+    border-color var(--mf-motion) ease, box-shadow var(--mf-motion) ease,
+    opacity 120ms ease, transform var(--mf-motion) var(--mf-ease);
+}
+button:not(:disabled):active, .btn:active, input[type="submit"]:active,
+.logout:active, .teacher-primary-link:active, .assessment-person:active,
+.project-feature-links a:active, .project-row:active, summary:active {
+  transform: translateY(1px); opacity: .85;
+}
+a:active { opacity: .85; }
+button:disabled, [aria-disabled="true"] { transform: none; }
+input:not([type="checkbox"]), select, textarea {
+  transition: border-color var(--mf-motion) ease, outline-color var(--mf-motion) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .project-row:hover { transform: translateY(-2px); }
+  summary:hover { color: var(--mf-accent); }
+}
+
+/* The role switch is a two-position slider; actual links/roles remain unchanged. */
+.auth-role-switch { position: relative; isolation: isolate; }
+.auth-role-switch::before {
+  content: ""; position: absolute; z-index: -1; pointer-events: none;
+  inset: 4px auto 4px 4px; width: calc((100% - 12px) / 2);
+  border-radius: 7px; background: white; box-shadow: 0 1px 4px rgba(33,64,49,.08);
+  transition: transform 220ms var(--mf-ease);
+}
+.auth-role-teacher .auth-role-switch::before { transform: translateX(calc(100% + 4px)); }
+.auth-role-switch a.active { background: transparent; box-shadow: none; }
+.auth-form-side { overflow: clip; }
+.auth-form-inner.mf-leave-next { animation: mf-leave-next 120ms ease-in both; }
+.auth-form-inner.mf-leave-prev { animation: mf-leave-prev 120ms ease-in both; }
+html[data-mf-entry="next"] .auth-form-inner { animation: mf-enter-next 220ms var(--mf-ease) both; }
+html[data-mf-entry="prev"] .auth-form-inner { animation: mf-enter-prev 220ms var(--mf-ease) both; }
+html[data-mf-entry="next"] .auth-role-teacher .auth-role-switch::before { animation: mf-slider-next 220ms var(--mf-ease) both; }
+html[data-mf-entry="prev"] .auth-role-student .auth-role-switch::before { animation: mf-slider-prev 220ms var(--mf-ease) both; }
+@keyframes mf-leave-next { to { opacity: .25; transform: translateX(-12px); } }
+@keyframes mf-leave-prev { to { opacity: .25; transform: translateX(12px); } }
+@keyframes mf-enter-next { from { opacity: .25; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@keyframes mf-enter-prev { from { opacity: .25; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+@keyframes mf-slider-next { from { transform: translateX(0); } to { transform: translateX(calc(100% + 4px)); } }
+@keyframes mf-slider-prev { from { transform: translateX(calc(100% + 4px)); } to { transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  button:active, a:active, summary:active, .project-row:hover { transform: none !important; }
+}

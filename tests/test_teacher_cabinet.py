@@ -164,6 +164,27 @@ class TeacherCabinetTests(unittest.TestCase):
             self.assertNotIn('@import', response.text)
             self.assertNotIn('<style>', response.text)
 
+    def test_motion_assets_and_auth_links_preserve_normal_navigation(self):
+        for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
+            page = self.client.get(path)
+            self.assertEqual(page.text.count('/static/motion.css'), 1)
+            self.assertEqual(page.text.count('/static/motion.js'), 1)
+            mode = 'register' if path.endswith('register') else 'login'
+            self.assertIn(f'href="/{mode}"', page.text)
+            self.assertIn(f'href="/teacher/{mode}"', page.text)
+            self.assertIn('<form method="post">', page.text)
+        self.sign_in(1)
+        self.assertIn('/static/motion.js', self.client.get('/teacher').text)
+        with self.client.get('/static/motion.css') as response:
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('prefers-reduced-motion: reduce', response.text)
+            self.assertIn('mf-enter-next', response.text)
+            self.assertIn('mf-enter-prev', response.text)
+        with self.client.get('/static/motion.js') as response:
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('reduced.matches', response.text)
+            self.assertIn("window.addEventListener('pageshow'", response.text)
+
     def test_theme_supports_reduced_motion_and_accessible_focus(self):
         with self.client.get('/static/mflow-theme.css') as response:
             css = response.get_data(as_text=True)
