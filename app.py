@@ -59,6 +59,7 @@ def render_page(html):
         '<link rel="stylesheet" href="/static/mobile.css?v=20261005">'
         '<link rel="stylesheet" href="/static/motion.css?v=20261005-controls">'
         '<link rel="stylesheet" href="/static/preferences.css?v=20261005">'
+        '<link rel="stylesheet" href="/static/controls.css?v=20261005">'
         '<script src="/static/preferences.js?v=20261005"></script>'
         '<script src="/static/motion.js?v=20261005-controls"></script>'
             '</head><body>' + html + '</body></html>')
@@ -1471,7 +1472,7 @@ def profile():
         + f"""
         <div class="container">
             <div class="profile-card">
-                <a href="/">← На главную</a>
+                <a class="back" href="/">← На главную</a>
                 <h1>Профиль</h1>
                 <dl>
                     <dt>Логин</dt>

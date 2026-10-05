@@ -123,7 +123,7 @@ def render_stages(stages, user, token, submitted=None):
         if stage["result"]:
             html += f'<h3>{"Описание проекта" if number == 5 else "Результат этапа"}</h3><p class="stage-text">{escape(stage["result"])}</p>'
         if stage["presentation_url"]:
-            html += f'<p><a href="{escape(stage["presentation_url"], quote=True)}" target="_blank" rel="noopener noreferrer">Открыть презентацию ↗</a></p>'
+            html += f'<p><a class="action-link" href="{escape(stage["presentation_url"], quote=True)}" target="_blank" rel="noopener noreferrer">Открыть презентацию ↗</a></p>'
         if stage.get("author_name"):
             html += f'<small>Автор результата: {escape(stage["author_name"])} · Обновлено: {escape(stage["updated_at"])}</small>'
         if stage.get("reviewer_name"):

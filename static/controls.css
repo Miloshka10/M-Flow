@@ -1,0 +1,56 @@
+/* Outlined secondary actions across all pages; ordinary text links stay inline. */
+.account .logout, .back, .filter-reset, .teacher-board-link,
+.project-feature-links a, .auth-footer a, .action-link {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; max-width: 100%; padding: 10px 14px;
+  border: 1px solid var(--mf-line); border-radius: 10px;
+  background: var(--mf-card); color: var(--mf-text);
+  font-size: 13px; font-weight: 500; line-height: 1.5;
+  text-align: center; white-space: normal; overflow-wrap: anywhere;
+  vertical-align: middle;
+}
+.account .logout:hover, .back:hover, .filter-reset:hover, .teacher-board-link:hover,
+.project-feature-links a:hover, .auth-footer a:hover, .action-link:hover {
+  background: var(--mf-accent-soft); color: var(--mf-accent); border-color: var(--mf-accent);
+}
+.account { gap: 8px; }
+.main-header { flex-wrap: wrap; padding: 16px 0; }
+.account { min-width: 0; }
+.teacher-primary-link, a.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; max-width: 100%; text-align: center; }
+.auth-footer a { margin-top: 12px; }
+.project-feature-links { gap: 10px; }
+.t-project-head { gap: 10px; }
+.t-project-head h2 { flex-basis: 100%; margin-bottom: 4px; }
+.auth-tabs { gap: 8px; border-bottom: 0; flex-wrap: wrap; }
+.auth-tabs .auth-tab {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 44px; padding: 10px 16px; margin: 0;
+  border: 1px solid var(--mf-line); border-radius: 10px; background: var(--mf-card);
+}
+.auth-tabs .auth-tab.active { background: var(--mf-accent-soft); border-color: var(--mf-accent); color: var(--mf-accent); }
+.task-report-compose summary, .task-report-history summary,
+.teacher-students summary, .team-person summary {
+  min-height: 44px; width: fit-content; max-width: 100%; padding: 10px 14px;
+  border: 1px solid var(--mf-line); border-radius: 10px;
+  background: var(--mf-card); color: var(--mf-accent);
+  list-style-position: inside; font-size: 13px;
+}
+.task-report-compose summary:hover, .task-report-history summary:hover,
+.teacher-students summary:hover, .team-person summary:hover { background: var(--mf-accent-soft); border-color: var(--mf-accent); }
+.teacher-attention-item { border: 1px solid var(--mf-line); border-radius: 10px; padding: 14px; margin: 10px 0; }
+.teacher-attention-item:hover { background: var(--mf-accent-soft); border-color: var(--mf-accent); }
+.project-stage-summary { border: 1px solid var(--mf-line); }
+.task-card .delete-task { min-height: 44px; padding: 10px 12px; border: 1px solid var(--mf-line); background: var(--mf-card); color: var(--mf-danger); }
+.task-card .delete-task:hover { border-color: var(--mf-danger); background: var(--mf-accent-soft); color: var(--mf-danger); }
+@media (max-width: 800px) {
+  .main-header { gap: 12px; }
+  .account { justify-content: flex-start; }
+}
+@media (max-width: 650px) {
+  .account .logout { padding: 10px 12px; }
+  .t-project-head .teacher-board-link { flex: 1 1 130px; }
+}
+@media (forced-colors: active) {
+  .account .logout, .back, .filter-reset, .teacher-board-link, .action-link,
+  .project-feature-links a, .auth-footer a { border-color: ButtonText; }
+}

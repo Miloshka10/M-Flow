@@ -201,6 +201,21 @@ class TeacherCabinetTests(unittest.TestCase):
             with self.client.get('/static/' + asset) as response:
                 self.assertEqual(response.status_code, 200)
 
+    def test_outlined_actions_loaded_on_all_major_pages(self):
+        for path in ('/login', '/register', '/settings'):
+            self.assertEqual(self.client.get(path).text.count('/static/controls.css'), 1)
+        self.sign_in(1)
+        for path in ('/', '/teacher', '/profile', '/project/1', '/project/1/stages',
+                     '/project/1/assessment', '/project/1/team', '/project/1/defense'):
+            page = self.client.get(path)
+            self.assertEqual(page.status_code, 200)
+            self.assertEqual(page.text.count('/static/controls.css'), 1)
+        with self.client.get('/static/controls.css') as response:
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('.account .logout', response.text)
+            self.assertIn('var(--mf-line)', response.text)
+            self.assertIn('min-height: 44px', response.text)
+
     def test_theme_supports_reduced_motion_and_accessible_focus(self):
         with self.client.get('/static/mflow-theme.css') as response:
             css = response.get_data(as_text=True)
