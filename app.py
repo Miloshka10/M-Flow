@@ -48,7 +48,11 @@ def render_page(html):
     # Страницы собираются f-строками с экранированием через escape().
     # Отдаём их как есть: пропускать через Jinja нельзя, иначе
     # {{ ... }} из пользовательских данных будет выполнен как код.
-    return html
+    return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            '<title>M-Flow — проекты и задачи</title>'
+            '<link rel="stylesheet" href="/static/mflow-theme.css?v=20261005">'
+            '</head><body>' + html + '</body></html>')
 
 
 def teacher_nav(user):
@@ -875,1120 +879,6 @@ def get_student_progress(project_id):
 # =========================================================
 
 PAGE_STYLE = """
-<style>
-@import url('/static/mflow-theme.css');
-
-* {
-    box-sizing: border-box;
-}
-
-body {
-    margin: 0;
-    background: #f5f7fb;
-    color: #172033;
-    font-family: Inter, Arial, sans-serif;
-}
-
-a {
-    color: inherit;
-    text-decoration: none;
-}
-
-button,
-input,
-select {
-    font-family: inherit;
-}
-
-.container {
-    width: min(1150px, calc(100% - 40px));
-    margin: 0 auto;
-}
-
-
-/* HEADER */
-
-.main-header {
-    height: 78px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.brand {
-    font-size: 27px;
-    font-weight: 800;
-    letter-spacing: -1px;
-    color: #1f2937;
-}
-
-.brand span {
-    color: #2563eb;
-}
-
-.account {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.account-text {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-}
-
-.account-text strong {
-    font-size: 14px;
-}
-
-.account-text small {
-    margin-top: 3px;
-    color: #8a94a6;
-    font-size: 12px;
-}
-
-.avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
-    background: #2563eb;
-    color: white;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-weight: 700;
-}
-
-.logout {
-    margin-left: 5px;
-    color: #8a94a6;
-    font-size: 13px;
-}
-
-.logout:hover {
-    color: #2563eb;
-}
-
-
-/* HERO */
-
-.hero {
-    margin-top: 28px;
-    padding: 38px;
-    border-radius: 24px;
-    background: linear-gradient(
-        135deg,
-        #1d4ed8,
-        #4f46e5
-    );
-    color: white;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 30px;
-    box-shadow:
-        0 18px 40px
-        rgba(37, 99, 235, 0.18);
-}
-
-.eyebrow {
-    display: block;
-    margin-bottom: 10px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    color: rgba(255,255,255,0.65);
-}
-
-.hero h1 {
-    margin: 0;
-    font-size: 36px;
-    letter-spacing: -1px;
-    color: white;
-}
-
-.hero p {
-    margin: 10px 0 0;
-    color: rgba(255,255,255,0.78);
-    font-size: 15px;
-}
-
-.overall-progress {
-    min-width: 230px;
-}
-
-.overall-progress span {
-    display: block;
-    margin-bottom: 5px;
-    color: rgba(255,255,255,0.7);
-    font-size: 12px;
-}
-
-.overall-progress strong {
-    display: block;
-    margin-bottom: 10px;
-    font-size: 30px;
-}
-
-.main-progress {
-    width: 100%;
-    height: 8px;
-    background: rgba(255,255,255,0.2);
-    border-radius: 20px;
-    overflow: hidden;
-}
-
-.main-progress div {
-    height: 100%;
-    background: white;
-    border-radius: 20px;
-}
-
-
-/* STATS */
-
-.stats-line {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    margin: 22px 0 38px;
-    background: white;
-    border: 1px solid #e7ebf2;
-    border-radius: 18px;
-    overflow: hidden;
-}
-
-.stats-line > div {
-    padding: 20px 25px;
-    border-right: 1px solid #edf0f5;
-}
-
-.stats-line > div:last-child {
-    border-right: none;
-}
-
-.stats-line strong {
-    display: block;
-    font-size: 25px;
-}
-
-.stats-line span {
-    display: block;
-    margin-top: 4px;
-    color: #8a94a6;
-    font-size: 13px;
-}
-
-
-/* SECTIONS */
-
-.section-title {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 18px;
-}
-
-.section-title h2 {
-    margin: 0;
-    font-size: 23px;
-}
-
-.section-title p {
-    margin: 5px 0 0;
-    color: #8a94a6;
-    font-size: 13px;
-}
-
-
-/* BUTTONS */
-
-button {
-    border: none;
-    border-radius: 10px;
-    padding: 10px 15px;
-    background: #2563eb;
-    color: white;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: 0.18s ease;
-}
-
-button:hover {
-    background: #1d4ed8;
-    transform: translateY(-1px);
-}
-
-button.secondary {
-    background: #eef2f7;
-    color: #344054;
-}
-
-button.secondary:hover {
-    background: #e2e8f0;
-}
-
-
-/* INPUTS */
-
-input,
-.priority-select {
-    width: 100%;
-    padding: 11px 13px;
-    border: 1px solid #dce2eb;
-    border-radius: 10px;
-    background: white;
-    color: #172033;
-    outline: none;
-}
-
-input:focus,
-.priority-select:focus {
-    border-color: #2563eb;
-    box-shadow:
-        0 0 0 3px
-        rgba(37,99,235,0.1);
-}
-
-
-/* PROJECT */
-
-.new-project {
-    display: none;
-    padding: 15px;
-    margin-bottom: 15px;
-    background: white;
-    border: 1px solid #e3e8f0;
-    border-radius: 14px;
-}
-
-.new-project.show {
-    display: flex;
-    gap: 8px;
-}
-
-.new-project input {
-    flex: 1;
-}
-
-.projects-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.project-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 17px 19px;
-    background: white;
-    border: 1px solid #e5e9f0;
-    border-radius: 15px;
-    transition: 0.18s ease;
-}
-
-.project-row:hover {
-    border-color: #cbd7f8;
-    box-shadow:
-        0 8px 22px
-        rgba(30,41,59,0.07);
-    transform: translateY(-1px);
-}
-
-.project-info {
-    display: flex;
-    align-items: center;
-    gap: 13px;
-}
-
-.project-symbol {
-    width: 40px;
-    height: 40px;
-    border-radius: 11px;
-    background: #eef4ff;
-    color: #2563eb;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-weight: 800;
-}
-
-.project-info h3 {
-    margin: 0 0 4px;
-    font-size: 15px;
-}
-
-.project-info span {
-    color: #8a94a6;
-    font-size: 12px;
-}
-
-.project-status {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.project-status > span {
-    min-width: 38px;
-    color: #667085;
-    font-size: 12px;
-    text-align: right;
-}
-
-.project-status b {
-    color: #9aa4b5;
-    font-size: 18px;
-}
-
-.mini-progress {
-    width: 100px;
-    height: 6px;
-    background: #e9edf4;
-    border-radius: 20px;
-    overflow: hidden;
-}
-
-.mini-progress div {
-    height: 100%;
-    background: #2563eb;
-    border-radius: 20px;
-}
-
-
-/* EMPTY */
-
-.empty {
-    padding: 55px 20px;
-    text-align: center;
-    background: white;
-    border: 1px dashed #d5dce7;
-    border-radius: 17px;
-}
-
-.empty h3 {
-    margin: 0 0 7px;
-}
-
-.empty p {
-    margin: 0;
-    color: #8a94a6;
-    font-size: 13px;
-}
-
-
-/* PROJECT PAGE */
-
-.project-header {
-    margin-top: 25px;
-    margin-bottom: 25px;
-}
-
-.project-header h1 {
-    margin: 8px 0 0;
-    font-size: 32px;
-    letter-spacing: -1px;
-}
-
-.back {
-    color: #667085;
-    font-size: 13px;
-}
-
-.back:hover {
-    color: #2563eb;
-}
-
-
-/* CARDS */
-
-.card {
-    background: white;
-    border: 1px solid #e5e9f0;
-    border-radius: 17px;
-    padding: 24px;
-    margin: 18px 0;
-}
-
-.card h2 {
-    margin-top: 0;
-    font-size: 20px;
-}
-
-.card p {
-    color: #667085;
-}
-
-
-/* PROGRESS */
-
-.project-progress {
-    width: 100%;
-    height: 9px;
-    margin-top: 15px;
-    background: #e9edf4;
-    border-radius: 20px;
-    overflow: hidden;
-}
-
-.project-progress div {
-    height: 100%;
-    background: #2563eb;
-    border-radius: 20px;
-}
-
-
-/* KANBAN */
-
-.kanban-wrapper {
-    margin-top: 25px;
-}
-
-.kanban {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 18px;
-    align-items: start;
-}
-
-.kanban-column {
-    background: #eef1f6;
-    border-radius: 18px;
-    padding: 14px;
-    min-height: 350px;
-}
-
-.kanban-column.drag-over {
-    background: #e4ebfb;
-    outline: 2px dashed #2563eb;
-    outline-offset: -2px;
-}
-
-.kanban-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 4px 4px 13px;
-}
-
-.kanban-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 700;
-}
-
-.kanban-dot {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-}
-
-.dot-todo {
-    background: #94a3b8;
-}
-
-.dot-progress {
-    background: #f59e0b;
-}
-
-.dot-done {
-    background: #22c55e;
-}
-
-.kanban-count {
-    min-width: 25px;
-    height: 25px;
-    padding: 0 7px;
-    border-radius: 8px;
-    background: white;
-    color: #667085;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 11px;
-    font-weight: 700;
-}
-
-.kanban-cards {
-    min-height: 280px;
-}
-
-.task-card {
-    position: relative;
-    background: white;
-    border: 1px solid #e5e9f0;
-    border-radius: 14px;
-    padding: 15px;
-    margin-bottom: 10px;
-    cursor: grab;
-    box-shadow: 0 4px 12px rgba(15,23,42,0.04);
-    transition: 0.18s ease;
-}
-
-.task-card:hover {
-    box-shadow: 0 8px 20px rgba(15,23,42,0.08);
-    transform: translateY(-1px);
-}
-
-.task-card:active {
-    cursor: grabbing;
-}
-
-.task-card.dragging {
-    opacity: 0.45;
-    transform: rotate(2deg);
-}
-
-.task-title {
-    margin-bottom: 10px;
-    font-size: 14px;
-    font-weight: 650;
-    line-height: 1.45;
-    word-break: break-word;
-}
-
-.task-card.done-card .task-title {
-    color: #98a2b3;
-    text-decoration: line-through;
-}
-
-
-/* PRIORITY */
-
-.task-priority {
-    display: inline-flex;
-    align-items: center;
-    margin-bottom: 10px;
-    padding: 5px 8px;
-    border-radius: 7px;
-    background: #f5f7fb;
-    color: #667085;
-    font-size: 11px;
-}
-
-.task-priority-select {
-    width: 100%;
-    margin-bottom: 10px;
-    padding: 7px 9px;
-    border: 1px solid #e1e6ef;
-    border-radius: 8px;
-    background: #f8fafc;
-    color: #475467;
-    font-size: 11px;
-    outline: none;
-    cursor: pointer;
-}
-
-.task-priority-select:focus {
-    border-color: #2563eb;
-}
-
-.add-task-priority {
-    min-width: 180px;
-}
-
-
-/* DEADLINE */
-
-.task-deadline {
-    display: inline-flex;
-    align-items: center;
-    padding: 5px 8px;
-    border-radius: 7px;
-    background: #f5f7fb;
-    color: #667085;
-    font-size: 11px;
-}
-
-.task-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-}
-
-.delete-task {
-    border: none;
-    background: transparent;
-    color: #98a2b3;
-    padding: 4px 6px;
-    font-size: 11px;
-}
-
-.delete-task:hover {
-    color: #ef4444;
-    background: #fff1f2;
-    transform: none;
-}
-
-.kanban-empty {
-    padding: 30px 10px;
-    text-align: center;
-    color: #98a2b3;
-    font-size: 12px;
-}
-
-
-/* ADD TASK */
-
-.add-task-form {
-    display: grid;
-    grid-template-columns: 1fr 180px 180px auto;
-    gap: 8px;
-}
-
-
-/* MEMBERS */
-
-.member {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 13px 0;
-    border-bottom: 1px solid #edf0f5;
-}
-
-.member:last-child {
-    border-bottom: none;
-}
-
-.role {
-    margin-left: auto;
-    color: #98a2b3;
-    font-size: 13px;
-}
-
-
-/* MESSAGES */
-
-.error,
-.success {
-    padding: 12px 15px;
-    margin: 15px 0;
-    border-radius: 10px;
-    font-size: 13px;
-}
-
-.error {
-    background: #fff1f2;
-    color: #be123c;
-    border: 1px solid #fecdd3;
-}
-
-.success {
-    background: #ecfdf3;
-    color: #027a48;
-    border: 1px solid #abefc6;
-}
-
-
-/* LOGIN / REGISTER */
-
-.auth-page {
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 20px;
-    background: #171717;
-}
-
-.auth-card {
-    width: 100%;
-    max-width: 860px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    background: white;
-    border-radius: 28px;
-    overflow: hidden;
-    box-shadow: 0 30px 70px rgba(0,0,0,.35);
-}
-
-.auth-hero {
-    background: #171717;
-    color: white;
-    padding: 48px 40px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    position: relative;
-    overflow: hidden;
-}
-
-.auth-hero::after {
-    content: "";
-    position: absolute;
-    width: 220px;
-    height: 220px;
-    right: -60px;
-    top: -80px;
-    background: #ffcc00;
-    border-radius: 50%;
-    opacity: .9;
-}
-
-.auth-hero-content { position: relative; z-index: 1; }
-
-.auth-logo {
-    font-size: 26px;
-    font-weight: 800;
-    margin-bottom: 18px;
-}
-
-.auth-logo span { color: #ffcc00; }
-
-.auth-hero h2 {
-    font-size: 24px;
-    margin: 0 0 10px;
-}
-
-.auth-hero p {
-    color: rgba(255,255,255,.65);
-    font-size: 14px;
-    line-height: 1.5;
-}
-
-.auth-form-side {
-    padding: 48px 40px;
-}
-
-.auth-tabs {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 28px;
-    background: #f3f3f1;
-    padding: 5px;
-    border-radius: 12px;
-}
-
-.auth-tab {
-    flex: 1;
-    text-align: center;
-    padding: 10px;
-    border-radius: 9px;
-    text-decoration: none;
-    color: #777;
-    font-weight: 600;
-    font-size: 14px;
-}
-
-.auth-tab.active {
-    background: #171717;
-    color: white;
-}
-
-.auth-form-side input {
-    width: 100%;
-    margin-bottom: 12px;
-    padding: 13px 14px;
-    border-radius: 12px;
-    border: 1px solid #e6e6e2;
-}
-
-.auth-form-side button {
-    width: 100%;
-    padding: 13px;
-    margin-top: 6px;
-    border-radius: 12px;
-    border: 0;
-    background: #171717;
-    color: white;
-    font-weight: 700;
-    cursor: pointer;
-}
-
-.auth-form-side button:hover { background: #ffcc00; color: #171717; }
-
-@media (max-width: 700px) {
-    .auth-card { grid-template-columns: 1fr; }
-    .auth-hero { padding: 32px 28px; }
-}
-
-
-/* DEADLINES */
-
-.task-deadline.deadline-overdue {
-    color: #c0392b;
-    font-weight: 700;
-}
-
-.task-deadline.deadline-soon {
-    color: #b7791f;
-    font-weight: 700;
-}
-
-.hot-strip {
-    margin: 0 0 18px;
-    padding: 14px 18px;
-    border-radius: 18px;
-    background: #fff4b8;
-    border: 1px solid #f1d96b;
-}
-
-.hot-strip strong { display: block; margin-bottom: 8px; }
-
-.hot-strip ul { margin: 0; padding-left: 18px; }
-
-.hot-strip li { margin: 3px 0; font-size: 14px; }
-
-.hot-strip li.overdue { color: #c0392b; font-weight: 600; }
-
-
-/* PROFILE */
-
-.profile-card {
-    max-width: 520px;
-    margin: 30px auto;
-    padding: 28px;
-    background: white;
-    border: 1px solid #e6e6e2;
-    border-radius: 24px;
-    box-shadow: 0 10px 30px rgba(0,0,0,.06);
-}
-
-.profile-card h1 { margin-top: 0; }
-
-.profile-card dl { margin: 0 0 22px; }
-
-.profile-card dt { color: #777; font-size: 13px; margin-top: 12px; }
-
-.profile-card dd { margin: 2px 0 0; font-weight: 600; }
-
-.profile-card input {
-    width: 100%;
-    margin-bottom: 10px;
-}
-
-.profile-card .ok { color: #1e7e4f; margin-bottom: 12px; }
-
-
-/* TASK FILTERS */
-
-.task-filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin: 0 0 18px;
-    align-items: center;
-}
-
-.task-filters input[type="search"] {
-    flex: 1;
-    min-width: 180px;
-}
-
-.task-filters select {
-    min-width: 150px;
-}
-
-.task-filters label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 14px;
-    color: #555;
-}
-
-.task-filters .filter-reset {
-    font-size: 13px;
-    color: #777;
-    text-decoration: none;
-}
-
-
-/* MOBILE */
-
-@media (max-width: 1050px) {
-
-    .add-task-form {
-        grid-template-columns:
-            1fr 150px 150px auto;
-    }
-}
-
-@media (max-width: 850px) {
-
-    .kanban {
-        grid-template-columns: 1fr;
-    }
-
-    .kanban-column {
-        min-height: auto;
-    }
-
-    .kanban-cards {
-        min-height: 80px;
-    }
-
-    .add-task-form {
-        grid-template-columns: 1fr;
-    }
-
-    .add-task-priority {
-        min-width: 0;
-    }
-}
-
-@media (max-width: 700px) {
-
-    .container {
-        width: min(100% - 28px, 1150px);
-    }
-
-    .hero {
-        flex-direction: column;
-        align-items: flex-start;
-        padding: 28px;
-    }
-
-    .overall-progress {
-        width: 100%;
-    }
-
-    .hero h1 {
-        font-size: 29px;
-    }
-
-    .stats-line {
-        grid-template-columns: 1fr;
-    }
-
-    .stats-line > div {
-        border-right: none;
-        border-bottom: 1px solid #edf0f5;
-    }
-
-    .stats-line > div:last-child {
-        border-bottom: none;
-    }
-
-    .section-title {
-        align-items: flex-start;
-        gap: 15px;
-    }
-
-    .project-row {
-        gap: 15px;
-    }
-
-    .project-status {
-        gap: 6px;
-    }
-
-    .mini-progress {
-        display: none;
-    }
-
-    .account-text {
-        display: none;
-    }
-
-    .member {
-        flex-wrap: wrap;
-    }
-
-    .role {
-        margin-left: 0;
-    }
-
-    .new-project.show {
-        flex-direction: column;
-    }
-}
-
-
-/* DESIGN FIXES */
-
-select {
-    padding: 10px 12px;
-    border: 1px solid #dce2eb;
-    border-radius: 10px;
-    background: white;
-    color: #172033;
-    font-size: 13px;
-    outline: none;
-}
-
-select:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
-
-input[type="checkbox"] { width: auto; margin: 0; }
-
-.stats-line { grid-template-columns: repeat(4, 1fr); }
-
-.focus-strip {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin: 0 0 30px;
-    padding: 14px 20px;
-    background: white;
-    border: 1px solid #e7ebf2;
-    border-radius: 16px;
-}
-
-.focus-strip > div:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 3px; }
-.focus-strip span { color: #8a94a6; font-size: 13px; }
-.focus-icon { width: 36px; height: 36px; border-radius: 10px; background: #eef4ff; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-.focus-mark { color: #cbd5e1; font-weight: 800; font-size: 20px; }
-
-.project-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 0 0 8px; }
-.metric-card { background: white; border: 1px solid #e5e9f0; border-radius: 14px; padding: 14px 16px; border-left: 4px solid #94a3b8; }
-.metric-card span { display: block; color: #8a94a6; font-size: 12px; }
-.metric-card strong { display: block; margin-top: 4px; font-size: 24px; }
-.metric-progress { border-left-color: #f59e0b; }
-.metric-done { border-left-color: #22c55e; }
-.metric-overdue { border-left-color: #ef4444; }
-.metric-overdue strong { color: #c0392b; }
-
-.task-filters select { min-width: 160px; }
-.task-filters label { white-space: nowrap; }
-.task-filters .filter-reset { color: #667085; }
-
-.add-task-form { grid-template-columns: 1fr 160px 160px 170px auto; align-items: center; }
-.add-task-form select, .add-task-form input { width: 100%; min-width: 0; }
-.add-task-form .add-task-priority { min-width: 0; }
-
-.task-footer { flex-wrap: wrap; row-gap: 8px; }
-.task-footer .role { margin-left: 0; font-size: 12px; }
-.task-card .task-priority:has(+ .task-priority-select) { display: none; }
-
-.hot-strip { background: #fffbeb; border-color: #fde68a; }
-
-.login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; background: #0f172a; }
-.login-box { width: 100%; max-width: 420px; padding: 36px; background: white; border-radius: 24px; }
-.login-logo { font-size: 24px; font-weight: 800; margin-bottom: 18px; }
-.login-logo span { color: #2563eb; }
-
-.auth-page { background: #0f172a; }
-.auth-hero { background: linear-gradient(135deg, #1d4ed8, #4f46e5); }
-.auth-hero::after { background: rgba(255,255,255,0.14); opacity: 1; }
-.auth-logo span { color: #bfdbfe; }
-.auth-tabs { background: #eef2f7; }
-.auth-tab.active { background: #2563eb; }
-.auth-form-side input { border-color: #dce2eb; }
-.auth-form-side button { background: #2563eb; }
-.auth-form-side button:hover { background: #1d4ed8; color: white; }
-
-@media (max-width: 1050px) {
-    .add-task-form { grid-template-columns: 1fr 1fr; }
-    .add-task-form input[name="title"] { grid-column: 1 / -1; }
-    .stats-line, .project-metrics { grid-template-columns: repeat(2, 1fr); }
-    .stats-line > div:nth-child(2) { border-right: none; }
-    .stats-line > div:nth-child(-n+2) { border-bottom: 1px solid #edf0f5; }
-}
-
-@media (max-width: 700px) {
-    .add-task-form { grid-template-columns: 1fr; }
-    .stats-line { grid-template-columns: 1fr 1fr; }
-    .focus-mark { display: none; }
-}
-
-</style>
 
 
 <script>
@@ -2317,7 +1207,7 @@ def render_auth_page(mode, error=None, role="student"):
     username = escape(request.form.get("username", "")[:30])
 
     error_html = (
-        f'<div class="error">{escape(error)}</div>'
+        f'<div class="error" role="alert">{escape(error)}</div>'
         if error
         else ""
     )
@@ -2360,29 +1250,37 @@ def render_auth_page(mode, error=None, role="student"):
         + f"""
         <div class="auth-page auth-role-{role}">
             <div class="auth-card">
-                <div class="auth-hero">
-                    <div class="auth-hero-content">
-                        <div class="auth-logo">M<span>-</span>Flow</div>
-                        <span class="auth-role-badge">{role_title}</span>
-                        <h2>{hero_title}</h2>
-                        <p>{hero_text}</p>
-                    </div>
-                </div>
                 <div class="auth-form-side">
+                    <div class="auth-form-inner">
+                    <a href="{prefix}/login" class="brand auth-form-brand" aria-label="M-Flow — вход">M<span>-</span>Flow</a>
+                    <h1>{"С возвращением" if is_login else "Создать аккаунт"}</h1>
+                    <p class="auth-intro">{role_title} · {"Продолжите работу над проектами." if is_login else "Всё для работы над школьным проектом."}</p>
                     <nav class="auth-role-switch" aria-label="Выбор роли">
                         <a href="{student_url}" class="{"active" if not is_teacher else ""}" {"aria-current='page'" if not is_teacher else ""}>Я ученик</a>
                         <a href="{teacher_url}" class="{"active" if is_teacher else ""}" {"aria-current='page'" if is_teacher else ""}>Я учитель</a>
                     </nav>
                     <div class="auth-tabs">
-                        <a href="{prefix}/login" class="auth-tab {login_active}">Вход</a>
-                        <a href="{prefix}/register" class="auth-tab {register_active}">Регистрация</a>
+                        <a href="{prefix}/login" class="auth-tab {login_active}" {"aria-current='page'" if is_login else ""}>Вход</a>
+                        <a href="{prefix}/register" class="auth-tab {register_active}" {"aria-current='page'" if not is_login else ""}>Регистрация</a>
                     </div>
                     {error_html}
                     <form method="post">
                         {form_fields}
                         <button type="submit">{submit_label}</button>
                     </form>
+                    <p class="auth-footer">{"Ваши проекты, этапы и отчёты — в одном кабинете." if is_teacher else "Учитель сможет добавить вас в проект по вашему логину."}</p>
+                    </div>
                 </div>
+                <aside class="auth-hero" aria-label="О проекте M-Flow">
+                    <div class="auth-hero-top">Рабочее пространство школьных проектов</div>
+                    <div class="auth-hero-content">
+                        <h2 class="auth-logo auth-shimmer">M-Flow</h2>
+                        <div class="auth-byline auth-shimmer">by Minich</div>
+                        <h3>{hero_title}</h3>
+                        <p>{hero_text}</p>
+                    </div>
+                    <div class="auth-hero-footer">От выбора темы до защиты проекта.</div>
+                </aside>
             </div>
         </div>
         """
@@ -3145,7 +2043,7 @@ def project(project_id):
         )
 
     hot_html = (
-        f'<div class="hot-strip"><strong>🔥 Горящие дедлайны</strong>'
+        f'<div class="hot-strip"><strong>Горящие дедлайны</strong>'
         f'<ul>{hot_items}</ul></div>'
         if hot_items
         else ""
@@ -3163,13 +2061,13 @@ def project(project_id):
 
     filters_html = f"""
     <form method="get" class="task-filters">
-        <input type="search" name="q" value="{escape(search_query)}" placeholder="Поиск по названию задачи">
-        <select name="priority">
+        <input type="search" name="q" value="{escape(search_query)}" placeholder="Поиск по названию задачи" aria-label="Поиск по названию задачи">
+        <select name="priority" aria-label="Фильтр приоритета">
             <option value="">Любой приоритет</option>
-            <option value="low" {selected("low")}>🟢 Низкий</option>
-            <option value="normal" {selected("normal")}>🔵 Обычный</option>
-            <option value="high" {selected("high")}>🟠 Высокий</option>
-            <option value="urgent" {selected("urgent")}>🔴 Срочный</option>
+            <option value="low" {selected("low")}>Низкий</option>
+            <option value="normal" {selected("normal")}>Обычный</option>
+            <option value="high" {selected("high")}>Высокий</option>
+            <option value="urgent" {selected("urgent")}>Срочный</option>
         </select>
         <label><input type="checkbox" name="mine" value="1" {mine_checked}> Только мои</label>
         <button type="submit">Найти</button>
@@ -3248,14 +2146,6 @@ def project(project_id):
         }
 
 
-        priority_icons = {
-            "low": "🟢",
-            "normal": "🔵",
-            "high": "🟠",
-            "urgent": "🔴"
-        }
-
-
         priority = (
             task["priority"]
             or "normal"
@@ -3265,12 +2155,6 @@ def project(project_id):
         priority_name = priority_names.get(
             priority,
             "Обычный"
-        )
-
-
-        priority_icon = priority_icons.get(
-            priority,
-            "🔵"
         )
 
 
@@ -3387,10 +2271,10 @@ def project(project_id):
 
         priority_control = f"""
             <select class="task-priority-select" data-task-id="{task_id}" onchange="changePriority(this)">
-                <option value="low" {low_selected}>🟢 Низкий</option>
-                <option value="normal" {normal_selected}>🔵 Обычный</option>
-                <option value="high" {high_selected}>🟠 Высокий</option>
-                <option value="urgent" {urgent_selected}>🔴 Срочный</option>
+                <option value="low" {low_selected}>Низкий</option>
+                <option value="normal" {normal_selected}>Обычный</option>
+                <option value="high" {high_selected}>Высокий</option>
+                <option value="urgent" {urgent_selected}>Срочный</option>
             </select>
         """ if owner else ""
 
@@ -3408,8 +2292,7 @@ def project(project_id):
             </div>
 
 
-            <div class="task-priority">
-                {priority_icon}
+            <div class="task-priority priority-{escape(priority)}">
                 {priority_name}
             </div>
 
@@ -3424,10 +2307,10 @@ def project(project_id):
             <div class="task-footer">
 
                 <span class="task-deadline {deadline_class}">
-                    📅 {safe_deadline}
+                    {safe_deadline}
                 </span>
 
-                <span class="role">👤 {assignee_name}</span>
+                <span class="role">{assignee_name}</span>
 
                 {delete_control}
 
@@ -3638,15 +2521,15 @@ def project(project_id):
     <div class="card">
         <h2>Добавить задачу</h2>
         <form action="/project/{project_id}/add" method="post" class="add-task-form">
-            <input name="title" placeholder="Название задачи" required>
-            <input name="deadline" type="date">
-            <select name="priority" class="priority-select add-task-priority">
-                <option value="low">🟢 Низкий</option>
-                <option value="normal" selected>🔵 Обычный</option>
-                <option value="high">🟠 Высокий</option>
-                <option value="urgent">🔴 Срочный</option>
+            <input name="title" placeholder="Название задачи" aria-label="Название задачи" required>
+            <input name="deadline" type="date" aria-label="Дедлайн задачи">
+            <select name="priority" class="priority-select add-task-priority" aria-label="Приоритет новой задачи">
+                <option value="low">Низкий</option>
+                <option value="normal" selected>Обычный</option>
+                <option value="high">Высокий</option>
+                <option value="urgent">Срочный</option>
             </select>
-            <select name="assignee_id" class="priority-select">
+            <select name="assignee_id" class="priority-select" aria-label="Ответственный за задачу">
                 {student_options}
             </select>
             <button type="submit">Добавить</button>
@@ -3674,10 +2557,7 @@ def project(project_id):
             <form
                 action="/project/{project_id}/add_member"
                 method="post"
-                style="
-                    display:flex;
-                    gap:8px;
-                "
+                class="member-add-form"
             >
 
                 <input
@@ -4475,34 +3355,7 @@ def delete_project_task(
 # TEACHER CABINET
 # =========================================================
 
-TEACHER_STYLE = """
-<style>
-.t-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 22px 0; }
-.t-stat { background: white; border: 1px solid #e5e9f0; border-radius: 16px; padding: 16px 18px; }
-.t-stat strong { display: block; font-size: 26px; }
-.t-stat span { color: #8a94a6; font-size: 13px; }
-.t-stat.warn strong { color: #c0392b; }
-.t-project { background: white; border: 1px solid #e5e9f0; border-radius: 18px; padding: 22px; margin-bottom: 18px; }
-.t-project-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.t-project-head h2 { margin: 0; font-size: 20px; }
-.t-chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
-.t-chip { background: #f5f7fb; border-radius: 8px; padding: 5px 10px; font-size: 12px; color: #475467; }
-.t-chip.bad { background: #fff1f2; color: #be123c; }
-.t-bar { height: 8px; background: #e9edf4; border-radius: 20px; overflow: hidden; }
-.t-bar div { height: 100%; background: #2563eb; border-radius: 20px; }
-.t-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
-.t-table th { text-align: left; color: #8a94a6; font-size: 12px; font-weight: 600; padding: 6px 8px; }
-.t-table td { padding: 9px 8px; border-top: 1px solid #edf0f5; vertical-align: middle; }
-.t-table .t-bar { width: 120px; }
-.t-sub { margin: 20px 0 8px; font-size: 14px; font-weight: 700; }
-.t-edit { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid #edf0f5; }
-.t-edit .t-title { flex: 1; min-width: 160px; font-weight: 600; font-size: 14px; word-break: break-word; }
-.t-edit .t-reason { font-size: 12px; color: #c0392b; min-width: 140px; }
-.t-edit input[type=date], .t-edit select { width: auto; padding: 7px 9px; font-size: 13px; }
-.t-muted { color: #8a94a6; font-size: 13px; }
-@media (max-width: 850px) { .t-stats { grid-template-columns: repeat(2, 1fr); } }
-</style>
-"""
+TEACHER_STYLE = ""
 
 
 def percent(done, total):
@@ -4556,7 +3409,7 @@ def project_stage_page(project_id):
     finally:
         conn.close()
     messages = "".join(f'<p role="status">{escape(message)}</p>' for message in get_flashed_messages())
-    return render_page('<meta name="viewport" content="width=device-width, initial-scale=1">' + PAGE_STYLE + f'''
+    return render_page(PAGE_STYLE + f'''
         <link rel="stylesheet" href="/static/project-stages.css"><div class="container">{render_header(user)}
         <main class="stages-page"><a class="back" href="/project/{project_id}">← К задачам проекта</a>
         <h1>Пять этапов · {escape(project_name)}</h1>
@@ -4671,7 +3524,7 @@ def project_assessment(project_id):
             content = '<section class="card"><h2>Оценка ещё не опубликована</h2><p>Здесь появятся ваши баллы и примечание учителя.</p></section>'
     conn.close()
     messages = "".join(f'<p role="status">{escape(message)}</p>' for message in get_flashed_messages())
-    return render_page('<meta name="viewport" content="width=device-width, initial-scale=1">' + PAGE_STYLE + f'''<link rel="stylesheet" href="/static/assessment.css">
+    return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/assessment.css">
         <div class="app">{render_header(user)}<main class="main-content assessment-page">
         <a class="back" href="/project/{project_id}">← К задачам проекта</a>
         <h1>Оценивание · {escape(project_name)}</h1>

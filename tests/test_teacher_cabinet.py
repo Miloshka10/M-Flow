@@ -101,6 +101,41 @@ class TeacherCabinetTests(unittest.TestCase):
         conn.close()
         self.assertIn("/project/1/stages", self.client.get("/project/1").text)
 
+    def test_auth_design_form_precedes_brand_and_preserves_controls(self):
+        for path in ("/login", "/register", "/teacher/login", "/teacher/register"):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.text.startswith('<!doctype html><html lang="ru">'))
+            self.assertEqual(response.text.count('name="viewport"'), 1)
+            self.assertEqual(response.text.count('/static/mflow-theme.css'), 1)
+            self.assertLess(response.text.index('class="auth-form-side"'), response.text.index('class="auth-hero"'))
+            self.assertIn('by Minich', response.text)
+            self.assertIn('name="username"', response.text)
+            self.assertIn('type="password"', response.text)
+            self.assertIn('aria-label="Выбор роли"', response.text)
+            if path.endswith("register"):
+                self.assertIn('name="repeat_password"', response.text)
+
+    def test_all_workspaces_use_same_stylesheet(self):
+        self.sign_in(1)
+        for path in ("/", "/teacher", "/profile", "/project/1", "/project/1/stages", "/project/1/assessment"):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.text.count('/static/mflow-theme.css'), 1)
+            self.assertEqual(response.text.count('name="viewport"'), 1)
+            self.assertNotIn('@import', response.text)
+            self.assertNotIn('<style>', response.text)
+
+    def test_theme_supports_reduced_motion_and_accessible_focus(self):
+        with self.client.get('/static/mflow-theme.css') as response:
+            css = response.get_data(as_text=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('prefers-reduced-motion: reduce', css)
+            self.assertIn('forced-colors: active', css)
+            self.assertIn(':focus-visible', css)
+            self.assertIn('wordmark-shimmer', css)
+            self.assertNotIn('#ffcc00', css)
+
     def test_all_five_stages_can_be_completed(self):
         for number in range(1, 6):
             fields = {"presentation_url": "https://example.com/slides"} if number == 5 else {}

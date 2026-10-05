@@ -1,11 +1,11 @@
-.stages-page { max-width: 1050px; padding: 28px 20px; margin: 0 auto; }
+.stages-page { padding: 28px 0; margin: 0 auto; }
 .stage-summary { padding: 16px; background: #e4f2ee; border-radius: 12px; font-weight: 700; }
 .stage-timeline { display: grid; gap: 18px; margin-top: 24px; }
-.stage-card { background: white; padding: 24px; border: 1px solid #d5e2df; border-radius: 18px; }
+.stage-card { background: var(--mf-card); padding: 24px; border: 1px solid var(--mf-line); border-radius: var(--mf-radius); }
 .stage-card.done { border-left: 5px solid #348777; }
 .stage-card.review { border-left: 5px solid #d79837; }
-.stage-card.progress { border-left: 5px solid #5286ba; }
-.stage-card.locked { background: #f3f5f6; color: #586777; }
+.stage-card.progress { border-left: 5px solid var(--mf-accent); }
+.stage-card.locked { background: #edf2ef; color: var(--mf-muted); }
 .stage-heading { display: flex; align-items: center; gap: 14px; }
 .stage-heading h2 { margin: 0; font-size: 21px; }
 .stage-number { flex-shrink: 0; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: #dceee8; color: #245a4e; font-weight: 700; }
@@ -13,7 +13,8 @@
 .stage-card label { display: block; margin: 20px 0; }
 .stage-card textarea, .stage-card input { display: block; width: 100%; padding: 12px; margin-top: 8px; box-sizing: border-box; border: 1px solid #b8c9cf; border-radius: 10px; font: inherit; }
 .stage-actions { display: flex; flex-wrap: wrap; gap: 12px; }
-.stage-actions button { padding: 12px 18px; border: 1px solid #297363; border-radius: 10px; background: #286e60; color: white; font: inherit; cursor: pointer; }
+.stage-actions button { background: var(--mf-accent); }
+.stage-actions button:hover { background: var(--mf-accent-hover); }
 .stage-actions button[value="save"], .stage-actions button[value="return"] { background: #eaf3f0; color: #285c50; }
 .stage-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .stage-comment { padding: 14px; border-radius: 10px; background: #fff4df; }
