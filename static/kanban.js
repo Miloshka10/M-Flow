@@ -19,7 +19,8 @@ async function saveTask(card, endpoint, value) {
   controls.forEach(control => control.disabled = true);
   try {
     const response = await fetch(window.location.pathname + '/' + endpoint, {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
+      method: 'POST', headers: {'Content-Type': 'application/json',
+        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''},
       body: JSON.stringify({task_id: Number(card.dataset.taskId), [endpoint]: value})
     });
     if (response.redirected || response.status === 401) throw new Error('Сессия завершена. Войдите в аккаунт заново.');

@@ -9,6 +9,29 @@ import sqlite3
 from datetime import date, timedelta
 from werkzeug.security import generate_password_hash
 from unittest.mock import patch
+from html.parser import HTMLParser
+
+
+class FormTokens(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.forms, self.current, self.meta = [], None, None
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == 'meta' and attrs.get('name') == 'csrf-token':
+            self.meta = attrs.get('content')
+        if tag == 'form':
+            self.current = dict(method=attrs.get('method', 'get').lower(),
+                                action=attrs.get('action'), tokens=[])
+            self.forms.append(self.current)
+        if tag == 'input' and self.current is not None and attrs.get('name') == 'csrf_token':
+            self.current['tokens'].append(attrs.get('value'))
+
+    def handle_endtag(self, tag):
+        if tag == 'form':
+            self.current = None
 
 
 class TeacherCabinetTests(unittest.TestCase):
@@ -60,9 +83,24 @@ class TeacherCabinetTests(unittest.TestCase):
     def sign_in(self, user_id):
         with self.client.session_transaction() as session:
             session["user_id"] = user_id
-            session["assessment_csrf"] = "test-form-token"
-            session["stages_csrf"] = "test-stage-token"
-            session["collaboration_csrf"] = "test-collaboration-token"
+            session["csrf_token"] = "test-form-token"
+
+    def post(self, path, **kwargs):
+        """Functional tests send the same token as a real form/AJAX client.
+
+        CSRF rejection tests deliberately use self.client.post directly.
+        """
+        with self.client.session_transaction() as session:
+            token = session.get('csrf_token')
+        if token is None:
+            self.client.get('/login')
+            with self.client.session_transaction() as session:
+                token = session['csrf_token']
+        if 'json' in kwargs:
+            kwargs.setdefault('headers', {})['X-CSRF-Token'] = token
+        else:
+            kwargs.setdefault('data', {}).setdefault('csrf_token', token)
+        return self.client.post(path, **kwargs)
 
     def count_page_queries(self, path):
         statements = []
@@ -78,6 +116,167 @@ class TeacherCabinetTests(unittest.TestCase):
             response = self.client.get(path)
         self.assertEqual(response.status_code, 200)
         return len(statements)
+
+    def database_snapshot(self):
+        conn = self.module.get_db()
+        try:
+            return tuple(conn.iterdump())
+        finally:
+            conn.close()
+
+    def test_every_post_route_rejects_missing_and_invalid_csrf_without_mutation(self):
+        adapter = self.module.app.url_map.bind('localhost')
+        routes = [rule for rule in self.module.app.url_map.iter_rules() if 'POST' in rule.methods]
+        self.assertGreaterEqual(len(routes), 20)
+        for user_id in (1, 3):
+            self.sign_in(user_id)
+            before = self.database_snapshot()
+            for rule in routes:
+                path = adapter.build(rule.endpoint, {arg: 1 for arg in rule.arguments})
+                for token in (None, '', 'wrong', 'неверный', 'x' * 129):
+                    with self.subTest(user=user_id, path=path, token=token):
+                        if path.endswith(('/status', '/priority')):
+                            headers = {} if token is None else {'X-CSRF-Token': token}
+                            response = self.client.post(path, json={'task_id': 1, 'status': 'done', 'priority': 'high'}, headers=headers)
+                            self.assertEqual(response.json['code'], 'csrf_failed')
+                        else:
+                            data = {} if token is None else {'csrf_token': token}
+                            response = self.client.post(path, data=data)
+                            self.assertIn('Обновите страницу', response.text)
+                        self.assertEqual(response.status_code, 400)
+            self.assertEqual(self.database_snapshot(), before)
+            with self.client.session_transaction() as session:
+                self.assertEqual(session['user_id'], user_id)
+
+    def test_all_rendered_post_forms_have_one_shared_token(self):
+        paths = ('/', '/teacher', '/project/1', '/profile', '/settings', '/skills', '/teams',
+                 '/project/1/team', '/project/1/defense', '/project/1/stages', '/project/1/assessment')
+        for user_id in (1, 3):
+            self.sign_in(user_id)
+            for path in paths:
+                page = self.client.get(path)
+                if page.status_code == 403:
+                    continue
+                with self.subTest(user=user_id, path=path):
+                    self.assertEqual(page.status_code, 200)
+                    parsed = FormTokens(page.text)
+                    self.assertEqual(parsed.meta, 'test-form-token')
+                    self.assertNotIn('href="/logout"', page.text)
+                    for form in parsed.forms:
+                        self.assertEqual(form['tokens'], [parsed.meta] if form['method'] == 'post' else [])
+                    if path != '/profile':  # Profile has a back link, not a header.
+                        self.assertTrue(any(f['action'] == '/logout' for f in parsed.forms))
+        for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
+            page = FormTokens(self.client.get(path).text)
+            self.assertTrue(page.meta)
+            self.assertEqual(page.forms[0]['tokens'], [page.meta])
+
+    def test_logout_is_post_only_and_invalid_tokens_leave_session_active(self):
+        self.sign_in(1)
+        self.assertEqual(self.client.get('/logout').status_code, 405)
+        self.assertEqual(self.client.post('/logout').status_code, 400)
+        self.assertEqual(self.client.post('/logout', data={'csrf_token': 'wrong'}).status_code, 400)
+        with self.client.session_transaction() as session:
+            self.assertEqual(session['user_id'], 1)
+        self.assertEqual(self.post('/logout').location, '/teacher/login')
+        with self.client.session_transaction() as session:
+            self.assertNotIn('user_id', session)
+            self.assertNotIn('csrf_token', session)
+
+    def test_csrf_token_is_bound_to_session_and_rotated_on_login(self):
+        first = self.module.app.test_client()
+        second = self.module.app.test_client()
+        token = FormTokens(first.get('/login').text).meta
+        other = FormTokens(second.get('/login').text).meta
+        self.assertNotEqual(token, other)
+        payload = dict(username='student-one', password='test-password')
+        self.assertEqual(second.post('/login', data=dict(payload, csrf_token=token)).status_code, 400)
+        response = first.post('/login', data=dict(payload, csrf_token=token))
+        self.assertEqual(response.location, '/')
+        fresh = FormTokens(first.get('/').text).meta
+        self.assertNotEqual(token, fresh)
+        before = self.database_snapshot()
+        self.assertEqual(first.post('/project/1/status', json={'task_id': 1, 'status': 'done'},
+                                    headers={'X-CSRF-Token': token}).status_code, 400)
+        self.assertEqual(self.database_snapshot(), before)
+        self.assertEqual(first.post('/project/1/status', json={'task_id': 1, 'status': 'done'},
+                                    headers={'X-CSRF-Token': fresh}).status_code, 200)
+        with first.session_transaction() as session:
+            session.clear()
+        expired = first.post('/project/1/status', json={'task_id': 1, 'status': 'todo'}, headers={'X-CSRF-Token': fresh})
+        self.assertEqual(expired.status_code, 401)
+        self.assertIn('Сессия завершена', expired.json['error'])
+
+    def test_anonymous_auth_posts_also_require_csrf(self):
+        before = self.database_snapshot()
+        for path in ('/login', '/teacher/login', '/register', '/teacher/register'):
+            for token in (None, 'wrong'):
+                client = self.module.app.test_client()
+                data = dict(username='unwanted-account', password='test-password', repeat_password='test-password')
+                if token is not None:
+                    data['csrf_token'] = token
+                self.assertEqual(client.post(path, data=data).status_code, 400)
+                with client.session_transaction() as session:
+                    self.assertNotIn('user_id', session)
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_valid_csrf_does_not_grant_access_to_foreign_tasks(self):
+        self.sign_in(3)
+        before = self.database_snapshot()
+        for path, data in (('/project/1/delete/2', {}), ('/project/1/add_member', {'username': 'teacher-two'}),
+                           ('/project/3/add', {'title': 'Denied'}), ('/project/1/task/2/update', {'body': 'Denied'})):
+            self.assertEqual(self.post(path, data=data).status_code, 403)
+        self.assertEqual(self.post('/project/1/priority', json={'task_id': 1, 'priority': 'high'}).status_code, 403)
+        self.assertEqual(self.post('/project/1/status', json={'task_id': 2, 'status': 'done'}).status_code, 403)
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_successful_password_change_rotates_csrf_and_login_still_works(self):
+        self.sign_in(3)
+        response = self.post('/profile', data=dict(old_password='test-password', new_password='new-test-password', repeat_password='new-test-password'))
+        self.assertIn('Пароль изменён', response.text)
+        token = FormTokens(response.text).meta
+        self.assertNotEqual(token, 'test-form-token')
+        self.assertEqual(self.client.post('/logout', data={'csrf_token': 'test-form-token'}).status_code, 400)
+        self.assertEqual(self.client.post('/logout', data={'csrf_token': token}).status_code, 302)
+        self.assertEqual(self.post('/login', data=dict(username='student-one', password='new-test-password')).location, '/')
+
+    def test_token_pages_are_not_cached_but_static_assets_keep_normal_caching(self):
+        self.assertEqual(self.client.get('/login').headers['Cache-Control'], 'no-store')
+        self.sign_in(1)
+        self.assertEqual(self.client.get('/teacher').headers['Cache-Control'], 'no-store')
+        with self.client.get('/static/kanban.js') as response:
+            self.assertNotIn('no-store', response.headers.get('Cache-Control', ''))
+
+    def test_legacy_mutation_scenario_accepts_valid_form_and_ajax_tokens(self):
+        self.sign_in(1)
+        created = self.post('/add_project', data={'name': 'Protected project'})
+        self.assertEqual(created.status_code, 302)
+        conn = self.module.get_db()
+        pid = conn.execute("SELECT id FROM projects WHERE name='Protected project'").fetchone()[0]
+        conn.close()
+        base = f'/project/{pid}'
+        self.assertEqual(self.post(base + '/add_member', data={'username': 'student-one'}).status_code, 302)
+        self.assertEqual(self.post(base + '/add', data={'title': 'Protected task', 'assignee_id': '3'}).status_code, 302)
+        conn = self.module.get_db()
+        task_id = conn.execute("SELECT id FROM tasks WHERE title='Protected task'").fetchone()[0]
+        conn.close()
+        self.assertEqual(self.post(base + f'/edit/{task_id}', data={'title': 'Updated task', 'assignee_id': '3'}).status_code, 302)
+        self.assertEqual(self.post(base + '/priority', json={'task_id': task_id, 'priority': 'high'}).status_code, 200)
+        self.sign_in(3)
+        self.assertEqual(self.post(base + '/status', json={'task_id': task_id, 'status': 'done'}).status_code, 200)
+        self.assertEqual(self.post(base + f'/task/{task_id}/update', data={'body': 'Protected report'}).status_code, 302)
+        conn = self.module.get_db()
+        row = conn.execute('SELECT title,status,priority FROM tasks WHERE id=?', (task_id,)).fetchone()
+        self.assertEqual(tuple(row), ('Updated task', 'done', 'high'))
+        self.assertEqual(conn.execute('SELECT body FROM task_updates WHERE task_id=?', (task_id,)).fetchone()[0], 'Protected report')
+        conn.close()
+        self.sign_in(1)
+        self.assertEqual(self.post(base + '/remove_member/3').status_code, 302)
+        self.assertEqual(self.post(base + f'/delete/{task_id}').status_code, 302)
+        conn = self.module.get_db()
+        self.assertIsNone(conn.execute('SELECT id FROM tasks WHERE id=?', (task_id,)).fetchone())
+        self.assertEqual(conn.execute('SELECT COUNT(*) FROM task_updates WHERE task_id=?', (task_id,)).fetchone()[0], 0)
+        conn.close()
 
     def test_page_query_counts_do_not_grow_with_projects_or_cards(self):
         self.sign_in(1)
@@ -172,14 +371,14 @@ class TeacherCabinetTests(unittest.TestCase):
         page = self.client.get('/project/1')
         self.assertIn('id="task-status-1"', page.text)
         self.assertNotIn('id="task-status-2"', page.text)
-        response = self.client.post('/project/1/status', json={'task_id': 1, 'status': 'done'})
+        response = self.post('/project/1/status', json={'task_id': 1, 'status': 'done'})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.client.post('/project/1/status', json={'task_id': 2, 'status': 'done'}).status_code, 403)
-        self.assertEqual(self.client.post('/project/3/status', json={'task_id': 1, 'status': 'done'}).status_code, 403)
+        self.assertEqual(self.post('/project/1/status', json={'task_id': 2, 'status': 'done'}).status_code, 403)
+        self.assertEqual(self.post('/project/3/status', json={'task_id': 1, 'status': 'done'}).status_code, 403)
         conn = self.module.get_db()
         self.assertEqual(conn.execute('SELECT status FROM tasks WHERE id=1').fetchone()[0], 'done')
         conn.close()
-        self.assertEqual(self.client.post('/project/1/status', json={'task_id': 1, 'status': 'invalid'}).status_code, 400)
+        self.assertEqual(self.post('/project/1/status', json={'task_id': 1, 'status': 'invalid'}).status_code, 400)
 
     def test_mobile_tables_include_field_labels(self):
         self.sign_in(1)
@@ -197,30 +396,30 @@ class TeacherCabinetTests(unittest.TestCase):
                             {'task_id': 2**80, field: 'done'},
                             {'task_id': 1, field: []}, {'task_id': 1, field: {}}):
                 with self.subTest(endpoint=endpoint, payload=payload):
-                    response = self.client.post('/project/1/' + endpoint, json=payload)
+                    response = self.post('/project/1/' + endpoint, json=payload)
                     self.assertEqual(response.status_code, 400)
                     self.assertFalse(response.json['success'])
 
     def test_huge_route_ids_return_validation_error(self):
         self.sign_in(1)
         for path in (f'/project/{2**80}', '/project/0', f'/teams/invitations/{2**80}/respond'):
-            response = self.client.post(path) if path.endswith('respond') else self.client.get(path)
+            response = self.post(path) if path.endswith('respond') else self.client.get(path)
             self.assertEqual(response.status_code, 400)
 
     def test_anonymous_task_api_returns_json_not_login_html(self):
-        response = self.client.post('/project/1/status', json={'task_id': 1, 'status': 'done'})
+        response = self.post('/project/1/status', json={'task_id': 1, 'status': 'done'})
         self.assertEqual(response.status_code, 401)
         self.assertFalse(response.json['success'])
 
     def test_status_response_has_full_metrics_even_with_filtered_board(self):
         self.sign_in(1)
-        response = self.client.post('/project/1/status?q=Overdue', json={'task_id': 1, 'status': 'done'})
+        response = self.post('/project/1/status?q=Overdue', json={'task_id': 1, 'status': 'done'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json['metrics'], dict(todo=0, progress=1, done=1, total=2, overdue=0, percent=50))
         self.assertEqual(response.json['students'], [dict(id=3, done=1, total=1)])
 
     def test_oversized_request_is_rejected(self):
-        response = self.client.post('/register', data={'username': 'x' * (1024 * 1024 + 1)})
+        response = self.post('/register', data={'username': 'x' * (1024 * 1024 + 1)})
         self.assertEqual(response.status_code, 413)
         self.assertIn('Слишком много данных', response.text)
 
@@ -238,7 +437,7 @@ class TeacherCabinetTests(unittest.TestCase):
 
     def test_profile_rejects_oversized_new_password(self):
         self.sign_in(1)
-        response = self.client.post('/profile', data=dict(old_password='test-password', new_password='x' * 257, repeat_password='x' * 257))
+        response = self.post('/profile', data=dict(old_password='test-password', new_password='x' * 257, repeat_password='x' * 257))
         self.assertEqual(response.status_code, 200)
         self.assertIn('не длиннее 256', response.text)
         conn = self.module.get_db()
@@ -263,9 +462,9 @@ class TeacherCabinetTests(unittest.TestCase):
 
     def stage_post(self, user_id, number=1, revision=0, action="submit", **fields):
         self.sign_in(user_id)
-        data = dict(csrf_token="test-stage-token", number=str(number), revision=str(revision),
+        data = dict(csrf_token="test-form-token", number=str(number), revision=str(revision),
                     action=action, result="Результат этапа", **fields)
-        return self.client.post("/project/1/stages", data=data)
+        return self.post("/project/1/stages", data=data)
 
     def stage_rows(self):
         conn = self.module.get_db()
@@ -418,7 +617,7 @@ class TeacherCabinetTests(unittest.TestCase):
         self.sign_in(3)
         self.assertEqual(self.client.get("/project/3/stages").status_code, 403)
         self.assertEqual(self.client.post("/project/1/stages", data={"action": "submit"}).status_code, 400)
-        self.client.get("/logout")
+        self.post("/logout")
         self.assertEqual(self.client.get("/project/1/stages").status_code, 302)
 
     def test_last_stage_requires_documentation_and_safe_presentation_url(self):
@@ -429,19 +628,19 @@ class TeacherCabinetTests(unittest.TestCase):
         for url in ("javascript:alert(1)", "https://", "https://[broken", "https://example.com/ bad"):
             self.assertEqual(self.stage_post(3, number=5, presentation_url=url).status_code, 400)
         self.sign_in(3)
-        data = dict(csrf_token="test-stage-token", number="5", revision="0", action="submit",
+        data = dict(csrf_token="test-form-token", number="5", revision="0", action="submit",
                     result="", presentation_url="https://example.com/slides")
-        self.assertEqual(self.client.post("/project/1/stages", data=data).status_code, 400)
+        self.assertEqual(self.post("/project/1/stages", data=data).status_code, 400)
         self.assertEqual(self.stage_rows()[4]["state"], "todo")
 
     def test_stage_content_is_escaped_and_draft_can_be_empty(self):
         self.sign_in(3)
-        data = dict(csrf_token="test-stage-token", number="1", revision="0", action="save", result="")
-        self.assertEqual(self.client.post("/project/1/stages", data=data).status_code, 302)
+        data = dict(csrf_token="test-form-token", number="1", revision="0", action="save", result="")
+        self.assertEqual(self.post("/project/1/stages", data=data).status_code, 302)
         data.update(revision="1", action="submit")
-        self.assertEqual(self.client.post("/project/1/stages", data=data).status_code, 400)
+        self.assertEqual(self.post("/project/1/stages", data=data).status_code, 400)
         data["result"] = "<script>alert('topic')</script>"
-        self.assertEqual(self.client.post("/project/1/stages", data=data).status_code, 302)
+        self.assertEqual(self.post("/project/1/stages", data=data).status_code, 302)
         self.sign_in(1)
         response = self.client.get("/project/1/stages")
         self.assertIn("&lt;script&gt;", response.text)
@@ -472,7 +671,7 @@ class TeacherCabinetTests(unittest.TestCase):
 
     def invitation_post(self, user_id=3, project_id=2, student_id=4):
         self.sign_in(user_id)
-        return self.client.post('/teams/invite',data=dict(csrf_token='test-collaboration-token',project_id=str(project_id),
+        return self.post('/teams/invite',data=dict(csrf_token='test-form-token',project_id=str(project_id),
                                 student_id=str(student_id),role_text='Инженер прототипа',message='Давай сделаем общий проект'))
 
     def invitation_id(self):
@@ -483,15 +682,15 @@ class TeacherCabinetTests(unittest.TestCase):
 
     def invitation_answer(self,user_id,action='accept'):
         self.sign_in(user_id)
-        return self.client.post(f'/teams/invitations/{self.invitation_id()}/respond',
-                               data=dict(csrf_token='test-collaboration-token',action=action))
+        return self.post(f'/teams/invitations/{self.invitation_id()}/respond',
+                               data=dict(csrf_token='test-form-token',action=action))
 
     def test_student_profile_saves_skills_without_changing_another_user(self):
         self.add_candidate()
         self.sign_in(3)
-        data=dict(csrf_token='test-collaboration-token',user_id='4',class_name='10А',direction='ИТ',
+        data=dict(csrf_token='test-form-token',user_id='4',class_name='10А',direction='ИТ',
                   skills='Python, python,  Презентации ',bio='Люблю код',discoverable='1')
-        self.assertEqual(self.client.post('/skills',data=data).status_code,302)
+        self.assertEqual(self.post('/skills',data=data).status_code,302)
         conn = self.module.get_db()
         from teamwork import profile_for
         profile = profile_for(conn,3)
@@ -499,7 +698,7 @@ class TeacherCabinetTests(unittest.TestCase):
         self.assertEqual(profile_for(conn,4)['class_name'],'11Б')
         conn.close()
         self.sign_in(1)
-        self.assertEqual(self.client.post('/skills',data=data).status_code,403)
+        self.assertEqual(self.post('/skills',data=data).status_code,403)
 
     def test_profile_visibility_requires_explicit_opt_in(self):
         self.add_candidate(discoverable=0)
@@ -507,22 +706,22 @@ class TeacherCabinetTests(unittest.TestCase):
         self.assertNotIn('candidate-engineer',self.client.get('/teams').text)
         self.assertEqual(self.invitation_post().status_code,400)
         self.sign_in(4)
-        data=dict(csrf_token='test-collaboration-token',class_name='11Б',direction='Инженерное',skills='Arduino',discoverable='1')
-        self.assertEqual(self.client.post('/skills',data=data).status_code,302)
+        data=dict(csrf_token='test-form-token',class_name='11Б',direction='Инженерное',skills='Arduino',discoverable='1')
+        self.assertEqual(self.post('/skills',data=data).status_code,302)
         self.sign_in(3)
         self.assertIn('candidate-engineer',self.client.get('/teams').text)
         self.sign_in(4)
         data.pop('discoverable')
-        self.client.post('/skills',data=data)
+        self.post('/skills',data=data)
         self.sign_in(3)
         self.assertNotIn('candidate-engineer',self.client.get('/teams').text)
 
     def test_incomplete_or_excessive_skills_profile_is_rejected(self):
         self.sign_in(3)
-        data=dict(csrf_token='test-collaboration-token',discoverable='1')
-        self.assertEqual(self.client.post('/skills',data=data).status_code,400)
+        data=dict(csrf_token='test-form-token',discoverable='1')
+        self.assertEqual(self.post('/skills',data=data).status_code,400)
         for fields in ({'class_name':'x'*31},{'skills':','.join(f'skill{i}' for i in range(13))},{'skills':'x'*41},{'bio':'x'*501}):
-            self.assertEqual(self.client.post('/skills',data=dict(csrf_token='test-collaboration-token',**fields)).status_code,400)
+            self.assertEqual(self.post('/skills',data=dict(csrf_token='test-form-token',**fields)).status_code,400)
 
     def test_directory_filters_skills_direction_and_class(self):
         self.add_candidate()
@@ -573,19 +772,19 @@ class TeacherCabinetTests(unittest.TestCase):
         self.assertEqual(self.client.get('/project/2/team').status_code,403)
         self.invitation_post()
         self.sign_in(3)
-        self.assertEqual(self.client.post('/project/2/team',data=dict(csrf_token='test-collaboration-token',action='cancel',invitation_id=self.invitation_id())).status_code,302)
+        self.assertEqual(self.post('/project/2/team',data=dict(csrf_token='test-form-token',action='cancel',invitation_id=self.invitation_id())).status_code,302)
         self.assertEqual(self.invitation_answer(4).status_code,400)
         self.assertEqual(self.client.get('/project/2/team').status_code,403)
 
     def test_team_roles_are_owner_only_and_removed_with_membership(self):
         self.sign_in(3)
-        data=dict(csrf_token='test-collaboration-token',action='role',student_id='3',role_text='Разработчик')
-        self.assertEqual(self.client.post('/project/1/team',data=data).status_code,403)
+        data=dict(csrf_token='test-form-token',action='role',student_id='3',role_text='Разработчик')
+        self.assertEqual(self.post('/project/1/team',data=data).status_code,403)
         self.sign_in(1)
-        self.assertEqual(self.client.post('/project/1/team',data=data).status_code,302)
+        self.assertEqual(self.post('/project/1/team',data=data).status_code,302)
         self.assertIn('Разработчик',self.client.get('/project/1/team').text)
         data['student_id']='2'
-        self.assertEqual(self.client.post('/project/1/team',data=data).status_code,400)
+        self.assertEqual(self.post('/project/1/team',data=data).status_code,400)
         conn = self.module.get_db()
         conn.execute('DELETE FROM project_members WHERE project_id=1 AND user_id=3')
         conn.commit()
@@ -594,7 +793,7 @@ class TeacherCabinetTests(unittest.TestCase):
 
     def defense_post(self,user_id=3,revision=0,action='submit',url='https://example.com/defense',comment='',description='Защита проекта'):
         self.sign_in(user_id)
-        return self.client.post('/project/1/defense',data=dict(csrf_token='test-collaboration-token',revision=str(revision),
+        return self.post('/project/1/defense',data=dict(csrf_token='test-form-token',revision=str(revision),
                                 action=action,video_url=url,description=description,teacher_comment=comment))
 
     def test_video_defense_submission_return_and_acceptance(self):
@@ -688,7 +887,7 @@ class TeacherCabinetTests(unittest.TestCase):
         for asset in ("assessment.css", "assessment.js"):
             with self.client.get(f"/static/{asset}") as response:
                 self.assertEqual(response.status_code, 200)
-        response = self.client.post("/project/1/assessment", data=self.assessment_data())
+        response = self.post("/project/1/assessment", data=self.assessment_data())
         self.assertEqual(response.status_code, 302)
         self.sign_in(3)
         response = self.client.get("/project/1/assessment")
@@ -696,14 +895,14 @@ class TeacherCabinetTests(unittest.TestCase):
         self.assertIn("Итого: 45 / 45 · Оценка: 5", response.text)
         self.assertIn("Хорошая работа", response.text)
         self.assertNotIn('name="criterion_', response.text)
-        self.assertEqual(self.client.post("/project/1/assessment", data=self.assessment_data()).status_code, 403)
+        self.assertEqual(self.post("/project/1/assessment", data=self.assessment_data()).status_code, 403)
 
     def test_draft_is_private_and_can_be_incomplete(self):
         self.sign_in(1)
         data = self.assessment_data("draft")
         data["criterion_1"] = ""
         data["criterion_2"] = "0"
-        self.assertEqual(self.client.post("/project/1/assessment", data=data).status_code, 302)
+        self.assertEqual(self.post("/project/1/assessment", data=data).status_code, 302)
         conn = self.module.get_db()
         row = conn.execute("SELECT * FROM project_assessments").fetchone()
         from grading import load_scores, summarize
@@ -722,10 +921,10 @@ class TeacherCabinetTests(unittest.TestCase):
         for bad in ("", "4", "-1", "1.5", "abc"):
             data = self.assessment_data()
             data["criterion_1"] = bad
-            self.assertEqual(self.client.post("/project/1/assessment", data=data).status_code, 400)
+            self.assertEqual(self.post("/project/1/assessment", data=data).status_code, 400)
         data = self.assessment_data()
         data["student_id"] = "2"
-        self.assertEqual(self.client.post("/project/1/assessment", data=data).status_code, 400)
+        self.assertEqual(self.post("/project/1/assessment", data=data).status_code, 400)
         conn = self.module.get_db()
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM project_assessments").fetchone()[0], 0)
         conn.close()
@@ -733,9 +932,9 @@ class TeacherCabinetTests(unittest.TestCase):
     def test_teacher_requires_project_access_but_can_grade_as_member(self):
         self.sign_in(2)
         self.assertEqual(self.client.get("/project/1/assessment").status_code, 403)
-        self.assertEqual(self.client.post("/project/1/assessment", data=self.assessment_data()).status_code, 403)
+        self.assertEqual(self.post("/project/1/assessment", data=self.assessment_data()).status_code, 403)
         self.sign_in(1)
-        self.assertEqual(self.client.post("/project/2/assessment", data=self.assessment_data()).status_code, 302)
+        self.assertEqual(self.post("/project/2/assessment", data=self.assessment_data()).status_code, 302)
 
     def test_student_cannot_view_another_students_assessment(self):
         conn = self.module.get_db()
@@ -744,7 +943,7 @@ class TeacherCabinetTests(unittest.TestCase):
         conn.commit()
         conn.close()
         self.sign_in(1)
-        self.client.post("/project/1/assessment", data=self.assessment_data())
+        self.post("/project/1/assessment", data=self.assessment_data())
         self.sign_in(4)
         response = self.client.get("/project/1/assessment?student_id=3")
         self.assertIn("Оценка ещё не опубликована", response.text)
@@ -753,10 +952,10 @@ class TeacherCabinetTests(unittest.TestCase):
     def test_assessment_update_escapes_content_and_does_not_duplicate(self):
         self.sign_in(1)
         data = self.assessment_data()
-        self.client.post("/project/1/assessment", data=data)
+        self.post("/project/1/assessment", data=data)
         data["note"] = "<script>alert(1)</script>"
         data["criterion_1"] = "0"
-        self.assertEqual(self.client.post("/project/1/assessment", data=data).status_code, 302)
+        self.assertEqual(self.post("/project/1/assessment", data=data).status_code, 302)
         conn = self.module.get_db()
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM project_assessments").fetchone()[0], 1)
         conn.close()
@@ -794,11 +993,11 @@ class TeacherCabinetTests(unittest.TestCase):
         conn.commit()
         conn.close()
         self.sign_in(1)
-        self.client.post("/project/1/assessment", data=self.assessment_data())
+        self.post("/project/1/assessment", data=self.assessment_data())
         self.sign_in(2)
         data = self.assessment_data("draft")
         data["note"] = "Приватный черновик второго учителя"
-        self.client.post("/project/1/assessment", data=data)
+        self.post("/project/1/assessment", data=data)
         conn = self.module.get_db()
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM project_assessments").fetchone()[0], 2)
         conn.close()
@@ -822,17 +1021,17 @@ class TeacherCabinetTests(unittest.TestCase):
     def test_student_cannot_open_or_create_in_cabinet(self):
         self.sign_in(3)
         self.assertEqual(self.client.get("/teacher").status_code, 403)
-        self.assertEqual(self.client.post("/teacher/projects", data={"name": "Denied"}).status_code, 403)
+        self.assertEqual(self.post("/teacher/projects", data={"name": "Denied"}).status_code, 403)
 
     def test_member_teacher_cannot_edit_observed_project(self):
         self.sign_in(1)
-        response = self.client.post("/project/2/edit/3", data={"title": "Denied"})
+        response = self.post("/project/2/edit/3", data={"title": "Denied"})
         self.assertEqual(response.status_code, 403)
 
     def test_teacher_can_create_project_and_login_lands_in_cabinet(self):
-        response = self.client.post("/teacher/login", data={"username": "teacher-one", "password": "test-password"})
+        response = self.post("/teacher/login", data={"username": "teacher-one", "password": "test-password"})
         self.assertEqual(response.location, "/teacher")
-        response = self.client.post("/teacher/projects", data={"name": "New project"})
+        response = self.post("/teacher/projects", data={"name": "New project"})
         self.assertEqual(response.status_code, 302)
         conn = self.module.get_db()
         project = conn.execute("SELECT id, owner_id FROM projects WHERE name = 'New project'").fetchone()
@@ -842,7 +1041,7 @@ class TeacherCabinetTests(unittest.TestCase):
         self.assertEqual(self.client.get(response.location).status_code, 200)
 
     def test_teacher_registration_supports_custom_login(self):
-        response = self.client.post("/teacher/register", data={
+        response = self.post("/teacher/register", data={
             "username": "my-new-teacher", "password": "my-password-123",
             "repeat_password": "my-password-123"})
         self.assertEqual(response.location, "/teacher")
@@ -851,13 +1050,13 @@ class TeacherCabinetTests(unittest.TestCase):
         user = conn.execute("SELECT role FROM users WHERE username=?", ("my-new-teacher",)).fetchone()
         self.assertEqual(user["role"], "teacher")
         conn.close()
-        self.assertEqual(self.client.get("/logout").location, "/teacher/login")
-        response = self.client.post("/teacher/login", data={
+        self.assertEqual(self.post("/logout").location, "/teacher/login")
+        response = self.post("/teacher/login", data={
             "username": "my-new-teacher", "password": "my-password-123"})
         self.assertEqual(response.location, "/teacher")
 
     def test_registration_role_is_selected_by_route(self):
-        response = self.client.post("/register", data={
+        response = self.post("/register", data={
             "username": "new-student", "password": "my-password-123",
             "repeat_password": "my-password-123", "role": "teacher"})
         self.assertEqual(response.location, "/")
@@ -868,14 +1067,14 @@ class TeacherCabinetTests(unittest.TestCase):
 
     def test_wrong_login_portal_does_not_sign_in(self):
         for path, username in (("/login", "teacher-one"), ("/teacher/login", "student-one")):
-            response = self.client.post(path, data={"username": username, "password": "test-password"})
+            response = self.post(path, data={"username": username, "password": "test-password"})
             self.assertEqual(response.status_code, 200)
             self.assertIn("Это аккаунт", response.text)
             with self.client.session_transaction() as session:
                 self.assertNotIn("user_id", session)
 
     def test_teacher_registration_cannot_replace_existing_student(self):
-        response = self.client.post("/teacher/register", data={
+        response = self.post("/teacher/register", data={
             "username": "student-one", "password": "my-password-123",
             "repeat_password": "my-password-123"})
         self.assertIn("Такой логин уже занят", response.text)
@@ -884,7 +1083,7 @@ class TeacherCabinetTests(unittest.TestCase):
         conn.close()
 
     def test_mismatched_passwords_do_not_create_account(self):
-        response = self.client.post("/teacher/register", data={
+        response = self.post("/teacher/register", data={
             "username": "mismatch", "password": "my-password-123", "repeat_password": "different-123"})
         self.assertIn("Пароли не совпадают", response.text)
         conn = self.module.get_db()

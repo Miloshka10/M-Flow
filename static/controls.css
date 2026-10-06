@@ -14,6 +14,8 @@
   background: var(--mf-accent-soft); color: var(--mf-accent); border-color: var(--mf-accent);
 }
 .account { gap: 8px; }
+.account .logout-form { display: inline-flex; margin: 0; padding: 0; }
+.account button.logout { font-family: inherit; cursor: pointer; }
 .main-header { flex-wrap: wrap; padding: 16px 0; }
 .account { min-width: 0; }
 .teacher-primary-link, a.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; max-width: 100%; text-align: center; }

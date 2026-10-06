@@ -52,6 +52,51 @@ app.config.update(
 )
 
 
+def csrf_token():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_urlsafe(32)
+    return session["csrf_token"]
+
+
+def csrf_input():
+    return f'<input type="hidden" name="csrf_token" value="{escape(csrf_token(), quote=True)}">'
+
+
+def logout_form():
+    return f'<form method="post" action="/logout" class="logout-form">{csrf_input()}<button type="submit" class="logout">Выйти</button></form>'
+
+
+@app.before_request
+def protect_mutations():
+    if request.method in ("GET", "HEAD", "OPTIONS") or request.endpoint is None:
+        return
+    if request.method not in request.url_rule.methods:
+        return
+    public_auth = {"login", "register", "teacher_login", "teacher_register"}
+    if request.endpoint not in public_auth and get_current_user() is None:
+        # Expired authentication is reported before CSRF; no mutation can run.
+        session.clear()
+        if request.is_json:
+            return jsonify(success=False, error="Сессия завершена. Войдите в аккаунт заново."), 401
+        return redirect("/teacher/login" if request.path.startswith("/teacher") else "/login")
+    expected = session.get("csrf_token")
+    submitted = request.headers.get("X-CSRF-Token") if request.is_json else request.form.get("csrf_token")
+    if not (isinstance(expected, str) and isinstance(submitted, str)
+            and 0 < len(submitted) <= 128
+            and secrets.compare_digest(expected.encode(), submitted.encode())):
+        message = "Форма устарела или сессия изменилась. Обновите страницу и повторите действие."
+        if request.is_json:
+            return jsonify(success=False, error=message, code="csrf_failed"), 400
+        return render_error_page("Форма устарела", message, 400)
+
+
+@app.after_request
+def protect_private_page_cache(response):
+    if response.mimetype == "text/html" or (request.method not in ("GET", "HEAD", "OPTIONS")):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 def render_page(html):
     # Страницы собираются f-строками с экранированием через escape().
     # Отдаём их как есть: пропускать через Jinja нельзя, иначе
@@ -59,11 +104,12 @@ def render_page(html):
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             '<title>M-Flow — проекты и задачи</title>'
+            f'<meta name="csrf-token" content="{escape(csrf_token(), quote=True)}">'
         '<link rel="stylesheet" href="/static/mflow-theme.css?v=20261005-mobile">'
         '<link rel="stylesheet" href="/static/mobile.css?v=20261005">'
         '<link rel="stylesheet" href="/static/motion.css?v=20261005-controls">'
         '<link rel="stylesheet" href="/static/preferences.css?v=20261005">'
-        '<link rel="stylesheet" href="/static/controls.css?v=20261005">'
+        '<link rel="stylesheet" href="/static/controls.css?v=20261006-csrf">'
         '<script src="/static/preferences.js?v=20261005"></script>'
         '<script src="/static/motion.js?v=20261005-controls"></script>'
             '</head><body>' + html + '</body></html>')
@@ -929,7 +975,7 @@ def get_student_progress(project_id):
 # STYLE + JAVASCRIPT
 # =========================================================
 
-PAGE_STYLE = '<script src="/static/kanban.js?v=20261005-review" defer></script>'
+PAGE_STYLE = '<script src="/static/kanban.js?v=20261006-csrf" defer></script>'
 
 
 # =========================================================
@@ -1004,6 +1050,7 @@ def render_auth_page(mode, error=None, role="student"):
                     </div>
                     {error_html}
                     <form method="post">
+                        {csrf_input()}
                         {form_fields}
                         <button type="submit">{submit_label}</button>
                     </form>
@@ -1160,6 +1207,7 @@ def profile():
             conn.commit()
             conn.close()
             message = "Пароль изменён."
+            session.pop("csrf_token", None)
 
     role_name = "Учитель" if user["role"] == "teacher" else "Ученик"
     projects_count = len(get_projects())
@@ -1189,6 +1237,7 @@ def profile():
                 {message_html}
                 {error_html}
                 <form method="post">
+                    {csrf_input()}
                     <label for="old-password">Старый пароль</label>
                     <input id="old-password" type="password" name="old_password" autocomplete="current-password" required>
                     <label for="new-password">Новый пароль</label>
@@ -1207,7 +1256,8 @@ def profile():
 # LOGOUT
 # =========================================================
 
-@app.route("/logout")
+@app.route("/logout", methods=["POST"])
+@login_required
 def logout():
 
     user = get_current_user()
@@ -1422,12 +1472,7 @@ def index():
                         Профиль
                     </a>
 
-                    <a
-                        href="/logout"
-                        class="logout"
-                    >
-                        Выйти
-                    </a>
+                    {logout_form()}
 
                 </div>
 
@@ -1587,6 +1632,7 @@ def index():
                         action="/add_project"
                         method="post"
                     >
+                        {csrf_input()}
 
                         <input
                             name="name"
@@ -1939,6 +1985,7 @@ def project(project_id):
                 <details class="task-report-compose">
                     <summary>Добавить отчёт</summary>
                     <form method="post" action="/project/{project_id}/task/{task_id}/update">
+                        {csrf_input()}
                         <textarea name="body" maxlength="500" rows="3" required
                             placeholder="Что уже сделано? Что мешает двигаться дальше?"></textarea>
                         <button type="submit">Отправить учителю</button>
@@ -1948,6 +1995,7 @@ def project(project_id):
 
         delete_control = f"""
             <form action="/project/{project_id}/delete/{task_id}" method="post">
+                {csrf_input()}
                 <button type="submit" class="delete-task" title="Удалить задачу">Удалить</button>
             </form>
         """ if owner else ""
@@ -2195,6 +2243,7 @@ def project(project_id):
                 action="/project/{project_id}/remove_member/{member_id}"
                 method="post"
             >
+                {csrf_input()}
 
                 <button
                     type="submit"
@@ -2264,6 +2313,7 @@ def project(project_id):
     <div class="card">
         <h2>Добавить задачу</h2>
         <form action="/project/{project_id}/add" method="post" class="add-task-form">
+            {csrf_input()}
             <input name="title" placeholder="Название задачи" aria-label="Название задачи" required>
             <input name="deadline" type="date" aria-label="Дедлайн задачи">
             <select name="priority" class="priority-select add-task-priority" aria-label="Приоритет новой задачи">
@@ -2302,6 +2352,7 @@ def project(project_id):
                 method="post"
                 class="member-add-form"
             >
+                {csrf_input()}
 
                 <input
                     name="username"
@@ -2416,12 +2467,7 @@ def project(project_id):
                         Профиль
                     </a>
 
-                    <a
-                        href="/logout"
-                        class="logout"
-                    >
-                        Выйти
-                    </a>
+                    {logout_form()}
 
                 </div>
 
@@ -3121,7 +3167,7 @@ def render_header(user):
             <div class="avatar">{escape(user["username"][0].upper())}</div>
             {nav}
             <a href="/profile" class="logout">Профиль</a>
-            <a href="/logout" class="logout">Выйти</a>
+            {logout_form()}
         </div>
     </header>
     """
@@ -3152,11 +3198,7 @@ def site_settings():
 
 
 def collaboration_token():
-    return session.setdefault("collaboration_csrf", secrets.token_urlsafe(32))
-
-
-def valid_collaboration_form(token):
-    return secrets.compare_digest(request.form.get("csrf_token", "").encode(), token.encode())
+    return csrf_token()
 
 
 def render_collaboration_page(user, title, body, project_id=None, error="", status=200):
@@ -3174,8 +3216,6 @@ def skill_profile():
     if user['role'] != 'student':
         return render_error_page('Нет доступа', 'Учебный профиль предназначен для учеников.', 403)
     token = collaboration_token()
-    if request.method == 'POST' and not valid_collaboration_form(token):
-        return render_error_page('Форма устарела', 'Обновите страницу профиля и повторите сохранение.', 400)
     conn = get_db()
     error, status = '', 200
     try:
@@ -3215,8 +3255,6 @@ def teams_directory():
 @login_required
 def send_team_invitation():
     user = get_current_user()
-    if not valid_collaboration_form(collaboration_token()):
-        return render_error_page('Форма устарела','Откройте каталог участников заново.',400)
     conn = get_db()
     try:
         try:
@@ -3235,8 +3273,6 @@ def answer_team_invitation(invitation_id):
     user = get_current_user()
     if user['role'] != 'student':
         return render_error_page('Нет доступа','Приглашения в команды адресованы ученикам.',403)
-    if not valid_collaboration_form(collaboration_token()):
-        return render_error_page('Форма устарела','Обновите страницу приглашений.',400)
     conn = get_db()
     try:
         try:
@@ -3263,8 +3299,6 @@ def project_team(project_id):
     if request.method == 'POST' and not owner:
         return render_error_page('Нет доступа','Управлять составом и ролями может только владелец проекта.',403)
     token = collaboration_token()
-    if request.method == 'POST' and not valid_collaboration_form(token):
-        return render_error_page('Форма устарела','Обновите страницу команды.',400)
     conn = get_db()
     error, status = '',200
     try:
@@ -3290,8 +3324,6 @@ def project_video_defense(project_id):
     if name is None:
         return render_error_page('Нет доступа','Вы не участвуете в этом проекте.',403)
     token = collaboration_token()
-    if request.method == 'POST' and not valid_collaboration_form(token):
-        return render_error_page('Форма устарела','Обновите страницу видеозащиты.',400)
     conn = get_db()
     error,status,submitted = '',200,None
     try:
@@ -3317,9 +3349,7 @@ def project_stage_page(project_id):
     project_name = get_project_name(project_id)
     if project_name is None:
         return render_error_page("Нет доступа", "Вы не участвуете в этом проекте.", 403)
-    token = session.setdefault("stages_csrf", secrets.token_urlsafe(32))
-    if request.method == "POST" and not secrets.compare_digest(request.form.get("csrf_token", "").encode(), token.encode()):
-        return render_error_page("Форма устарела", "Обновите страницу этапов и повторите сохранение.", 400)
+    token = csrf_token()
     conn = get_db()
     error, status, submitted = "", 200, None
     try:
@@ -3357,9 +3387,7 @@ def project_assessment(project_id):
     is_teacher = user["role"] == "teacher"
     if request.method == "POST" and not is_teacher:
         return render_error_page("Нет доступа", "Оценивать проекты может только учитель.", 403)
-    csrf_token = session.setdefault("assessment_csrf", secrets.token_urlsafe(32))
-    if request.method == "POST" and not secrets.compare_digest(request.form.get("csrf_token", "").encode(), csrf_token.encode()):
-        return render_error_page("Форма устарела", "Обновите страницу оценивания и повторите сохранение.", 400)
+    token = csrf_token()
     conn = get_db()
     students = conn.execute("""
         SELECT id, username FROM users WHERE role = 'student' AND (
@@ -3424,7 +3452,7 @@ def project_assessment(project_id):
             <h2>Оценивание: {escape(selected['username'])}</h2><p>{saved}</p>
             <form method="post" id="assessment-form">
                 <input type="hidden" name="student_id" value="{selected['id']}">
-                <input type="hidden" name="csrf_token" value="{csrf_token}">
+                <input type="hidden" name="csrf_token" value="{token}">
                 <label>ФИО ученика<input name="student_name" maxlength="100" required value="{escape(student_name, quote=True)}"></label>
                 <div class="assessment-table"><table><thead><tr><th>Критерий</th><th>Максимум</th><th>Баллы</th></tr></thead><tbody>{fields}</tbody></table></div>
                 <p id="assessment-total" aria-live="polite">Итого: {total} / {MAX_SCORE} · Оценка: {grade if grade is not None else 'не все критерии заполнены'}</p>
@@ -3664,6 +3692,7 @@ def render_attention_task(project_id, item, students, can_manage=True):
 
     return f"""
     <form method="post" action="/project/{project_id}/edit/{task["id"]}" class="t-edit">
+        {csrf_input()}
         <input type="hidden" name="next" value="/teacher">
         <span class="t-title">{escape(task["title"])}</span>
         <span class="t-reason">{escape(" · ".join(item["reasons"]))}</span>
@@ -3898,6 +3927,7 @@ def teacher_cabinet():
                     <h2>Новый проект</h2>
                     <p class="t-muted">После создания добавьте участников на доске проекта.</p>
                     <form class="teacher-create-form" method="post" action="/teacher/projects">
+                        {csrf_input()}
                         <input name="name" maxlength="80" required aria-label="Название проекта"
                             placeholder="Например: Исследование качества воды">
                         <button type="submit">Создать проект</button>
