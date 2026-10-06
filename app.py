@@ -22,6 +22,7 @@ import json
 import secrets
 from collections import defaultdict
 from project_rules import has_project_teacher
+from dashboard_view import student_dashboard
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
 from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, change_stage, render_stages, STATE_LABELS
 from teamwork import (initialize_teamwork, profile_for, save_profile, directory, invite_student,
@@ -102,6 +103,9 @@ def render_page(html):
     # Страницы собираются f-строками с экранированием через escape().
     # Отдаём их как есть: пропускать через Jinja нельзя, иначе
     # {{ ... }} из пользовательских данных будет выполнен как код.
+    if '<main' in html and 'id="main-content"' not in html:
+        html = html.replace('<main', '<main id="main-content"', 1)
+    skip_target = 'main-content' if '<main' in html else 'page-content'
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             '<title>M-Flow — проекты и задачи</title>'
@@ -113,7 +117,9 @@ def render_page(html):
         '<link rel="stylesheet" href="/static/controls.css?v=20261006-csrf">'
         '<script src="/static/preferences.js?v=20261005"></script>'
         '<script src="/static/motion.js?v=20261005-controls"></script>'
-            '</head><body>' + html + '</body></html>')
+        '<link rel="stylesheet" href="/static/product-design.css?v=20261006">'
+        '<script src="/static/dashboard.js?v=20261006" defer></script>'
+            f'</head><body id="page-content"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
 
 def teacher_nav(user):
@@ -1062,12 +1068,14 @@ def render_auth_page(mode, error=None, role="student"):
                 <aside class="auth-hero" aria-label="О проекте M-Flow">
                     <div class="auth-hero-top">Рабочее пространство школьных проектов</div>
                     <div class="auth-hero-content">
+                        <span class="auth-product-tag">ДЛЯ БОЛЬШИХ ИДЕЙ</span>
                         <h2 class="auth-logo auth-shimmer">M-Flow</h2>
                         <div class="auth-byline auth-shimmer">by Minich</div>
+                        <img class="auth-art" src="/static/project-kit.svg" alt="" width="480" height="360">
                         <h3>{hero_title}</h3>
                         <p>{hero_text}</p>
                     </div>
-                    <div class="auth-hero-footer">От выбора темы до защиты проекта.</div>
+                    <div class="auth-hero-footer"><span>01 / Тема</span><span>02–04 / Работа</span><span>05 / Документы</span></div>
                 </aside>
             </div>
         </div>
@@ -1276,394 +1284,13 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-
     user = get_current_user()
     if user['role'] == 'teacher':
         return teacher_cabinet()
     projects = get_projects(with_counts=True)
-
-    total_projects = len(projects)
-    total_tasks = 0
-    completed_tasks = 0
-    active_tasks = 0
-    overdue_tasks = 0
-
-    projects_html = ""
-
-
-    for project in projects:
-
-        project_id = project["id"]
-        project_name = escape(
-            project["name"]
-        )
-
-        project_total = project["total"]
-        project_done = project["done"]
-
-        total_tasks += project_total
-        completed_tasks += project_done
-        active_tasks += project["active"]
-        overdue_tasks += project["overdue"]
-
-
-        if project_total:
-
-            project_progress = round(
-                project_done
-                / project_total
-                * 100
-            )
-
-        else:
-
-            project_progress = 0
-
-
-        projects_html += f"""
-        <a
-            class="project-row"
-            href="/project/{project_id}"
-        >
-
-            <div class="project-info">
-
-                <div class="project-symbol">
-                    M
-                </div>
-
-                <div>
-
-                    <h3>
-                        {project_name}
-                    </h3>
-
-                    <span>
-                        {project_done}
-                        из
-                        {project_total}
-                        задач выполнено
-                    </span>
-
-                </div>
-
-            </div>
-
-            <div class="project-status">
-
-                <div class="mini-progress">
-
-                    <div
-                        style="width: {project_progress}%"
-                    ></div>
-
-                </div>
-
-                <span>
-                    {project_progress}%
-                </span>
-
-                <b>→</b>
-
-            </div>
-
-        </a>
-        """
-
-
-    progress = (
-        round(
-            completed_tasks
-            / total_tasks
-            * 100
-        )
-        if total_tasks
-        else 0
-    )
-
-
-    messages = ""
-
-    for message in session.pop(
-        "_flashes",
-        []
-    ):
-
-        category, text = message
-
-        messages += f"""
-        <div class="{category}">
-            {escape(text)}
-        </div>
-        """
-
-
-    if projects_html:
-
-        project_content = projects_html
-
-    else:
-
-        project_content = """
-        <div class="empty">
-
-            <h3>
-                Проектов пока нет
-            </h3>
-
-            <p>
-                Создай первый проект,
-                чтобы начать работу.
-            </p>
-
-        </div>
-        """
-
-
-    role_name = (
-        "Учитель"
-        if user["role"] == "teacher"
-        else "Ученик"
-    )
-
-    username = escape(
-        user["username"]
-    )
-
-    avatar = escape(
-        user["username"][0].upper()
-    )
-
-
-    return render_page(
-        PAGE_STYLE
-        + f"""
-
-        <div class="container">
-
-            <header class="main-header">
-
-                <a
-                    href="/"
-                    class="brand"
-                >
-                    M<span>-</span>Flow
-                </a>
-
-                <div class="account">
-
-                    <div class="account-text">
-
-                        <strong>
-                            {username}
-                        </strong>
-
-                        <small>
-                            {role_name}
-                        </small>
-
-                    </div>
-
-                    <div class="avatar">
-                        {avatar}
-                    </div>
-
-                    {teacher_nav(user)}
-                    <a
-                        href="/profile"
-                        class="logout"
-                    >
-                        Профиль
-                    </a>
-
-                    {logout_form()}
-
-                </div>
-
-            </header>
-
-
-            <main>
-
-                <section class="hero">
-
-                    <div>
-
-                        <span class="eyebrow">
-                            РАБОЧЕЕ ПРОСТРАНСТВО
-                        </span>
-
-                        <h1>
-                            Привет,
-                            {username}
-                            👋
-                        </h1>
-
-                        <p>
-                            Все школьные проекты
-                            в одном месте.
-                        </p>
-
-                    </div>
-
-                    <div class="overall-progress">
-
-                        <span>
-                            Прогресс задач
-                        </span>
-
-                        <strong>
-                            {progress}%
-                        </strong>
-
-                        <div class="main-progress">
-
-                            <div
-                                style="width: {progress}%"
-                            ></div>
-
-                        </div>
-
-                    </div>
-
-                </section>
-
-
-                {messages}
-
-
-                <section class="stats-line">
-
-                    <div>
-
-                        <strong>
-                            {total_projects}
-                        </strong>
-
-                        <span>
-                            Проектов
-                        </span>
-
-                    </div>
-
-                    <div>
-
-                        <strong>
-                            {total_tasks}
-                        </strong>
-
-                        <span>
-                            Всего задач
-                        </span>
-
-                    </div>
-
-                    <div>
-
-                        <strong>
-                            {completed_tasks}
-                        </strong>
-
-                        <span>
-                            Выполнено
-                        </span>
-
-                    </div>
-
-                    <div>
-
-                        <strong>
-                            {overdue_tasks}
-                        </strong>
-
-                        <span>
-                            Просрочено
-                        </span>
-
-                    </div>
-
-                </section>
-
-
-                <section class="focus-strip">
-
-                    <div class="focus-icon">◌</div>
-
-                    <div>
-                        <strong>Фокус на сегодня</strong>
-                        <span>В работе: {active_tasks} · Просрочено: {overdue_tasks}</span>
-                    </div>
-
-                    <div class="focus-mark">M</div>
-
-                </section>
-
-
-                <section>
-
-                    <div class="section-title">
-
-                        <div>
-
-                            <h2>
-                                Мои проекты
-                            </h2>
-
-                            <p>
-                                Проекты, к которым
-                                у тебя есть доступ
-                            </p>
-
-                        </div>
-
-                        <button
-                            onclick="
-                                document
-                                .getElementById('project-form')
-                                .classList
-                                .toggle('show')
-                            "
-                        >
-                            + Новый проект
-                        </button>
-
-                    </div>
-
-
-                    <form
-                        id="project-form"
-                        class="new-project"
-                        action="/add_project"
-                        method="post"
-                    >
-                        {csrf_input()}
-
-                        <input
-                            name="name"
-                            placeholder="Название проекта"
-                            required
-                        >
-
-                        <button type="submit">
-                            Создать
-                        </button>
-
-                    </form>
-
-
-                    <div class="projects-list">
-
-                        {project_content}
-
-                    </div>
-
-                </section>
-
-            </main>
-
-        </div>
-        """
-    )
+    messages = ''.join(f'<div class="{escape(category, quote=True)}" role="status">{escape(message)}</div>'
+                       for category, message in get_flashed_messages(with_categories=True))
+    return render_page(PAGE_STYLE + student_dashboard(user, projects, csrf_token(), render_header(user), messages))
 
 
 # =========================================================
@@ -3888,19 +3515,25 @@ def teacher_cabinet():
         attention_html = review_links + (attention_html if attention_items else '')
 
     overdue_class = "warn" if overdue_tasks else ""
+    review_count = sum(bool(p['current_stage'] and p['current_stage']['state'] == 'review')
+                       + bool(p['defense_state'] == DEFENSE_STATES['submitted']) for p in overview)
 
     return render_page(
         PAGE_STYLE
         + TEACHER_STYLE
         + f"""
-        <div class="container">
+        <div class="container workspace teacher-workspace">
             {render_header(user)}
             <main>
-                <section class="teacher-hero">
-                    <div><span class="teacher-eyebrow">КОНТРОЛЬ ПРОЕКТОВ</span>
+                <div class="workspace-intro"><span>РАБОЧЕЕ ПРОСТРАНСТВО УЧИТЕЛЯ</span><span>M-Flow / проверка</span></div>
+                <section class="teacher-hero workspace-hero">
+                    <div class="hero-copy"><span class="hero-kicker">КОНТРОЛЬ ПРОЕКТОВ</span>
                         <h1>Кабинет учителя</h1>
-                        <p>{escape(user["username"])}, здесь видно, как движутся проекты вашей команды.</p>
+                        <p>{escape(user["username"])}, всё важное — перед вами.<br>Помогайте ученикам двигаться от идеи к результату.</p>
+                        <a class="btn" href="#review-queue">Перейти к проверке <span aria-hidden="true">↗</span></a>
                     </div>
+                    <img class="hero-art" src="/static/project-kit.svg" alt="" width="480" height="360">
+                    <div class="review-counter"><strong>{review_count}</strong><span>на проверке<br>этапы и видеозащиты</span></div>
                 </section>
                 {messages}
                 <div class="t-stats">
@@ -3922,13 +3555,14 @@ def teacher_cabinet():
                     <a href="/teacher" class="back">Сбросить</a>
                 </form>
                 <div class="teacher-dashboard-grid">
-                    <section class="teacher-panel"><h2>Требуют внимания</h2>{attention_html}</section>
+                    <section class="teacher-panel review-panel" id="review-queue"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>Требуют внимания</h2>{attention_html}</section>
                     <section class="teacher-panel"><h2>Последние отчёты</h2>{reports_html}</section>
                 </div>
                 <div class="section-title"><h2>Проекты</h2>
                     <span class="t-muted">Показано {len(visible_projects)} из {len(overview)}</span></div>
                 {projects_html}
                 <section class="teacher-panel"><h2>Как подключиться к проекту</h2><p>Проект создаёт ученик. Сообщите ему свой логин: <strong>{escape(user['username'])}</strong>. Ученик-владелец добавит вас на доске проекта. Вы сможете проверять этапы, видеозащиту и выставлять оценки.</p></section>
+                <footer class="workspace-footer"><span>M-Flow <small>by Minich</small></span><a href="/settings">Настройки оформления ↗</a></footer>
             </main>
         </div>
         """

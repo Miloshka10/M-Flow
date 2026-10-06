@@ -460,6 +460,60 @@ class TeacherCabinetTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertIn('safe-area-inset', response.text)
 
+    def test_product_design_assets_and_semantic_forms_are_shared(self):
+        for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
+            page = self.client.get(path).text
+            self.assertEqual(page.count('/static/product-design.css'), 1)
+            self.assertIn('width="480" height="360"', page)
+            self.assertIn('К содержимому', page)
+        self.sign_in(3)
+        page = self.client.get('/').text
+        self.assertIn('class="project-row project-tile"', page)
+        self.assertIn('<details id="project-create"', page)
+        self.assertIn('for="project-name"', page)
+        self.assertEqual(len(FormTokens(page).forms), 2)  # Logout and project create.
+        for path in ('/project/1', '/project/1/stages', '/project/1/defense', '/profile', '/settings'):
+            self.assertIn('/static/product-design.css', self.client.get(path).text)
+
+    def test_redesign_shows_real_totals_and_empty_state_without_writing_database(self):
+        self.sign_in(3)
+        before = self.database_snapshot()
+        page = self.client.get('/').text
+        self.assertIn('1 из 3 задач выполнено', page)
+        self.assertIn('33%', page)
+        self.assertNotIn('Private project', page)
+        self.assertEqual(self.database_snapshot(), before)
+        self.add_candidate()
+        self.sign_in(4)
+        page = self.client.get('/').text
+        self.assertIn('Пока чистый лист.', page)
+        self.assertIn('0 из 0 задач выполнено', page)
+        self.assertNotIn('project-row project-tile', page)
+
+    def test_teacher_review_counter_uses_submitted_results_not_task_completion(self):
+        self.stage_post(3)
+        self.defense_post()
+        self.sign_in(1)
+        page = self.client.get('/teacher').text
+        self.assertIn('class="review-counter"><strong>2</strong>', page)
+        self.assertIn('href="#review-queue"', page)
+        self.assertNotIn('project-create', page)
+        self.assertIn('Этап ожидает проверки', page)
+        self.assertIn('Видеозащита ожидает проверки', page)
+
+    def test_product_assets_remain_lightweight_local_and_accessible(self):
+        with self.client.get('/static/product-design.css') as response:
+            self.assertIn('html[data-theme="dark"]', response.text)
+            self.assertIn('prefers-reduced-motion', response.text)
+            self.assertIn('forced-colors', response.text)
+            self.assertIn(':focus-visible', response.text)
+            self.assertNotIn('@import', response.text)
+        with self.client.get('/static/project-kit.svg') as response:
+            from xml.etree import ElementTree
+            self.assertLess(len(response.data), 5000)
+            self.assertEqual(ElementTree.fromstring(response.data).attrib['viewBox'], '0 0 480 360')
+            self.assertNotIn('<script', response.text)
+
     def test_touch_status_control_respects_task_permissions_and_saves(self):
         self.sign_in(3)
         page = self.client.get('/project/1')
