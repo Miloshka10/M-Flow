@@ -112,7 +112,7 @@ def render_page(html):
             '<title>M-Flow — проекты и задачи</title>'
             f'<meta name="csrf-token" content="{escape(csrf_token(), quote=True)}">'
         '<link rel="stylesheet" href="/static/mflow-theme.css?v=20261005-mobile">'
-        '<link rel="stylesheet" href="/static/mobile.css?v=20261005">'
+        '<link rel="stylesheet" href="/static/mobile.css?v=20261006-scrollbar">'
         '<link rel="stylesheet" href="/static/motion.css?v=20261005-controls">'
         '<link rel="stylesheet" href="/static/preferences.css?v=20261005">'
         '<link rel="stylesheet" href="/static/controls.css?v=20261006-csrf">'

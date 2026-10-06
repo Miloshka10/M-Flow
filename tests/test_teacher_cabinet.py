@@ -460,6 +460,17 @@ class TeacherCabinetTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertIn('safe-area-inset', response.text)
 
+    def test_mobile_page_scrollbar_hiding_is_scoped_and_keeps_accessible_scroll_areas(self):
+        with self.client.get('/static/mobile.css') as response:
+            css = response.text
+        self.assertIn('@media (max-width: 800px) and (forced-colors: none)', css)
+        self.assertIn('html { scrollbar-width: none; }', css)
+        self.assertIn('html::-webkit-scrollbar, body::-webkit-scrollbar', css)
+        self.assertNotIn('*::-webkit-scrollbar', css)
+        self.assertNotIn('body { overflow: hidden', css)
+        self.assertNotIn('html { overflow: hidden', css)
+        self.assertIn('mobile.css?v=20261006-scrollbar', self.client.get('/login').text)
+
     def test_product_design_assets_and_semantic_forms_are_shared(self):
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
             page = self.client.get(path).text

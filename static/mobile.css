@@ -5,6 +5,13 @@ body { overflow-wrap: anywhere; }
 img, video { max-width: 100%; height: auto; }
 .hero > *, .teacher-hero > *, .project-info > *, .section-title > * { min-width: 0; }
 
+/* Hide only the mobile page track, not scrolling or nested scroll areas.
+   Keep it visible in forced-colors mode for users who rely on that control. */
+@media (max-width: 800px) and (forced-colors: none) {
+  html { scrollbar-width: none; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; height: 0; }
+}
+
 @media (max-width: 800px), (pointer: coarse) {
   /* 16px prevents Safari from zooming the page when focusing a form. */
   body input:not([type="checkbox"]), body select, body textarea { font-size: 16px; }
