@@ -16,6 +16,7 @@ function setup(response) {
   const elements = {
     '[data-project-progress]': {}, '[data-project-progress-fill]': {style: {}},
     '[data-project-progress-text]': {}, '#board-status': {hidden: true},
+    '[data-workspace-task-summary]': {}, '[data-task-deadline]': {},
     '[data-student-progress="3"]': {}
   };
   elements['meta[name="csrf-token"]'] = {content: 'test-csrf-token'};
@@ -32,10 +33,12 @@ function setup(response) {
 }
 (async () => {
   const success = setup({ok: true, status: 200, json: async () => ({success: true,
-    metrics: {percent: 50, done: 1, total: 2}, students: [{id: 3, done: 1, total: 1}]})});
+    metrics: {percent: 50, done: 1, total: 2, overdue: 0}, deadline_text: 'Нет незавершённых задач со сроком', students: [{id: 3, done: 1, total: 1}]})});
   await success.context.moveTask(success.card, 'done');
   assert.equal(success.column.dataset.status, 'done');
   assert.equal(success.elements['[data-project-progress]'].textContent, '50%');
+  assert.equal(success.elements['[data-workspace-task-summary]'].textContent, '1 из 2 · просрочено 0');
+  assert.equal(success.elements['[data-task-deadline]'].textContent, 'Нет незавершённых задач со сроком');
   assert.equal(success.elements['[data-student-progress="3"]'].textContent, '1 из 1 задач · 100%');
   assert.equal(success.select.disabled, false);
   assert.equal(success.requests[0].options.headers['X-CSRF-Token'], 'test-csrf-token');

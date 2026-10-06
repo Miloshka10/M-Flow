@@ -23,6 +23,7 @@ import secrets
 from collections import defaultdict
 from project_rules import has_project_teacher
 from dashboard_view import student_dashboard
+from project_workspace import render_workspace, task_deadline
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
 from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, change_stage, render_stages, STATE_LABELS
 from teamwork import (initialize_teamwork, profile_for, save_profile, directory, invite_student,
@@ -549,7 +550,7 @@ def add_project(name):
     return project_id
 
 
-def get_project_name(project_id):
+def get_project_details(project_id):
 
     user = get_current_user()
 
@@ -560,7 +561,7 @@ def get_project_name(project_id):
 
     project = conn.execute(
         """
-        SELECT projects.name
+        SELECT projects.id, projects.name, projects.owner_id
         FROM projects
         WHERE projects.id = ?
         AND (
@@ -582,10 +583,12 @@ def get_project_name(project_id):
 
     conn.close()
 
-    if project is None:
-        return None
+    return project
 
-    return project["name"]
+
+def get_project_name(project_id):
+    project = get_project_details(project_id)
+    return project['name'] if project is not None else None
 
 
 # =========================================================
@@ -929,10 +932,9 @@ def get_project_members(project_id):
             users.id,
             users.username,
             users.role
-        FROM project_members
-        JOIN users
-            ON users.id = project_members.user_id
-        WHERE project_members.project_id = ?
+        FROM users
+        WHERE users.id = (SELECT owner_id FROM projects WHERE id = ?)
+        OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id = ? AND m.user_id = users.id)
         ORDER BY
             CASE
                 WHEN users.role = 'teacher' THEN 0
@@ -940,7 +942,7 @@ def get_project_members(project_id):
             END,
             users.username
         """,
-        (project_id,)
+        (project_id, project_id)
     ).fetchall()
 
     conn.close()
@@ -983,7 +985,7 @@ def get_student_progress(project_id):
 # STYLE + JAVASCRIPT
 # =========================================================
 
-PAGE_STYLE = '<script src="/static/kanban.js?v=20261006-csrf" defer></script>'
+PAGE_STYLE = '<script src="/static/kanban.js?v=20261006-route" defer></script>'
 
 
 # =========================================================
@@ -1351,44 +1353,35 @@ def create_project():
 @login_required
 def project(project_id):
 
-    project_name = get_project_name(
-        project_id
-    )
-
-
-    if project_name is None:
-
-        return (
-            "Проект не найден или у вас нет доступа.",
-            403
-        )
-
-
-    all_tasks = get_tasks(
-        project_id
-    )
-
-    task_update_history = get_task_update_history(project_id)
-
-    members = get_project_members(
-        project_id
-    )
-
-    student_progress = get_student_progress(
-        project_id
-    )
-
-    owner = is_project_owner(
-        project_id
-    )
-
+    details = get_project_details(project_id)
+    if details is None:
+        return render_error_page('Нет доступа', 'Проект не найден или вы не участвуете в нём.', 403)
+    project_name = details['name']
     current_user = get_current_user()
-
-
+    all_tasks = get_tasks(project_id)
+    task_update_history = get_task_update_history(project_id)
+    members = get_project_members(project_id)
+    student_counts = defaultdict(lambda: [0, 0])
+    for task in all_tasks:
+        counts = student_counts[task['assignee_id']]
+        counts[0] += 1
+        counts[1] += task['status'] == 'done'
+    student_progress = [dict(id=member['id'], username=member['username'],
+                             task_count=student_counts[member['id']][0],
+                             completed_count=student_counts[member['id']][1])
+                        for member in members if member['role'] == 'student'] if current_user['role'] == 'teacher' else []
+    owner = current_user['role'] == 'student' and details['owner_id'] == current_user['id']
     stage_conn = get_db()
-    completed_stages, current_stage = stage_summary(get_stages(stage_conn, project_id))
-    stage_conn.close()
-    stage_hint = f'Этап {current_stage["number"]}: {current_stage["title"]}' if current_stage else 'Все этапы приняты учителем'
+    try:
+        stages = get_stages(stage_conn, project_id)
+        defense = defense_for(stage_conn, project_id)
+        assessment_column = 'teacher_id' if current_user['role'] == 'teacher' else 'student_id'
+        published_assessments = stage_conn.execute(f'''SELECT a.scores_json, u.username AS teacher_name
+            FROM project_assessments a JOIN users u ON u.id=a.teacher_id
+            WHERE a.project_id=? AND a.state='published' AND a.{assessment_column}=?
+            ORDER BY a.updated_at DESC, a.teacher_id''', (project_id, current_user['id'])).fetchall()
+    finally:
+        stage_conn.close()
 
     # ---------- фильтры (поиск, приоритет, только мои) ----------
 
@@ -1975,7 +1968,7 @@ def project(project_id):
     if owner:
 
         owner_section = f"""
-        <div class="card">
+        <div class="card" id="project-members">
 
             <h2>
                 Добавить участника
@@ -1991,6 +1984,7 @@ def project(project_id):
                 <input
                     name="username"
                     placeholder="Логин пользователя"
+                    aria-label="Логин участника"
                     required
                 >
 
@@ -2030,150 +2024,19 @@ def project(project_id):
         """
 
 
-    # =====================================================
-    # CURRENT USER DATA
-    # =====================================================
-
-    current_username = escape(
-        current_user["username"]
-    )
-
-
-    current_role = (
-        "Учитель"
-        if current_user["role"] == "teacher"
-        else "Ученик"
-    )
-
-
-    current_avatar = escape(
-        current_user["username"][0].upper()
-    )
-
-
-    safe_project_name = escape(
-        project_name
-    )
-
-
-    # =====================================================
-    # PROJECT PAGE
-    # =====================================================
-
+    workspace_html = render_workspace(project_id, project_name, current_user, owner, members,
+                                      stages, defense, published_assessments, all_tasks,
+                                      completed_tasks, progress, overdue_count)
     return render_page(
         PAGE_STYLE
         + f"""
-
+        <link rel="stylesheet" href="/static/project-workspace.css?v=20261006-route">
         <div class="container">
-
-            <header class="main-header">
-
-                <a
-                    href="/"
-                    class="brand"
-                >
-                    M<span>-</span>Flow
-                </a>
-
-                <div class="account">
-
-                    <div class="account-text">
-
-                        <strong>
-                            {current_username}
-                        </strong>
-
-                        <small>
-                            {current_role}
-                        </small>
-
-                    </div>
-
-                    <div class="avatar">
-                        {current_avatar}
-                    </div>
-
-                    {teacher_nav(current_user)}
-                    <a
-                        href="/profile"
-                        class="logout"
-                    >
-                        Профиль
-                    </a>
-
-                    {logout_form()}
-
-                </div>
-
-            </header>
-
-
-            <main>
-
-                <div class="project-header">
-
-                    <a
-                        href="/"
-                        class="back"
-                    >
-                        ← Все проекты
-                    </a>
-
-                    <h1>
-                        {safe_project_name}
-                    </h1>
-                    <a href="/project/{project_id}/assessment" class="back">Оценивание проекта →</a>
-                    <div class="project-feature-links"><a href="/project/{project_id}/team">Команда проекта →</a><a href="/project/{project_id}/defense">Видеозащита →</a></div>
-                    <a href="/project/{project_id}/stages" class="project-stage-summary">Этапы проекта: принято {completed_stages} из 5 · {escape(stage_hint)} →</a>
-                    <link rel="stylesheet" href="/static/project-stages.css">
-
-                </div>
-
-
+            {render_header(current_user)}
+            <main class="project-workspace">
+                <a href="/" class="back">← Все проекты</a>
                 {messages}
-
-
-                <div class="card">
-
-                    <div class="section-title">
-
-                        <div>
-
-                            <h2>
-                                Прогресс задач
-                            </h2>
-
-                            <p data-project-progress-text>
-                                {completed_tasks}
-                                из
-                                {total_tasks}
-                                задач выполнено
-                            </p>
-
-                        </div>
-
-                        <strong data-project-progress
-                            style="
-                                font-size: 28px;
-                            "
-                        >
-                            {progress}%
-                        </strong>
-
-                    </div>
-
-
-                    <div class="project-progress">
-
-                        <div data-project-progress-fill
-                            style="
-                                width: {progress}%;
-                            "
-                        ></div>
-
-                    </div>
-
-                </div>
+                {workspace_html}
 
 
                 <section class="project-metrics">
@@ -2201,7 +2064,7 @@ def project(project_id):
                 </section>
 
 
-                <div class="kanban-wrapper">
+                <div class="kanban-wrapper" id="task-board">
 
                     <div class="section-title">
 
@@ -2635,7 +2498,7 @@ def change_task_status(project_id):
     counts['percent'] = percent(counts['done'], counts['total'])
     students = [dict(id=student['id'], done=student['completed_count'], total=student['task_count'])
                 for student in get_student_progress(project_id)]
-    return jsonify(success=True, metrics=counts, students=students)
+    return jsonify(success=True, metrics=counts, students=students, deadline_text=task_deadline(tasks))
 
 
 @app.route(
@@ -3012,7 +2875,7 @@ def project_stage_page(project_id):
         conn.close()
     messages = "".join(f'<p role="status">{escape(message)}</p>' for message in get_flashed_messages())
     return render_page(PAGE_STYLE + f'''
-        <link rel="stylesheet" href="/static/project-stages.css"><div class="container">{render_header(user)}
+        <link rel="stylesheet" href="/static/project-stages.css"><link rel="stylesheet" href="/static/project-workspace.css?v=20261006-route"><div class="container">{render_header(user)}
         <main class="stages-page"><a class="back" href="/project/{project_id}">← К задачам проекта</a>
         <h1>Пять этапов · {escape(project_name)}</h1>
         <p>Ученики сохраняют результат и отправляют его учителю. После принятия открывается следующий этап.

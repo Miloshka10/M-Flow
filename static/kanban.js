@@ -37,7 +37,7 @@ async function saveTask(card, endpoint, value) {
     controls.forEach(control => control.disabled = false);
   }
 }
-function updateProjectMetrics(metrics) {
+function updateProjectMetrics(metrics, deadlineText) {
   if (!metrics) return;
   for (const state of ['todo', 'progress', 'done', 'overdue']) {
     const count = document.querySelector('.metric-' + state + ' strong');
@@ -49,6 +49,10 @@ function updateProjectMetrics(metrics) {
   if (percent) percent.textContent = metrics.percent + '%';
   if (fill) fill.style.width = metrics.percent + '%';
   if (text) text.textContent = metrics.done + ' из ' + metrics.total + ' задач выполнено';
+  const summary = document.querySelector('[data-workspace-task-summary]');
+  if (summary) summary.textContent = metrics.done + ' из ' + metrics.total + ' · просрочено ' + metrics.overdue;
+  const deadline = document.querySelector('[data-task-deadline]');
+  if (deadline && deadlineText) deadline.textContent = deadlineText;
 }
 async function moveTask(card, target) {
   const previous = card.closest('.kanban-column').dataset.status;
@@ -69,7 +73,7 @@ async function moveTask(card, target) {
       deadline.classList.toggle('deadline-overdue', target !== 'done' && days !== null && days < 0);
       deadline.classList.toggle('deadline-soon', target !== 'done' && days !== null && days >= 0 && days <= 2);
     }
-    updateKanbanCounts(); updateProjectMetrics(result.metrics);
+    updateKanbanCounts(); updateProjectMetrics(result.metrics, result.deadline_text);
     (result.students || []).forEach(student => {
       const progress = document.querySelector('[data-student-progress="' + student.id + '"]');
       if (progress) progress.textContent = student.done + ' из ' + student.total + ' задач · ' + (student.total ? Math.round(student.done / student.total * 100) : 0) + '%';

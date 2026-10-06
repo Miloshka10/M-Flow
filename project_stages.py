@@ -12,6 +12,24 @@ STAGES = (
     (5, "Подготовка документации: презентация и описание проекта"),
 )
 STATE_LABELS = {"todo": "Не начат", "progress": "В работе", "review": "На проверке", "done": "Принят учителем"}
+STAGE_DESCRIPTIONS = {
+    1: "Сформулируйте тему, цель и ожидаемый результат. Согласуйте их с учителем.",
+    2: "Опишите первый результат работы и выбранные способы решения задачи.",
+    3: "Покажите развитие проекта: что сделано, проверено и что осталось улучшить.",
+    4: "Подготовьте результат работы и объясните, как он решает задачу проекта.",
+    5: "Подготовьте описание проекта и доступную учителю ссылку на презентацию.",
+}
+
+
+def stage_needs_revision(stage):
+    # Return is stored as progress; no schema migration or synthetic history.
+    return bool(stage['state'] == 'progress' and stage.get('reviewed_by') and stage['teacher_comment'])
+
+
+def stage_label(stage, current_number=None):
+    if current_number is not None and stage['number'] > current_number:
+        return 'Заблокирован'
+    return 'Нужна доработка' if stage_needs_revision(stage) else STATE_LABELS[stage['state']]
 
 
 def initialize_stages(conn):
@@ -128,8 +146,9 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True):
     for stage in stages:
         number = stage["number"]
         locked = current_number is not None and number > current_number
-        label = "Откроется после предыдущего этапа" if locked else STATE_LABELS[stage["state"]]
-        html += f'<section class="stage-card {stage["state"]} {"locked" if locked else ""}"><div class="stage-heading"><span class="stage-number">{number}</span><h2>{escape(stage["title"])}</h2></div><p>{label}</p>'
+        label = stage_label(stage, current_number)
+        explanation = f'Откроется после принятия этапа {number - 1} учителем.' if locked else STAGE_DESCRIPTIONS[number]
+        html += f'<section id="stage-{number}" class="stage-card {stage["state"]} {"locked" if locked else ""}"><div class="stage-heading"><span class="stage-number">{number}</span><h2>{escape(stage["title"])}</h2></div><p>{label}</p><p>{explanation}</p>'
         if stage["result"]:
             html += f'<h3>{"Описание проекта" if number == 5 else "Результат этапа"}</h3><p class="stage-text">{escape(stage["result"])}</p>'
         if stage["presentation_url"]:
