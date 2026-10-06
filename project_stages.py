@@ -2,6 +2,7 @@
 
 from html import escape
 from urllib.parse import urlsplit
+from project_rules import has_project_teacher, TEACHER_REQUIRED
 
 STAGES = (
     (1, "Выбор темы и согласование с учителем"),
@@ -88,6 +89,8 @@ def change_stage(conn, project_id, user, form):
                     raise ValueError("Укажите полную ссылку на презентацию, начинающуюся с https:// или http://.")
             if action == "submit" and (not result or (current["number"] == 5 and not url)):
                 raise ValueError("Для проверки заполните результат этапа; на пятом этапе нужны описание и ссылка на презентацию.")
+            if action == "submit" and not has_project_teacher(conn, project_id):
+                raise ValueError(TEACHER_REQUIRED)
             state = "review" if action == "submit" else "progress"
             submitted_by = user["id"]
         elif user["role"] == "teacher":
@@ -116,10 +119,12 @@ def change_stage(conn, project_id, user, form):
         raise
 
 
-def render_stages(stages, user, token, submitted=None):
+def render_stages(stages, user, token, submitted=None, has_teacher=True):
     completed, current = stage_summary(stages)
     current_number = current["number"] if current else None
     html = f'<p class="stage-summary">Принято {completed} из 5 этапов · {completed * 20}%</p><div class="stage-timeline">'
+    if user['role'] == 'student' and not has_teacher:
+        html += f'<p role="alert">{TEACHER_REQUIRED}</p>'
     for stage in stages:
         number = stage["number"]
         locked = current_number is not None and number > current_number
@@ -143,7 +148,7 @@ def render_stages(stages, user, token, submitted=None):
                 html += prefix + f'<label>{result_label}<textarea name="result" rows="5" maxlength="5000">{escape(values.get("result", ""))}</textarea></label>'
                 if number == 5:
                     html += f'<label>Ссылка на презентацию<input type="url" name="presentation_url" maxlength="2000" placeholder="https://…" value="{escape(values.get("presentation_url", ""), quote=True)}"></label><p>Проверьте, что учитель сможет открыть презентацию по ссылке.</p>'
-                html += '<div class="stage-actions"><button name="action" value="save">Сохранить черновик</button><button name="action" value="submit">Отправить учителю</button></div></form>'
+                html += f'<div class="stage-actions"><button name="action" value="save">Сохранить черновик</button><button name="action" value="submit" {"disabled" if not has_teacher else ""}>Отправить учителю</button></div></form>'
             elif user["role"] == "teacher" and stage["state"] == "review":
                 html += prefix + f'<label>Комментарий учителя<textarea name="teacher_comment" rows="3" maxlength="2000">{escape(values.get("teacher_comment", ""))}</textarea></label><div class="stage-actions"><button name="action" value="accept">{"Согласовать тему" if number == 1 else "Принять этап"}</button><button name="action" value="return">Вернуть на доработку</button></div></form>'
             else:

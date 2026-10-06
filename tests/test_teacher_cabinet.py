@@ -220,6 +220,100 @@ class TeacherCabinetTests(unittest.TestCase):
                     self.assertNotIn('user_id', session)
         self.assertEqual(self.database_snapshot(), before)
 
+    def test_teacher_cannot_manage_or_submit_student_work_even_for_legacy_owned_project(self):
+        self.sign_in(1)
+        before = self.database_snapshot()
+        for path in ('/add_project', '/teacher/projects', '/project/1/add', '/project/1/delete/1',
+                     '/project/1/edit/1', '/project/1/add_member', '/project/1/remove_member/3',
+                     '/project/1/task/1/update', '/project/1/team', '/teams/invite'):
+            with self.subTest(path=path):
+                self.assertEqual(self.post(path, data={'title': 'Denied', 'action': 'role'}).status_code, 403)
+        for endpoint, value in (('status', 'done'), ('priority', 'high')):
+            self.assertEqual(self.post('/project/1/' + endpoint, json={'task_id': 1, endpoint: value}).status_code, 403)
+        self.assertEqual(self.stage_post(1, action='submit').status_code, 400)
+        self.assertEqual(self.defense_post(user_id=1, action='submit').status_code, 400)
+        self.assertEqual(self.database_snapshot(), before)
+        page = self.client.get('/project/1?mine=1').text
+        self.assertIn('Overdue task', page)
+        self.assertNotIn('Только мои', page)
+        self.assertNotIn('id="task-status-', page)
+        self.assertNotIn('Добавить задачу', page)
+        self.assertIn('Прогресс учеников', page)
+
+    def test_legacy_transfer_is_explicit_atomic_and_preserves_results(self):
+        self.sign_in(1)
+        conn = self.module.get_db()
+        tasks = [tuple(r) for r in conn.execute('SELECT * FROM tasks ORDER BY id')]
+        reports = [tuple(r) for r in conn.execute('SELECT * FROM task_updates ORDER BY id')]
+        conn.close()
+        before = self.database_snapshot()
+        self.client.get('/teacher')
+        self.assertEqual(self.database_snapshot(), before)
+        self.assertEqual(self.client.post('/project/1/transfer', data={'student_id': '3'}).status_code, 400)
+        for fields in ({'student_id': '2'}, {'student_id': str(2**80)}, {'student_id': '3', 'student_username': 'student-one'}, {'student_username': 'missing'}):
+            self.assertEqual(self.post('/project/1/transfer', data=fields).status_code, 400)
+        self.assertEqual(self.database_snapshot(), before)
+        self.assertEqual(self.post('/project/1/transfer', data={'student_id': '3'}).status_code, 302)
+        conn = self.module.get_db()
+        self.assertEqual(conn.execute('SELECT owner_id FROM projects WHERE id=1').fetchone()[0], 3)
+        self.assertEqual([tuple(r) for r in conn.execute('SELECT * FROM tasks ORDER BY id')], tasks)
+        self.assertEqual([tuple(r) for r in conn.execute('SELECT * FROM task_updates ORDER BY id')], reports)
+        conn.close()
+        self.assertIn('Owned project', self.client.get('/teacher').text)
+        self.assertEqual(self.post('/project/1/transfer', data={'student_id': '3'}).status_code, 403)
+        self.sign_in(2)
+        self.assertEqual(self.post('/project/1/transfer', data={'student_id': '3'}).status_code, 403)
+        self.sign_in(3)
+        self.assertEqual(self.post('/project/1/transfer', data={'student_id': '3'}).status_code, 403)
+        self.assertIn('Добавить задачу', self.client.get('/project/1').text)
+
+    def test_legacy_project_without_students_can_be_transferred_by_login(self):
+        self.sign_in(2)
+        self.assertEqual(self.post('/project/3/transfer', data={'student_username': 'student-one'}).status_code, 302)
+        self.assertIn('Private project', self.client.get('/teacher').text)
+        self.sign_in(3)
+        self.assertIn('Private project', self.client.get('/').text)
+
+    def test_student_can_draft_without_teacher_but_cannot_submit_until_teacher_joins(self):
+        conn = self.module.get_db()
+        conn.execute('DELETE FROM project_members WHERE project_id=2 AND user_id=1')
+        conn.commit()
+        conn.close()
+        self.sign_in(3)
+        for path in ('/project/2/stages', '/project/2/defense'):
+            self.assertIn('В проекте нет учителя', self.client.get(path).text)
+        stage = dict(number='1', revision='0', action='submit', result='Тема')
+        defense = dict(revision='0', action='submit', video_url='https://example.com/video')
+        self.assertEqual(self.post('/project/2/stages', data=dict(stage)).status_code, 400)
+        self.assertEqual(self.post('/project/2/defense', data=dict(defense)).status_code, 400)
+        self.assertEqual(self.post('/project/2/stages', data=dict(stage, action='save')).status_code, 302)
+        self.assertEqual(self.post('/project/2/defense', data=dict(defense, action='save')).status_code, 302)
+        self.assertEqual(self.post('/project/2/add_member', data={'username': 'teacher-one'}).status_code, 302)
+        self.assertEqual(self.post('/project/2/stages', data=dict(stage, revision='1')).status_code, 302)
+        self.assertEqual(self.post('/project/2/defense', data=dict(defense, revision='1')).status_code, 302)
+        self.sign_in(1)
+        page = self.client.get('/teacher?focus=attention').text
+        self.assertIn('Этап ожидает проверки', page)
+        self.assertIn('Видеозащита ожидает проверки', page)
+        # Completing tasks is not the same as passing project review.
+        self.assertIn('Observed project', self.client.get('/teacher?focus=done').text)
+
+    def test_removal_cancels_pending_invitation_and_does_not_restore_old_role(self):
+        self.add_candidate()
+        self.invitation_post(project_id=2)
+        self.sign_in(3)
+        self.post('/project/2/add_member', data={'username': 'candidate-engineer'})
+        self.post('/project/2/team', data={'action': 'role', 'student_id': '4', 'role_text': 'Инженер'})
+        self.assertEqual(self.post('/project/2/remove_member/4').status_code, 302)
+        conn = self.module.get_db()
+        self.assertIsNone(conn.execute('SELECT * FROM team_member_roles WHERE project_id=2 AND user_id=4').fetchone())
+        self.assertEqual(conn.execute('SELECT state FROM team_invitations WHERE project_id=2 AND invitee_id=4').fetchone()[0], 'cancelled')
+        conn.close()
+        self.assertEqual(self.invitation_answer(4).status_code, 400)
+        self.sign_in(3)
+        self.post('/project/2/add_member', data={'username': 'candidate-engineer'})
+        self.assertNotIn('Роль: Инженер', self.client.get('/project/2/team').text)
+
     def test_valid_csrf_does_not_grant_access_to_foreign_tasks(self):
         self.sign_in(3)
         before = self.database_snapshot()
@@ -248,14 +342,14 @@ class TeacherCabinetTests(unittest.TestCase):
             self.assertNotIn('no-store', response.headers.get('Cache-Control', ''))
 
     def test_legacy_mutation_scenario_accepts_valid_form_and_ajax_tokens(self):
-        self.sign_in(1)
+        self.sign_in(3)
         created = self.post('/add_project', data={'name': 'Protected project'})
         self.assertEqual(created.status_code, 302)
         conn = self.module.get_db()
         pid = conn.execute("SELECT id FROM projects WHERE name='Protected project'").fetchone()[0]
         conn.close()
         base = f'/project/{pid}'
-        self.assertEqual(self.post(base + '/add_member', data={'username': 'student-one'}).status_code, 302)
+        self.assertEqual(self.post(base + '/add_member', data={'username': 'teacher-two'}).status_code, 302)
         self.assertEqual(self.post(base + '/add', data={'title': 'Protected task', 'assignee_id': '3'}).status_code, 302)
         conn = self.module.get_db()
         task_id = conn.execute("SELECT id FROM tasks WHERE title='Protected task'").fetchone()[0]
@@ -270,8 +364,8 @@ class TeacherCabinetTests(unittest.TestCase):
         self.assertEqual(tuple(row), ('Updated task', 'done', 'high'))
         self.assertEqual(conn.execute('SELECT body FROM task_updates WHERE task_id=?', (task_id,)).fetchone()[0], 'Protected report')
         conn.close()
-        self.sign_in(1)
-        self.assertEqual(self.post(base + '/remove_member/3').status_code, 302)
+        self.sign_in(3)
+        self.assertEqual(self.post(base + '/remove_member/2').status_code, 302)
         self.assertEqual(self.post(base + f'/delete/{task_id}').status_code, 302)
         conn = self.module.get_db()
         self.assertIsNone(conn.execute('SELECT id FROM tasks WHERE id=?', (task_id,)).fetchone())
@@ -292,7 +386,7 @@ class TeacherCabinetTests(unittest.TestCase):
                          [(f'Card {n}',) for n in range(30)])
         conn.commit()
         conn.close()
-        for path, budget in zip(paths, (2, 7, 8)):
+        for path, budget in zip(paths, (7, 7, 8)):
             with self.subTest(path=path):
                 self.assertEqual(self.count_page_queries(path), before[path])
                 self.assertLessEqual(before[path], budget)
@@ -390,7 +484,11 @@ class TeacherCabinetTests(unittest.TestCase):
             self.assertIn(f'data-label="{label}"', cabinet)
 
     def test_malformed_task_api_requests_do_not_raise_server_errors(self):
-        self.sign_in(1)
+        conn = self.module.get_db()
+        conn.execute('UPDATE projects SET owner_id=3 WHERE id=1')
+        conn.commit()
+        conn.close()
+        self.sign_in(3)
         for endpoint, field in (('status', 'status'), ('priority', 'priority')):
             for payload in ([1], 'bad', 1, {'task_id': True, field: 'done'},
                             {'task_id': 2**80, field: 'done'},
@@ -412,7 +510,7 @@ class TeacherCabinetTests(unittest.TestCase):
         self.assertFalse(response.json['success'])
 
     def test_status_response_has_full_metrics_even_with_filtered_board(self):
-        self.sign_in(1)
+        self.sign_in(3)
         response = self.post('/project/1/status?q=Overdue', json={'task_id': 1, 'status': 'done'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json['metrics'], dict(todo=0, progress=1, done=1, total=2, overdue=0, percent=50))
@@ -749,8 +847,8 @@ class TeacherCabinetTests(unittest.TestCase):
     def test_invites_require_owner_and_discoverable_student(self):
         self.add_candidate()
         self.assertEqual(self.invitation_post(project_id=1).status_code,400)
-        self.assertEqual(self.invitation_post(user_id=1,project_id=1,student_id=2).status_code,400)
-        self.assertEqual(self.invitation_post(user_id=1,project_id=1,student_id=3).status_code,400)
+        self.assertEqual(self.invitation_post(user_id=1,project_id=1,student_id=2).status_code,403)
+        self.assertEqual(self.invitation_post(user_id=1,project_id=1,student_id=3).status_code,403)
         self.assertEqual(self.invitation_post(student_id=3).status_code,400)
 
     def test_invitation_cannot_be_answered_by_another_student_or_twice(self):
@@ -777,10 +875,13 @@ class TeacherCabinetTests(unittest.TestCase):
         self.assertEqual(self.client.get('/project/2/team').status_code,403)
 
     def test_team_roles_are_owner_only_and_removed_with_membership(self):
+        self.add_candidate()
         self.sign_in(3)
         data=dict(csrf_token='test-form-token',action='role',student_id='3',role_text='Разработчик')
         self.assertEqual(self.post('/project/1/team',data=data).status_code,403)
         self.sign_in(1)
+        self.assertEqual(self.post('/project/1/transfer', data={'student_username': 'candidate-engineer'}).status_code, 302)
+        self.sign_in(4)
         self.assertEqual(self.post('/project/1/team',data=data).status_code,302)
         self.assertIn('Разработчик',self.client.get('/project/1/team').text)
         data['student_id']='2'
@@ -1028,17 +1129,18 @@ class TeacherCabinetTests(unittest.TestCase):
         response = self.post("/project/2/edit/3", data={"title": "Denied"})
         self.assertEqual(response.status_code, 403)
 
-    def test_teacher_can_create_project_and_login_lands_in_cabinet(self):
+    def test_teacher_cannot_create_project_and_login_lands_in_cabinet(self):
         response = self.post("/teacher/login", data={"username": "teacher-one", "password": "test-password"})
         self.assertEqual(response.location, "/teacher")
         response = self.post("/teacher/projects", data={"name": "New project"})
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(self.post('/add_project', data={'name': 'New project'}).status_code, 403)
         conn = self.module.get_db()
         project = conn.execute("SELECT id, owner_id FROM projects WHERE name = 'New project'").fetchone()
-        self.assertEqual(project["owner_id"], 1)
-        self.assertIsNotNone(conn.execute("SELECT 1 FROM project_members WHERE project_id=? AND user_id=1", (project["id"],)).fetchone())
+        self.assertIsNone(project)
         conn.close()
-        self.assertEqual(self.client.get(response.location).status_code, 200)
+        self.assertIn('Кабинет учителя', self.client.get('/').text)
+        self.assertNotIn('+ Создать проект', self.client.get('/teacher').text)
 
     def test_teacher_registration_supports_custom_login(self):
         response = self.post("/teacher/register", data={

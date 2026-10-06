@@ -90,7 +90,7 @@ def invite_student(conn, sender_id, form):
     conn.execute("BEGIN IMMEDIATE")
     try:
         pid, uid = form.get("project_id", ""), form.get("student_id", "")
-        project = conn.execute("SELECT * FROM projects WHERE id=? AND owner_id=?", (pid, sender_id)).fetchone()
+        project = conn.execute("SELECT p.* FROM projects p JOIN users u ON u.id=p.owner_id WHERE p.id=? AND p.owner_id=? AND u.role='student'", (pid, sender_id)).fetchone()
         target = conn.execute("""SELECT u.id FROM users u JOIN student_profiles p ON p.user_id=u.id
             WHERE u.id=? AND u.role='student' AND p.discoverable=1""", (uid,)).fetchone()
         if project is None:
@@ -213,18 +213,20 @@ def render_directory(candidates, projects, invitations, token, filters, is_stude
 
 
 def render_team(conn, project_id, owner, token):
-    members = conn.execute("""SELECT u.id,u.username,u.role,p.class_name,p.direction,p.skills_json,p.discoverable,r.role_text
+    members = conn.execute("""SELECT u.id,u.username,u.role,p.class_name,p.direction,p.skills_json,p.discoverable,r.role_text,
+        EXISTS(SELECT 1 FROM project_members m WHERE m.project_id=? AND m.user_id=u.id) AS is_member
         FROM users u LEFT JOIN student_profiles p ON p.user_id=u.id
         LEFT JOIN team_member_roles r ON r.project_id=? AND r.user_id=u.id
         WHERE u.id IN (SELECT user_id FROM project_members WHERE project_id=?)
-        OR u.id=(SELECT owner_id FROM projects WHERE id=?) ORDER BY u.role,u.username""", (project_id, project_id, project_id)).fetchall()
-    body = '<p>Команда общая для проекта: классы и направления не ограничивают участие.</p><a class="teacher-primary-link" href="/teams">Подобрать участников по навыкам</a><div class="team-directory">'
+        OR u.id=(SELECT owner_id FROM projects WHERE id=?) ORDER BY u.role,u.username""", (project_id, project_id, project_id, project_id)).fetchall()
+    directory_label = 'Подобрать участников по навыкам' if owner else 'Каталог учеников'
+    body = f'<p>Команда общая для проекта: классы и направления не ограничивают участие.</p><a class="teacher-primary-link" href="/teams">{directory_label}</a><div class="team-directory">'
     for member in members:
         body += f'<section class="card team-person"><h2>{escape(member["username"])}</h2><p>{"Учитель" if member["role"] == "teacher" else "Ученик"}</p>'
         if member['discoverable']:
             body += f'<p>{escape(member["class_name"])} · {escape(member["direction"])}</p><div class="team-skills">' + ''.join(f'<span class="team-skill">{escape(s)}</span>' for s in json.loads(member['skills_json'])) + '</div>'
-        body += f'<p>Роль: {escape(member["role_text"] or "Пока не указана")}</p>'
-        if owner and member['role'] == 'student' and conn.execute('SELECT 1 FROM project_members WHERE project_id=? AND user_id=?', (project_id, member['id'])).fetchone():
+        body += '<p>Проверяет этапы, видеозащиту и выставляет оценки.</p>' if member['role'] == 'teacher' else f'<p>Роль: {escape(member["role_text"] or "Пока не указана")}</p>'
+        if owner and member['role'] == 'student' and member['is_member']:
             body += f'''<form method="post" class="team-invite-form">{hidden_token(token)}<input type="hidden" name="action" value="role"><input type="hidden" name="student_id" value="{member['id']}">
                 <label>Роль в команде<input name="role_text" maxlength="100" value="{escape(member['role_text'] or '',quote=True)}"></label><button class="secondary">Сохранить роль</button></form>'''
         body += '</section>'

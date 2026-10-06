@@ -3,6 +3,7 @@
 from html import escape
 from urllib.parse import urlsplit
 from teamwork import hidden_token
+from project_rules import has_project_teacher, TEACHER_REQUIRED
 
 DEFENSE_STATES = {"draft": "Черновик", "submitted": "На проверке", "accepted": "Защита принята", "returned": "Нужна доработка"}
 
@@ -53,6 +54,8 @@ def change_defense(conn, project_id, user, form):
                     raise ValueError("Укажите полную ссылку на видео с https:// или http://, без логина и пароля в адресе.")
             if action == "submit" and not url:
                 raise ValueError("Добавьте ссылку на запись перед отправкой учителю.")
+            if action == "submit" and not has_project_teacher(conn, project_id):
+                raise ValueError(TEACHER_REQUIRED)
             current.update(video_url=url, description=description, author_id=user["id"],
                            state="submitted" if action == "submit" else current["state"])
         elif user["role"] == "teacher":
@@ -77,7 +80,7 @@ def change_defense(conn, project_id, user, form):
         raise
 
 
-def render_defense(record, user, token, form=None):
+def render_defense(record, user, token, form=None, has_teacher=True):
     values = form or record
     body = f'<section class="card"><h2>{DEFENSE_STATES[record["state"]]}</h2><p>Одна запись защиты на проект. Черновик и проверка доступны только участникам проекта, включая учителя.</p>'
     if record['video_url']:
@@ -95,7 +98,7 @@ def render_defense(record, user, token, form=None):
         body += prefix + f'''<label>Ссылка на запись видео<input name="video_url" type="url" maxlength="2000" placeholder="https://…" value="{escape(values.get('video_url',''),quote=True)}"></label>
             <label>Описание выступления<textarea name="description" rows="4" maxlength="2000">{escape(values.get('description',''))}</textarea></label>
             <p>Подойдёт ссылка на видео или облачный диск. Проверьте права просмотра: учитель должен иметь доступ. M-Flow не загружает видео и не проверяет его доступность автоматически.</p>
-            <div class="team-actions"><button class="secondary" name="action" value="save">Сохранить черновик</button><button name="action" value="submit">Отправить защиту учителю</button></div></form>'''
+            <div class="team-actions"><button class="secondary" name="action" value="save">Сохранить черновик</button><button name="action" value="submit" {"disabled" if not has_teacher else ""}>Отправить защиту учителю</button></div></form>'''
     elif user['role'] == 'teacher' and record['state'] == 'submitted':
         body += prefix + f'''<label>Комментарий учителя<textarea name="teacher_comment" rows="4" maxlength="2000">{escape(values.get('teacher_comment',''))}</textarea></label>
             <div class="team-actions"><button name="action" value="accept">Принять защиту</button><button class="secondary" name="action" value="return">Вернуть на доработку</button></div></form>'''
@@ -103,4 +106,7 @@ def render_defense(record, user, token, form=None):
         body += '<p>Запись ожидает проверки учителя.</p>'
     elif user['role'] == 'teacher' and record['state'] in ('draft','returned'):
         body += '<p>Ожидается отправка записи учениками.</p>'
-    return body + f'</section><p>Видеозащита не заменяет пять этапов и не выставляет итоговые баллы автоматически. Оценить участников можно в разделе <a href="/project/{record["project_id"]}/assessment">«Оценивание»</a>.</p>'
+    if user['role'] == 'student' and not has_teacher:
+        body += f'<p role="alert">{TEACHER_REQUIRED}</p>'
+    grading_hint = 'Оценить участников' if user['role'] == 'teacher' else 'Посмотреть свои оценки'
+    return body + f'</section><p>Видеозащита не заменяет пять этапов и не выставляет итоговые баллы автоматически. {grading_hint} можно в разделе <a href="/project/{record["project_id"]}/assessment">«Оценивание»</a>.</p>'

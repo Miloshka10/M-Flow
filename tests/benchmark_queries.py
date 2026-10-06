@@ -42,6 +42,9 @@ if __name__ == '__main__':
                              [(pid, f'Задача {n}', ('todo', 'progress', 'done')[n % 3]) for n in range(20)])
         conn.commit(); conn.close()
         case.sign_in(1)
-        print(json.dumps({path: measure(case, path) for path in ('/', '/teacher', '/project/10')}, ensure_ascii=False, indent=2))
+        results = {path: measure(case, path) for path in ('/teacher', '/project/10')}
+        case.sign_in(3)
+        results['/ (student)'] = measure(case, '/')
+        print(json.dumps(results, ensure_ascii=False, indent=2))
     finally:
         TeacherCabinetTests.tearDownClass()

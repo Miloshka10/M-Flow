@@ -21,6 +21,7 @@ from html import escape
 import json
 import secrets
 from collections import defaultdict
+from project_rules import has_project_teacher
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
 from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, change_stage, render_stages, STATE_LABELS
 from teamwork import (initialize_teamwork, profile_for, save_profile, directory, invite_student,
@@ -423,10 +424,11 @@ def user_has_project_access(project_id):
 
 
 def is_project_owner(project_id):
+    """Only student owners manage projects; legacy teacher ownership is read-only."""
 
     user = get_current_user()
 
-    if user is None:
+    if user is None or user['role'] != 'student':
         return False
 
     conn = get_db()
@@ -826,7 +828,7 @@ def user_can_update_task(project_id, task_id):
 
     user = get_current_user()
 
-    if user is None:
+    if user is None or user['role'] != 'student':
         return False
 
     conn = get_db()
@@ -1007,7 +1009,7 @@ def render_auth_page(mode, error=None, role="student"):
         submit_label = "Войти"
         hero_title = "Проекты класса под контролем" if is_teacher else "Твои проекты и задачи"
         hero_text = (
-            "Следите за прогрессом учеников, назначайте задачи и читайте отчёты."
+            "Следите за прогрессом учеников, проверяйте этапы и читайте отчёты."
             if is_teacher else "Работай над задачами, следи за дедлайнами и рассказывай о прогрессе."
         )
     else:
@@ -1023,8 +1025,8 @@ def render_auth_page(mode, error=None, role="student"):
         submit_label = "Зарегистрироваться"
         hero_title = "Ваш кабинет учителя" if is_teacher else "Начни работу с M-Flow"
         hero_text = (
-            "Создайте свой аккаунт учителя с собственным логином. Первый проект можно начать сразу после регистрации."
-            if is_teacher else "Создай аккаунт ученика и сообщи свой логин учителю, чтобы он добавил тебя в проект."
+            "Создайте аккаунт учителя и сообщите ученикам свой логин. Они добавят вас в проекты для проверки результатов."
+            if is_teacher else "Создай аккаунт ученика, начни проект и добавь учителя по его логину для проверки результатов."
         )
 
     login_active = "active" if is_login else ""
@@ -1054,7 +1056,7 @@ def render_auth_page(mode, error=None, role="student"):
                         {form_fields}
                         <button type="submit">{submit_label}</button>
                     </form>
-                    <p class="auth-footer">{"Ваши проекты, этапы и отчёты — в одном кабинете." if is_teacher else "Учитель сможет добавить вас в проект по вашему логину."}<br><a href="/settings">Настройки оформления</a></p>
+                    <p class="auth-footer">{"Проверяйте этапы, видеозащиты и отчёты учеников в одном кабинете." if is_teacher else "Создайте проект и добавьте учителя по его логину."}<br><a href="/settings">Настройки оформления</a></p>
                     </div>
                 </div>
                 <aside class="auth-hero" aria-label="О проекте M-Flow">
@@ -1276,6 +1278,8 @@ def logout():
 def index():
 
     user = get_current_user()
+    if user['role'] == 'teacher':
+        return teacher_cabinet()
     projects = get_projects(with_counts=True)
 
     total_projects = len(projects)
@@ -1505,7 +1509,7 @@ def index():
                     <div class="overall-progress">
 
                         <span>
-                            Общий прогресс
+                            Прогресс задач
                         </span>
 
                         <strong>
@@ -1672,6 +1676,8 @@ def index():
 )
 @login_required
 def create_project():
+    if get_current_user()['role'] != 'student':
+        return render_error_page('Нет доступа', 'Проекты создают ученики. Учитель проверяет результаты в кабинете.', 403)
 
     name = request.form.get(
         "name",
@@ -1761,7 +1767,7 @@ def project(project_id):
 
     search_query = request.args.get("q", "").strip()
     priority_filter = request.args.get("priority", "")
-    only_mine = request.args.get("mine") == "1"
+    only_mine = current_user['role'] == 'student' and request.args.get("mine") == "1"
 
     tasks = list(all_tasks)
 
@@ -1828,6 +1834,7 @@ def project(project_id):
         return "selected" if priority_filter == value else ""
 
     mine_checked = "checked" if only_mine else ""
+    mine_filter = f'<label><input type="checkbox" name="mine" value="1" {mine_checked}> Только мои</label>' if current_user['role'] == 'student' else ''
     reset_link = (
         f'<a class="filter-reset" href="/project/{project_id}">Сбросить</a>'
         if filters_active
@@ -1844,7 +1851,7 @@ def project(project_id):
             <option value="high" {selected("high")}>Высокий</option>
             <option value="urgent" {selected("urgent")}>Срочный</option>
         </select>
-        <label><input type="checkbox" name="mine" value="1" {mine_checked}> Только мои</label>
+        {mine_filter}
         <button type="submit">Найти</button>
         {reset_link}
     </form>
@@ -1942,7 +1949,7 @@ def project(project_id):
 
         # Access to this project has already been checked; use loaded card data.
         # Mutation routes still perform their own database permission checks.
-        can_update = owner or task["assignee_id"] == current_user["id"]
+        can_update = current_user['role'] == 'student' and (owner or task["assignee_id"] == current_user["id"])
         draggable = "true" if can_update else "false"
         assignee_name = escape(task["assignee_name"] or "Не назначена")
 
@@ -1988,7 +1995,7 @@ def project(project_id):
                         {csrf_input()}
                         <textarea name="body" maxlength="500" rows="3" required
                             placeholder="Что уже сделано? Что мешает двигаться дальше?"></textarea>
-                        <button type="submit">Отправить учителю</button>
+                        <button type="submit">Сохранить отчёт</button>
                     </form>
                 </details>
             """
@@ -2284,7 +2291,7 @@ def project(project_id):
 
     student_progress_html = ""
 
-    if owner and current_user["role"] == "teacher":
+    if current_user["role"] == "teacher":
         for student in student_progress:
             task_count = student["task_count"]
             completed_count = student["completed_count"]
@@ -2300,14 +2307,14 @@ def project(project_id):
             """
 
         if not student_progress_html:
-            student_progress_html = "<p>Добавьте учеников в проект, чтобы видеть их прогресс.</p>"
+            student_progress_html = "<p>В проекте пока нет учеников. Владелец проекта формирует команду.</p>"
 
     teacher_dashboard = f"""
     <div class="card">
         <h2>Прогресс учеников</h2>
         {student_progress_html}
     </div>
-    """ if owner and current_user["role"] == "teacher" else ""
+    """ if current_user["role"] == "teacher" else ""
 
     add_task_section = f"""
     <div class="card">
@@ -2506,7 +2513,7 @@ def project(project_id):
                         <div>
 
                             <h2>
-                                Прогресс проекта
+                                Прогресс задач
                             </h2>
 
                             <p data-project-progress-text>
@@ -2578,7 +2585,7 @@ def project(project_id):
                             </h2>
 
                             <p>
-                                Меняй статус в карточке или перетаскивай задачи между колонками
+                                {"Здесь показаны задачи учеников. Учитель проверяет этапы, видеозащиту и оценки." if current_user['role'] == 'teacher' else "Меняй статус в карточке или перетаскивай задачи между колонками"}
                             </p>
 
                         </div>
@@ -2806,7 +2813,7 @@ def remove_member(
     conn = get_db()
 
 
-    conn.execute(
+    removed = conn.execute(
         """
         DELETE FROM project_members
         WHERE project_id = ?
@@ -2818,6 +2825,12 @@ def remove_member(
         )
     )
 
+    if not removed.rowcount:
+        conn.close()
+        flash('Этот пользователь не является участником проекта.', 'error')
+        return redirect(f'/project/{project_id}')
+    conn.execute('DELETE FROM team_member_roles WHERE project_id=? AND user_id=?', (project_id, user_id))
+    conn.execute("UPDATE team_invitations SET state='cancelled',updated_at=CURRENT_TIMESTAMP WHERE project_id=? AND invitee_id=? AND state='pending'", (project_id, user_id))
     conn.execute(
         """
         UPDATE tasks
@@ -3037,7 +3050,7 @@ def submit_task_update(project_id, task_id):
         )
 
     add_task_update(project_id, task_id, user["id"], body)
-    flash("Отчёт отправлен учителю.", "success")
+    flash("Отчёт сохранён в истории задачи.", "success")
     return redirect(f"/project/{project_id}")
 
 
@@ -3241,7 +3254,7 @@ def teams_directory():
     conn = get_db()
     try:
         candidates = directory(conn,user['id'],query=filters['q'],direction=filters['direction'],class_name=filters['class_name'],skill=filters['skill'])
-        projects = conn.execute('SELECT id,name FROM projects WHERE owner_id=? ORDER BY id DESC',(user['id'],)).fetchall()
+        projects = conn.execute("SELECT p.id,p.name FROM projects p JOIN users u ON u.id=p.owner_id WHERE p.owner_id=? AND u.role='student' ORDER BY p.id DESC",(user['id'],)).fetchall()
         invitations = conn.execute("""SELECT i.*,p.name AS project_name,u.username AS sender_name FROM team_invitations i
             JOIN projects p ON p.id=i.project_id JOIN users u ON u.id=i.sender_id
             WHERE i.invitee_id=? AND i.state='pending' ORDER BY i.id DESC""",(user['id'],)).fetchall()
@@ -3255,6 +3268,8 @@ def teams_directory():
 @login_required
 def send_team_invitation():
     user = get_current_user()
+    if user['role'] != 'student':
+        return render_error_page('Нет доступа', 'Команду формирует ученик-владелец проекта.', 403)
     conn = get_db()
     try:
         try:
@@ -3336,7 +3351,7 @@ def project_video_defense(project_id):
         record = defense_for(conn,project_id)
         if error and request.form.get('revision') == str(record['revision']):
             submitted = request.form
-        body = render_defense(record,user,token,submitted)
+        body = render_defense(record,user,token,submitted,has_teacher=has_project_teacher(conn, project_id))
     finally:
         conn.close()
     return render_collaboration_page(user,f'Видеозащита · {name}',body,project_id,error,status)
@@ -3361,6 +3376,7 @@ def project_stage_page(project_id):
             except ValueError as exc:
                 error, status, submitted = str(exc), 400, request.form
         stages = get_stages(conn, project_id)
+        has_teacher = has_project_teacher(conn, project_id)
         _, current = stage_summary(stages)
         if submitted is not None and (current is None or submitted.get("number") != str(current["number"])
                                       or submitted.get("revision") != str(current["revision"])):
@@ -3374,7 +3390,7 @@ def project_stage_page(project_id):
         <h1>Пять этапов · {escape(project_name)}</h1>
         <p>Ученики сохраняют результат и отправляют его учителю. После принятия открывается следующий этап.
         Этапы общие для участников проекта; их прохождение не меняет статусы задач и итоговые баллы.</p>
-        {messages}<p role="alert">{escape(error)}</p>{render_stages(stages, user, token, submitted)}</main></div>'''), status
+        {messages}<p role="alert">{escape(error)}</p>{render_stages(stages, user, token, submitted, has_teacher=has_teacher)}</main></div>'''), status
 
 
 @app.route("/project/<int:project_id>/assessment", methods=["GET", "POST"])
@@ -3561,6 +3577,7 @@ def build_teacher_overview(teacher):
         completed_stages, current_stage = stage_summary(stages_from_rows(stages_by_project[pid]))
         video_defense = (defenses_by_project[pid][0] if defenses_by_project[pid]
                          else {"revision": 0})
+        needs_review = bool(current_stage and current_stage['state'] == 'review') or bool(video_defense['revision'] and video_defense['state'] == 'submitted')
         tasks = tasks_by_project[pid]
         students = students_by_project[pid]
 
@@ -3653,10 +3670,12 @@ def build_teacher_overview(teacher):
             "progress": percent(counts["done"], len(tasks)),
             "students": list(stats.values()),
             "attention": attention,
-            "can_manage": project_row["owner_id"] == teacher["id"],
+            "can_manage": False,
+            "legacy_owner": project_row['owner_id'] == teacher['id'],
+            "needs_review": needs_review,
             "health": (
                 "overdue" if counts["overdue"] else
-                "attention" if counts["soon"] or counts["unassigned"] else
+                "attention" if counts["soon"] or counts["unassigned"] or needs_review else
                 "done" if tasks and counts["done"] == len(tasks) else
                 "empty" if not tasks else "normal"
             ),
@@ -3669,38 +3688,14 @@ def build_teacher_overview(teacher):
     return overview
 
 
-def render_attention_task(project_id, item, students, can_manage=True):
-
+def render_attention_task(project_id, item):
     task = item["task"]
-
-    if not can_manage:
-        return f'''
+    return f'''
         <div class="t-edit">
             <span class="t-title">{escape(task["title"])}</span>
             <span class="t-reason">{escape(" · ".join(item["reasons"]))}</span>
             <a class="back" href="/project/{project_id}#task-{task['id']}">Открыть задачу →</a>
         </div>'''
-
-    options = '<option value="">Не назначена</option>'
-
-    for student in students:
-        chosen = "selected" if student["id"] == task["assignee_id"] else ""
-        options += (
-            f'<option value="{student["id"]}" {chosen}>'
-            f'{escape(student["name"])}</option>'
-        )
-
-    return f"""
-    <form method="post" action="/project/{project_id}/edit/{task["id"]}" class="t-edit">
-        {csrf_input()}
-        <input type="hidden" name="next" value="/teacher">
-        <span class="t-title">{escape(task["title"])}</span>
-        <span class="t-reason">{escape(" · ".join(item["reasons"]))}</span>
-        <input type="date" name="deadline" aria-label="Дедлайн задачи" value="{escape(task["deadline"] or "")}">
-        <select name="assignee_id" aria-label="Ответственный ученик">{options}</select>
-        <button type="submit">Сохранить</button>
-    </form>
-    """
 
 
 def render_teacher_project(project):
@@ -3712,7 +3707,11 @@ def render_teacher_project(project):
     stage = project["current_stage"]
     stage_note = (f'Текущий этап {stage["number"]}: {escape(stage["title"])} · {STATE_LABELS[stage["state"]]}'
                   if stage else 'Все пять этапов приняты учителем')
-    access_note = "" if project["can_manage"] else '<span class="t-muted">Наблюдение · управляет владелец проекта</span>'
+    access_note = '<span class="t-muted">Проверка результатов · задачами и командой управляет ученик-владелец</span>'
+    if project['legacy_owner']:
+        options = ''.join(f'<option value="{student["id"]}">{escape(student["name"])}</option>' for student in project['students'])
+        access_note += ('<p>Этот старый проект создан учителем. Передайте управление ученику: задания и результаты сохранятся, вы останетесь учителем проекта.</p>'
+                       + f'<form method="post" action="/project/{project["id"]}/transfer">{csrf_input()}<label>Ученик-владелец<select name="student_id"><option value="">Выберите ученика</option>{options}</select></label><label>Или логин ученика<input name="student_username" maxlength="30" placeholder="Если ученика пока нет в проекте"></label><button type="submit">Передать проект ученику</button></form>')
     overdue_chip = (
         f'<span class="t-chip bad">Просрочено: {counts["overdue"]}</span>'
         if counts["overdue"] else
@@ -3751,14 +3750,14 @@ def render_teacher_project(project):
         """
         if rows else
         '<p class="t-muted">В проекте пока нет учеников. '
-        'Добавьте их на странице проекта.</p>'
+        'Ученик-владелец формирует команду на странице проекта.</p>'
     )
 
     attention_html = ""
 
     if project["attention"]:
         items = "".join(
-            render_attention_task(project["id"], item, project["students"], project["can_manage"])
+            render_attention_task(project["id"], item)
             for item in project["attention"]
         )
         attention_html = f'<div class="t-sub">Требуют внимания</div>{items}'
@@ -3818,7 +3817,8 @@ def teacher_cabinet():
         if (not query or query.casefold() in project["name"].casefold()
             or any(query.casefold() in student["name"].casefold()
                    for student in project["students"]))
-        and (focus == "all" or project["health"] == focus
+        and (focus == "all" or (focus != 'done' and project["health"] == focus)
+             or focus == 'done' and project['total'] > 0 and project['counts']['done'] == project['total']
              or focus == "attention" and bool(project["attention"]))
     ]
 
@@ -3846,14 +3846,14 @@ def teacher_cabinet():
     """ if overview else """
         <div class="empty">
             <h3>Ваше рабочее пространство готово</h3>
-            <p>Создайте первый проект, добавьте учеников и назначьте им задачи.</p>
+            <p>Попросите ученика создать проект и добавить ваш логин в участники. Здесь появятся его результаты для проверки.</p>
         </div>
     """)
 
     focus_options = "".join(
         f'<option value="{value}" {"selected" if focus == value else ""}>{label}</option>'
         for value, label in (("all", "Все проекты"), ("overdue", "Есть просрочки"),
-                             ("attention", "Требуют внимания"), ("done", "Завершённые"))
+                             ("attention", "Требуют внимания"), ("done", "Все задачи выполнены"))
     )
     reports = sorted(
         [(project, entry) for project in visible_projects for entry in project["reports"]],
@@ -3880,6 +3880,12 @@ def teacher_cabinet():
         </a>'''
         for project, item in attention_items
     ) or '<p class="t-muted">В выбранных проектах нет задач, требующих внимания.</p>'
+    review_links = ''.join(
+        (f'<a class="teacher-attention-item" href="/project/{p["id"]}/stages"><strong>Этап ожидает проверки</strong><span>{escape(p["name"])}</span></a>' if p['current_stage'] and p['current_stage']['state'] == 'review' else '')
+        + (f'<a class="teacher-attention-item" href="/project/{p["id"]}/defense"><strong>Видеозащита ожидает проверки</strong><span>{escape(p["name"])}</span></a>' if p['defense_state'] == DEFENSE_STATES['submitted'] else '')
+        for p in visible_projects if p['needs_review'])
+    if review_links:
+        attention_html = review_links + (attention_html if attention_items else '')
 
     overdue_class = "warn" if overdue_tasks else ""
 
@@ -3895,7 +3901,6 @@ def teacher_cabinet():
                         <h1>Кабинет учителя</h1>
                         <p>{escape(user["username"])}, здесь видно, как движутся проекты вашей команды.</p>
                     </div>
-                    <a href="#teacher-new-project" class="teacher-primary-link">+ Создать проект</a>
                 </section>
                 {messages}
                 <div class="t-stats">
@@ -3923,16 +3928,7 @@ def teacher_cabinet():
                 <div class="section-title"><h2>Проекты</h2>
                     <span class="t-muted">Показано {len(visible_projects)} из {len(overview)}</span></div>
                 {projects_html}
-                <section class="teacher-panel" id="teacher-new-project">
-                    <h2>Новый проект</h2>
-                    <p class="t-muted">После создания добавьте участников на доске проекта.</p>
-                    <form class="teacher-create-form" method="post" action="/teacher/projects">
-                        {csrf_input()}
-                        <input name="name" maxlength="80" required aria-label="Название проекта"
-                            placeholder="Например: Исследование качества воды">
-                        <button type="submit">Создать проект</button>
-                    </form>
-                </section>
+                <section class="teacher-panel"><h2>Как подключиться к проекту</h2><p>Проект создаёт ученик. Сообщите ему свой логин: <strong>{escape(user['username'])}</strong>. Ученик-владелец добавит вас на доске проекта. Вы сможете проверять этапы, видеозащиту и выставлять оценки.</p></section>
             </main>
         </div>
         """
@@ -3942,18 +3938,41 @@ def teacher_cabinet():
 @app.route("/teacher/projects", methods=["POST"])
 @login_required
 def create_teacher_project():
+    return render_error_page('Нет доступа', 'Проекты создают ученики. Попросите ученика добавить вас в свой проект.', 403)
+
+
+@app.route('/project/<int:project_id>/transfer', methods=['POST'])
+@login_required
+def transfer_legacy_project(project_id):
     user = get_current_user()
-    if user["role"] != "teacher":
-        return render_error_page("Нет доступа", "Создание проекта в кабинете доступно учителю.", 403)
-
-    name = request.form.get("name", "").strip()
-    if not name or len(name) > 80:
-        flash("Введите название проекта от 1 до 80 символов.", "error")
-        return redirect("/teacher")
-
-    project_id = add_project(name)
-    flash("Проект создан. Добавьте учеников и задачи.", "success")
-    return redirect(f"/project/{project_id}")
+    if user['role'] != 'teacher':
+        return render_error_page('Нет доступа', 'Передача доступна только учителю-владельцу старого проекта.', 403)
+    student_id = request.form.get('student_id', type=int)
+    username = request.form.get('student_username', '').strip()
+    if student_id is not None and not valid_database_id(student_id):
+        return render_error_page('Некорректный ученик', 'Выберите ученика проекта.', 400)
+    if len(username) > 30 or bool(student_id) == bool(username):
+        return render_error_page('Выберите ученика', 'Выберите ученика из списка или укажите один логин, но не оба.', 400)
+    conn = get_db()
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        owned = conn.execute('SELECT id FROM projects WHERE id=? AND owner_id=?', (project_id, user['id'])).fetchone()
+        if owned is None:
+            return render_error_page('Нет доступа', 'Проект уже передан или принадлежит другому владельцу.', 403)
+        if username:
+            student = conn.execute("SELECT id FROM users WHERE username=? AND role='student'", (username,)).fetchone()
+        else:
+            student = conn.execute("SELECT u.id FROM users u JOIN project_members m ON m.user_id=u.id WHERE m.project_id=? AND u.id=? AND u.role='student'", (project_id, student_id)).fetchone()
+        if student is None:
+            return render_error_page('Ученик не найден', 'Выберите ученика проекта или существующий логин ученика.', 400)
+        conn.executemany('INSERT OR IGNORE INTO project_members(project_id,user_id) VALUES(?,?)', [(project_id, user['id']), (project_id, student['id'])])
+        conn.execute('UPDATE projects SET owner_id=? WHERE id=?', (student['id'], project_id))
+        conn.execute("UPDATE team_invitations SET state='cancelled',updated_at=CURRENT_TIMESTAMP WHERE project_id=? AND state='pending'", (project_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    flash('Проект передан ученику. Вы остались учителем проекта; задачи и результаты сохранены.')
+    return redirect('/teacher')
 
 
 @app.route(
@@ -4032,6 +4051,7 @@ def edit_project_task(project_id, task_id):
             project_id
         )
     )
+
 
     conn.commit()
     conn.close()
