@@ -80,6 +80,40 @@ class TeacherCabinetTests(unittest.TestCase):
         conn.close()
         self.client = self.module.app.test_client()
 
+    def test_health_is_public_uncached_and_does_not_start_session(self):
+        response = self.client.get('/health')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, {'status': 'ok'})
+        self.assertEqual(response.headers['Cache-Control'], 'no-store')
+        self.assertNotIn('Set-Cookie', response.headers)
+        self.assertEqual(self.client.head('/health').status_code, 200)
+
+    def test_health_connection_failure_is_private_json(self):
+        from database import DatabaseUnavailable
+        with patch.object(self.module, 'get_db', side_effect=DatabaseUnavailable('postgresql://owner:private-secret@host/db')):
+            response = self.client.get('/health')
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json, {'status': 'unavailable'})
+        self.assertEqual(response.headers['Cache-Control'], 'no-store')
+        self.assertNotIn('private-secret', response.text)
+
+    def test_health_only_probes_select_one_and_closes_connection_on_error(self):
+        from unittest.mock import Mock
+        conn = Mock()
+        conn.execute.side_effect = sqlite3.OperationalError('private database path')
+        with patch.object(self.module, 'get_db', return_value=conn):
+            response = self.client.get('/health')
+        self.assertEqual(response.status_code, 503)
+        conn.execute.assert_called_once_with('SELECT 1')
+        conn.close.assert_called_once()
+        self.assertNotIn('private database path', response.text)
+
+    def test_health_rejects_mutating_methods(self):
+        with patch.object(self.module, 'get_db') as db:
+            for method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+                self.assertEqual(self.client.open('/health', method=method).status_code, 405)
+            db.assert_not_called()
+
     def sign_in(self, user_id):
         with self.client.session_transaction() as session:
             session["user_id"] = user_id

@@ -21,6 +21,9 @@ class DatabaseUnavailable(RuntimeError):
     """Safe public diagnostic, without credentials or driver connection details."""
 
 
+DATABASE_ERRORS = (DatabaseUnavailable, sqlite3.Error) + ((psycopg.Error,) if psycopg else ())
+
+
 @dataclass(frozen=True)
 class DatabaseSettings:
     backend: str

@@ -10,6 +10,8 @@ from flask import (
     has_request_context
 )
 import os
+from contextlib import closing
+from database import DATABASE_ERRORS
 from datetime import date, timedelta
 from functools import wraps
 from werkzeug.security import (
@@ -141,6 +143,20 @@ DATABASE_PATH = DATABASE_SETTINGS.path
 
 def get_db():
     return connect_database(DATABASE_SETTINGS)
+
+
+@app.route('/health', methods=['GET'])
+def health():
+    """Readiness only: no user table reads or connection details."""
+    try:
+        with closing(get_db()) as conn:
+            available = conn.execute('SELECT 1').fetchone()[0] == 1
+    except DATABASE_ERRORS:
+        available = False
+    response = jsonify(status='ok' if available else 'unavailable')
+    response.status_code = 200 if available else 503
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 def valid_database_id(value):
