@@ -17,6 +17,7 @@ backups/
 private-backups/
 restore-check/
 .mflow-snapshot-*
+.neon
 .env
 .env.*
 !.env.example

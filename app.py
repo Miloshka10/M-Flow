@@ -9,7 +9,6 @@ from flask import (
     g,
     has_request_context
 )
-import sqlite3
 import os
 from datetime import date, timedelta
 from functools import wraps
@@ -30,6 +29,9 @@ from teamwork import (initialize_teamwork, profile_for, save_profile, directory,
                       respond_to_invitation, change_team, render_profile as render_skill_profile,
                       render_directory, render_team)
 from video_defense import initialize_defenses, defense_for, change_defense, render_defense, DEFENSE_STATES
+from database import (DatabaseSettings, DatabaseUnavailable, INTEGRITY_ERRORS,
+                      PostgresConnection, connect_database, execute_schema_script,
+                      table_columns, insert_id, begin_project_write, initialization_settings)
 
 
 app = Flask(__name__)
@@ -129,10 +131,8 @@ def teacher_nav(user):
         return '<a href="/teacher" class="logout">Кабинет учителя</a>' + team_link
     return team_link
 
-DATABASE_PATH = os.environ.get(
-    "M_FLOW_DATABASE",
-    os.path.join(app.root_path, "database.db")
-)
+DATABASE_SETTINGS = DatabaseSettings.from_environment(app.root_path)
+DATABASE_PATH = DATABASE_SETTINGS.path
 
 
 # =========================================================
@@ -140,10 +140,7 @@ DATABASE_PATH = os.environ.get(
 # =========================================================
 
 def get_db():
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    return connect_database(DATABASE_SETTINGS)
 
 
 def valid_database_id(value):
@@ -160,10 +157,24 @@ def validate_route_ids():
 
 
 def prepare_database():
+    conn = connect_database(initialization_settings(DATABASE_SETTINGS))
+    try:
+        _prepare_database(conn)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
-    conn = get_db()
 
-    conn.executescript(
+def _prepare_database(conn):
+
+    if isinstance(conn, PostgresConnection):
+        # Serialize startup DDL across gunicorn workers in the same transaction.
+        conn.execute("SELECT pg_advisory_xact_lock(?)", (674930210,))
+
+    execute_schema_script(conn,
         """
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -205,7 +216,7 @@ def prepare_database():
             task_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
             body TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_at TEXT NOT NULL DEFAULT (CAST(CURRENT_TIMESTAMP AS TEXT)),
             FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE,
             FOREIGN KEY (user_id) REFERENCES users (id)
         );
@@ -219,7 +230,7 @@ def prepare_database():
             scores_json TEXT NOT NULL,
             note TEXT NOT NULL DEFAULT '',
             state TEXT NOT NULL CHECK(state IN ('draft', 'published')),
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT (CAST(CURRENT_TIMESTAMP AS TEXT)),
             PRIMARY KEY (project_id, student_id, teacher_id),
             FOREIGN KEY (project_id) REFERENCES projects(id),
             FOREIGN KEY (student_id) REFERENCES users(id),
@@ -232,22 +243,12 @@ def prepare_database():
     initialize_teamwork(conn)
     initialize_defenses(conn)
 
-    project_columns = {
-        column["name"]
-        for column in conn.execute("PRAGMA table_info(projects)").fetchall()
-    }
+    project_columns = table_columns(conn, "projects")
 
     if "owner_id" not in project_columns:
         conn.execute("ALTER TABLE projects ADD COLUMN owner_id INTEGER")
 
-    columns = conn.execute(
-        "PRAGMA table_info(tasks)"
-    ).fetchall()
-
-    column_names = [
-        column["name"]
-        for column in columns
-    ]
+    column_names = table_columns(conn, "tasks")
 
     if "status" not in column_names:
 
@@ -316,8 +317,9 @@ def prepare_database():
                 continue
             conn.execute(
                 """
-                INSERT OR IGNORE INTO users (username, password, role)
+                INSERT INTO users (username, password, role)
                 VALUES (?, ?, ?)
+                ON CONFLICT(username) DO NOTHING
                 """,
                 (username, generate_password_hash("1234"), role)
             )
@@ -330,17 +332,22 @@ def prepare_database():
             and not conn.execute("SELECT 1 FROM users WHERE username = ?", (teacher_name,)).fetchone()):
         conn.execute(
             """
-            INSERT OR IGNORE INTO users (username, password, role)
+            INSERT INTO users (username, password, role)
             VALUES (?, ?, 'teacher')
+            ON CONFLICT(username) DO NOTHING
             """,
             (teacher_name, generate_password_hash(teacher_password))
         )
 
-    conn.commit()
-    conn.close()
-
-
 prepare_database()
+
+
+@app.errorhandler(DatabaseUnavailable)
+def database_unavailable(error):
+    message = "База данных временно недоступна. Повторите попытку позже; новая локальная база не создаётся."
+    if request.is_json:
+        return jsonify(success=False, error=message), 503
+    return render_error_page("База данных недоступна", message, 503)
 
 
 # =========================================================
@@ -479,9 +486,9 @@ def get_projects(with_counts=False):
     params = [user["id"], user["id"]]
     if with_counts:
         columns = """, COUNT(t.id) AS total,
-            COALESCE(SUM(t.status='done'), 0) AS done,
-            COALESCE(SUM(t.status='progress'), 0) AS active,
-            COALESCE(SUM(t.status!='done' AND t.deadline!='' AND t.deadline<?), 0) AS overdue"""
+            COALESCE(SUM(CASE WHEN t.status='done' THEN 1 ELSE 0 END), 0) AS done,
+            COALESCE(SUM(CASE WHEN t.status='progress' THEN 1 ELSE 0 END), 0) AS active,
+            COALESCE(SUM(CASE WHEN t.status!='done' AND t.deadline!='' AND t.deadline<? THEN 1 ELSE 0 END), 0) AS overdue"""
         join = "LEFT JOIN tasks t ON t.project_id=projects.id"
         params.insert(0, date.today().isoformat())
     projects = conn.execute(f"""
@@ -521,7 +528,7 @@ def add_project(name):
 
     conn = get_db()
 
-    cursor = conn.execute(
+    project_id = insert_id(conn,
         """
         INSERT INTO projects
         (name, owner_id)
@@ -533,13 +540,12 @@ def add_project(name):
         )
     )
 
-    project_id = cursor.lastrowid
-
     conn.execute(
         """
-        INSERT OR IGNORE INTO project_members
+        INSERT INTO project_members
         (project_id, user_id)
         VALUES (?, ?)
+        ON CONFLICT(project_id, user_id) DO NOTHING
         """,
         (
             project_id,
@@ -1147,16 +1153,15 @@ def register_for_role(role):
             return render_auth_page("register", error="Такой логин уже занят. Выберите другой или войдите в существующий аккаунт.", role=role)
 
         try:
-            cursor = conn.execute(
+            new_user_id = insert_id(conn,
                 "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
                 (username, generate_password_hash(password), role)
             )
             conn.commit()
-        except sqlite3.IntegrityError:
+        except INTEGRITY_ERRORS:
             conn.rollback()
             conn.close()
             return render_auth_page("register", error="Такой логин уже занят.", role=role)
-        new_user_id = cursor.lastrowid
         conn.close()
 
         session.clear()
@@ -2323,7 +2328,7 @@ def remove_member(
         flash('Этот пользователь не является участником проекта.', 'error')
         return redirect(f'/project/{project_id}')
     conn.execute('DELETE FROM team_member_roles WHERE project_id=? AND user_id=?', (project_id, user_id))
-    conn.execute("UPDATE team_invitations SET state='cancelled',updated_at=CURRENT_TIMESTAMP WHERE project_id=? AND invitee_id=? AND state='pending'", (project_id, user_id))
+    conn.execute("UPDATE team_invitations SET state='cancelled',updated_at=CAST(CURRENT_TIMESTAMP AS TEXT) WHERE project_id=? AND invitee_id=? AND state='pending'", (project_id, user_id))
     conn.execute(
         """
         UPDATE tasks
@@ -2935,7 +2940,7 @@ def project_assessment(project_id):
                     ON CONFLICT(project_id, student_id, teacher_id) DO UPDATE SET
                     student_name=excluded.student_name, rubric_version=excluded.rubric_version,
                     scores_json=excluded.scores_json, note=excluded.note, state=excluded.state,
-                    updated_at=CURRENT_TIMESTAMP""",
+                    updated_at=CAST(CURRENT_TIMESTAMP AS TEXT)""",
                     (project_id, selected["id"], user["id"], student_name, RUBRIC_VERSION,
                      json.dumps(scores), note, action))
                 conn.commit()
@@ -3455,7 +3460,7 @@ def transfer_legacy_project(project_id):
         return render_error_page('Выберите ученика', 'Выберите ученика из списка или укажите один логин, но не оба.', 400)
     conn = get_db()
     try:
-        conn.execute('BEGIN IMMEDIATE')
+        begin_project_write(conn, project_id)
         owned = conn.execute('SELECT id FROM projects WHERE id=? AND owner_id=?', (project_id, user['id'])).fetchone()
         if owned is None:
             return render_error_page('Нет доступа', 'Проект уже передан или принадлежит другому владельцу.', 403)
@@ -3465,9 +3470,9 @@ def transfer_legacy_project(project_id):
             student = conn.execute("SELECT u.id FROM users u JOIN project_members m ON m.user_id=u.id WHERE m.project_id=? AND u.id=? AND u.role='student'", (project_id, student_id)).fetchone()
         if student is None:
             return render_error_page('Ученик не найден', 'Выберите ученика проекта или существующий логин ученика.', 400)
-        conn.executemany('INSERT OR IGNORE INTO project_members(project_id,user_id) VALUES(?,?)', [(project_id, user['id']), (project_id, student['id'])])
+        conn.executemany('INSERT INTO project_members(project_id,user_id) VALUES(?,?) ON CONFLICT(project_id,user_id) DO NOTHING', [(project_id, user['id']), (project_id, student['id'])])
         conn.execute('UPDATE projects SET owner_id=? WHERE id=?', (student['id'], project_id))
-        conn.execute("UPDATE team_invitations SET state='cancelled',updated_at=CURRENT_TIMESTAMP WHERE project_id=? AND state='pending'", (project_id,))
+        conn.execute("UPDATE team_invitations SET state='cancelled',updated_at=CAST(CURRENT_TIMESTAMP AS TEXT) WHERE project_id=? AND state='pending'", (project_id,))
         conn.commit()
     finally:
         conn.close()

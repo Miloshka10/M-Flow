@@ -2,7 +2,7 @@
 
 # Импорт приложения создаёт/обновляет таблицы один раз, соблюдая M_FLOW_DATABASE
 # и M_FLOW_DEBUG. Здесь больше нет отдельной схемы, демо-проектов и смены владельцев.
-from app import DATABASE_PATH
+from app import DATABASE_SETTINGS
 
 if __name__ == "__main__":
-    print(f"База данных проверена: {DATABASE_PATH}")
+    print(f"Схема базы данных проверена ({DATABASE_SETTINGS.backend}).")

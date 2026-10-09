@@ -39,9 +39,9 @@ class TeacherCabinetTests(unittest.TestCase):
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()
         cls.previous_env = {key: os.environ.get(key) for key in (
-            "M_FLOW_DEBUG", "M_FLOW_DATABASE", "M_FLOW_SECRET_KEY")}
+            "M_FLOW_DEBUG", "M_FLOW_DATABASE", "M_FLOW_SECRET_KEY", "M_FLOW_DATABASE_BACKEND")}
         os.environ.update(M_FLOW_DEBUG="1", M_FLOW_SECRET_KEY="test-only-key",
-                          M_FLOW_DATABASE=str(Path(cls.temp.name) / "test.db"))
+                          M_FLOW_DATABASE=str(Path(cls.temp.name) / "test.db"), M_FLOW_DATABASE_BACKEND="sqlite")
         spec = importlib.util.spec_from_file_location(
             "teacher_test_app", Path(__file__).resolve().parents[1] / "app.py")
         cls.module = importlib.util.module_from_spec(spec)
@@ -589,7 +589,7 @@ class TeacherCabinetTests(unittest.TestCase):
     def test_legacy_initializer_uses_configured_database_without_demo_seed(self):
         with tempfile.TemporaryDirectory() as folder:
             database = str(Path(folder) / 'production.db')
-            env = dict(os.environ, M_FLOW_DEBUG='0', M_FLOW_SECRET_KEY='initializer-test-only', M_FLOW_DATABASE=database)
+            env = dict(os.environ, M_FLOW_DEBUG='0', M_FLOW_SECRET_KEY='initializer-test-only', M_FLOW_DATABASE=database, M_FLOW_DATABASE_BACKEND='sqlite')
             result = subprocess.run([sys.executable, 'init_db.py'], cwd=Path(__file__).resolve().parents[1], env=env, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             conn = sqlite3.connect(database)

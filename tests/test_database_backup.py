@@ -27,7 +27,7 @@ class DatabaseBackupTests(unittest.TestCase):
         self.database = self.directory / "working.db"
         self.output = self.directory / "snapshot.sqlite3"
         self.env = patch.dict(os.environ, {
-            "M_FLOW_DATABASE": str(self.database), "M_FLOW_DEBUG": "0",
+            "M_FLOW_DATABASE": str(self.database), "M_FLOW_DEBUG": "0", "M_FLOW_DATABASE_BACKEND": "sqlite",
             "M_FLOW_SECRET_KEY": "disposable-backup-test-key",
             "M_FLOW_TEACHER_USER": "", "M_FLOW_TEACHER_PASSWORD": "",
         })

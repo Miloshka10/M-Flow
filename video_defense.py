@@ -4,12 +4,13 @@ from html import escape
 from urllib.parse import urlsplit
 from teamwork import hidden_token
 from project_rules import has_project_teacher, TEACHER_REQUIRED
+from database import execute_schema, begin_project_write
 
 DEFENSE_STATES = {"draft": "Черновик", "submitted": "На проверке", "accepted": "Защита принята", "returned": "Нужна доработка"}
 
 
 def initialize_defenses(conn):
-    conn.execute("""CREATE TABLE IF NOT EXISTS project_defenses (
+    execute_schema(conn, """CREATE TABLE IF NOT EXISTS project_defenses (
         project_id INTEGER PRIMARY KEY REFERENCES projects(id),
         video_url TEXT NOT NULL DEFAULT '',
         description TEXT NOT NULL DEFAULT '',
@@ -18,7 +19,7 @@ def initialize_defenses(conn):
         author_id INTEGER REFERENCES users(id),
         reviewer_id INTEGER REFERENCES users(id),
         revision INTEGER NOT NULL DEFAULT 1,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        updated_at TEXT NOT NULL DEFAULT (CAST(CURRENT_TIMESTAMP AS TEXT))
     )""")
 
 
@@ -31,7 +32,7 @@ def defense_for(conn, project_id):
 
 
 def change_defense(conn, project_id, user, form):
-    conn.execute("BEGIN IMMEDIATE")
+    begin_project_write(conn, project_id)
     try:
         current = defense_for(conn, project_id)
         if form.get("revision") != str(current["revision"]):
@@ -70,7 +71,7 @@ def change_defense(conn, project_id, user, form):
         conn.execute("""INSERT INTO project_defenses(project_id,video_url,description,state,teacher_comment,author_id,reviewer_id,revision)
             VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET video_url=excluded.video_url,
             description=excluded.description,state=excluded.state,teacher_comment=excluded.teacher_comment,
-            author_id=excluded.author_id,reviewer_id=excluded.reviewer_id,revision=excluded.revision,updated_at=CURRENT_TIMESTAMP""",
+            author_id=excluded.author_id,reviewer_id=excluded.reviewer_id,revision=excluded.revision,updated_at=CAST(CURRENT_TIMESTAMP AS TEXT)""",
             (project_id,current['video_url'],current['description'],current['state'],current['teacher_comment'],current['author_id'],current['reviewer_id'],current['revision']+1))
         conn.commit()
         return {"save": "Черновик записи сохранён.", "submit": "Запись защиты отправлена учителю.",

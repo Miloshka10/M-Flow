@@ -116,6 +116,9 @@ def _copy_snapshot(source, destination, timeout):
 
 def create_backup(destination, source=None, timeout=60):
     """Consistent full snapshot including all tables/indexes and committed WAL."""
+    if source is None and (os.environ.get("M_FLOW_DATABASE_BACKEND") == "postgres"
+                           or (os.environ.get("DATABASE_URL") and os.environ.get("M_FLOW_DATABASE_BACKEND") != "sqlite")):
+        raise BackupError("Рабочая база — PostgreSQL. Для неё нужен pg_dump; SQLite-копия не заменяет её резервную копию.")
     return _copy_snapshot(configured_database() if source is None else source,
                           destination, timeout)
 

@@ -3,6 +3,7 @@
 from html import escape
 from urllib.parse import urlsplit
 from project_rules import has_project_teacher, TEACHER_REQUIRED
+from database import execute_schema, begin_project_write
 
 STAGES = (
     (1, "Выбор темы и согласование с учителем"),
@@ -33,7 +34,7 @@ def stage_label(stage, current_number=None):
 
 
 def initialize_stages(conn):
-    conn.execute("""CREATE TABLE IF NOT EXISTS project_stages (
+    execute_schema(conn, """CREATE TABLE IF NOT EXISTS project_stages (
         project_id INTEGER NOT NULL REFERENCES projects(id),
         number INTEGER NOT NULL CHECK(number BETWEEN 1 AND 5),
         state TEXT NOT NULL CHECK(state IN ('progress', 'review', 'done')),
@@ -43,7 +44,7 @@ def initialize_stages(conn):
         submitted_by INTEGER REFERENCES users(id),
         reviewed_by INTEGER REFERENCES users(id),
         revision INTEGER NOT NULL DEFAULT 1,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT (CAST(CURRENT_TIMESTAMP AS TEXT)),
         PRIMARY KEY(project_id, number)
     )""")
 
@@ -76,7 +77,7 @@ def stage_summary(stages):
 
 def change_stage(conn, project_id, user, form):
     """Caller checks project membership and CSRF. Transaction prevents lost updates."""
-    conn.execute("BEGIN IMMEDIATE")
+    begin_project_write(conn, project_id)
     try:
         stages = get_stages(conn, project_id)
         _, current = stage_summary(stages)
@@ -127,7 +128,7 @@ def change_stage(conn, project_id, user, form):
             ON CONFLICT(project_id, number) DO UPDATE SET
             state=excluded.state, result=excluded.result, presentation_url=excluded.presentation_url,
             teacher_comment=excluded.teacher_comment, submitted_by=excluded.submitted_by,
-            reviewed_by=excluded.reviewed_by, revision=excluded.revision, updated_at=CURRENT_TIMESTAMP""",
+            reviewed_by=excluded.reviewed_by, revision=excluded.revision, updated_at=CAST(CURRENT_TIMESTAMP AS TEXT)""",
             (project_id, current["number"], state, result, url, comment, submitted_by, reviewed_by, current["revision"] + 1))
         conn.commit()
         return {"save": "Результат этапа сохранён.", "submit": "Этап отправлен учителю на проверку.",

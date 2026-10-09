@@ -2,10 +2,11 @@
 
 import json
 from html import escape
+from database import execute_schema_script, begin_project_write, begin_invitation_write, form_database_id
 
 
 def initialize_teamwork(conn):
-    conn.executescript("""
+    execute_schema_script(conn, """
         CREATE TABLE IF NOT EXISTS student_profiles (
             user_id INTEGER PRIMARY KEY REFERENCES users(id),
             class_name TEXT NOT NULL DEFAULT '',
@@ -22,7 +23,7 @@ def initialize_teamwork(conn):
             role_text TEXT NOT NULL DEFAULT '',
             message TEXT NOT NULL DEFAULT '',
             state TEXT NOT NULL CHECK(state IN ('pending','accepted','declined','cancelled')),
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT (CAST(CURRENT_TIMESTAMP AS TEXT)),
             UNIQUE(project_id, invitee_id)
         );
         CREATE INDEX IF NOT EXISTS idx_invitations_recipient ON team_invitations(invitee_id,state);
@@ -87,9 +88,9 @@ def directory(conn, current_id, query="", direction="", class_name="", skill="")
 
 
 def invite_student(conn, sender_id, form):
-    conn.execute("BEGIN IMMEDIATE")
+    pid, uid = form_database_id(form.get("project_id")), form_database_id(form.get("student_id"))
+    begin_project_write(conn, pid)
     try:
-        pid, uid = form.get("project_id", ""), form.get("student_id", "")
         project = conn.execute("SELECT p.* FROM projects p JOIN users u ON u.id=p.owner_id WHERE p.id=? AND p.owner_id=? AND u.role='student'", (pid, sender_id)).fetchone()
         target = conn.execute("""SELECT u.id FROM users u JOIN student_profiles p ON p.user_id=u.id
             WHERE u.id=? AND u.role='student' AND p.discoverable=1""", (uid,)).fetchone()
@@ -110,7 +111,7 @@ def invite_student(conn, sender_id, form):
         conn.execute("""INSERT INTO team_invitations(project_id,sender_id,invitee_id,role_text,message,state)
             VALUES (?,?,?,?,?,'pending') ON CONFLICT(project_id,invitee_id) DO UPDATE SET
             sender_id=excluded.sender_id, role_text=excluded.role_text, message=excluded.message,
-            state='pending', updated_at=CURRENT_TIMESTAMP""", (pid, sender_id, uid, role, message))
+            state='pending', updated_at=CAST(CURRENT_TIMESTAMP AS TEXT)""", (pid, sender_id, uid, role, message))
         conn.commit()
     except Exception:
         conn.rollback()
@@ -118,7 +119,7 @@ def invite_student(conn, sender_id, form):
 
 
 def respond_to_invitation(conn, invitation_id, user_id, action):
-    conn.execute("BEGIN IMMEDIATE")
+    begin_invitation_write(conn, invitation_id, user_id)
     try:
         invitation = conn.execute("SELECT * FROM team_invitations WHERE id=? AND invitee_id=?", (invitation_id, user_id)).fetchone()
         if invitation is None:
@@ -129,10 +130,10 @@ def respond_to_invitation(conn, invitation_id, user_id, action):
         if owner is None or owner["owner_id"] != invitation["sender_id"]:
             raise ValueError("Приглашение устарело: владелец проекта изменился.")
         if action == "accept":
-            conn.execute("INSERT OR IGNORE INTO project_members(project_id,user_id) VALUES (?,?)", (invitation["project_id"], user_id))
+            conn.execute("INSERT INTO project_members(project_id,user_id) VALUES (?,?) ON CONFLICT(project_id,user_id) DO NOTHING", (invitation["project_id"], user_id))
             conn.execute("""INSERT INTO team_member_roles(project_id,user_id,role_text) VALUES (?,?,?)
                 ON CONFLICT(project_id,user_id) DO UPDATE SET role_text=excluded.role_text""", (invitation["project_id"], user_id, invitation["role_text"]))
-        conn.execute("UPDATE team_invitations SET state=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        conn.execute("UPDATE team_invitations SET state=?,updated_at=CAST(CURRENT_TIMESTAMP AS TEXT) WHERE id=?",
                      ("accepted" if action == "accept" else "declined", invitation_id))
         conn.commit()
         return invitation["project_id"]
@@ -144,12 +145,12 @@ def respond_to_invitation(conn, invitation_id, user_id, action):
 def change_team(conn, project_id, form):
     action = form.get("action")
     if action == "cancel":
-        cur = conn.execute("UPDATE team_invitations SET state='cancelled',updated_at=CURRENT_TIMESTAMP WHERE id=? AND project_id=? AND state='pending'",
-                           (form.get("invitation_id", ""), project_id))
+        cur = conn.execute("UPDATE team_invitations SET state='cancelled',updated_at=CAST(CURRENT_TIMESTAMP AS TEXT) WHERE id=? AND project_id=? AND state='pending'",
+                           (form_database_id(form.get("invitation_id")), project_id))
         if not cur.rowcount:
             raise ValueError("Приглашение уже обработано или не относится к проекту.")
     elif action == "role":
-        uid, role = form.get("student_id", ""), form.get("role_text", "").strip()
+        uid, role = form_database_id(form.get("student_id")), form.get("role_text", "").strip()
         member = conn.execute("""SELECT 1 FROM project_members m JOIN users u ON u.id=m.user_id
             WHERE m.project_id=? AND m.user_id=? AND u.role='student'""", (project_id, uid)).fetchone()
         if not member or len(role) > 100:
