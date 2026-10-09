@@ -61,6 +61,7 @@ async function moveTask(card, target) {
   try {
     const result = await saveTask(card, 'status', target);
     document.querySelector('.kanban-column[data-status="' + target + '"] .kanban-cards').appendChild(card);
+    sortTaskCards(card.parentElement);
     if (select) select.value = target;
     card.classList.toggle('done-card', target === 'done');
     const deadline = card.querySelector('.task-deadline');
@@ -86,9 +87,33 @@ async function moveTask(card, target) {
   }
 }
 function changeTaskStatus(select) { return moveTask(select.closest('.task-card'), select.value); }
+function sortTaskCards(container) {
+  if (!container) return;
+  const ranks = {urgent: 1, high: 2, normal: 3, low: 4};
+  const cards = Array.from(container.querySelectorAll('.task-card'));
+  cards.sort((a, b) => (ranks[a.dataset.priority] || 3) - (ranks[b.dataset.priority] || 3) ||
+    Number(a.dataset.taskId) - Number(b.dataset.taskId));
+  cards.forEach(card => container.appendChild(card));
+}
 async function changePriority(select) {
   const previous = select.dataset.savedValue;
-  try { await saveTask(select.closest('.task-card'), 'priority', select.value); location.reload(); }
+  const card = select.closest('.task-card');
+  const next = select.value;
+  try {
+    await saveTask(card, 'priority', next);
+    select.dataset.savedValue = next;
+    card.dataset.priority = next;
+    const badge = card.querySelector('.task-priority');
+    if (badge) {
+      badge.className = 'task-priority priority-' + next;
+      badge.textContent = {low: 'Низкий', normal: 'Обычный', high: 'Высокий', urgent: 'Срочный'}[next];
+    }
+    const filter = new URLSearchParams(window.location.search || '').get('priority');
+    if (['low', 'normal', 'high', 'urgent'].includes(filter)) { location.reload(); return; }
+    sortTaskCards(card.parentElement);
+    const message = document.querySelector('#board-status');
+    if (message) { message.hidden = false; message.textContent = 'Приоритет задачи сохранён.'; }
+  }
   catch (error) { select.value = previous; alert(error.message || 'Проверьте соединение и повторите попытку.'); }
 }
 function setupKanban() {

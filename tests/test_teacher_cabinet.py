@@ -108,6 +108,26 @@ class TeacherCabinetTests(unittest.TestCase):
         conn.close.assert_called_once()
         self.assertNotIn('private database path', response.text)
 
+    def test_board_normalizes_unknown_priority_filter(self):
+        self.sign_in(3)
+        plain = self.client.get('/project/1')
+        invalid = self.client.get('/project/1?priority=unknown-priority')
+        self.assertEqual(plain.status_code, 200)
+        self.assertEqual(invalid.text, plain.text)
+
+    def test_board_search_is_bounded_and_case_insensitive(self):
+        self.sign_in(3)
+        self.assertIn('Overdue task', self.client.get('/project/1?q=OVERDUE').text)
+        self.assertEqual(self.client.get('/project/1?q=' + 'x' * 200).text,
+                         self.client.get('/project/1?q=' + 'x' * 100).text)
+
+    def test_theme_workflow_checks_without_mutating_repository(self):
+        workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/connect-theme.yml').read_text(encoding='utf-8')
+        self.assertIn('contents: read', workflow)
+        self.assertNotIn('contents: write', workflow)
+        self.assertNotIn('write_text', workflow)
+        self.assertNotIn('git push', workflow)
+
     def test_health_rejects_mutating_methods(self):
         with patch.object(self.module, 'get_db') as db:
             for method in ('POST', 'PUT', 'PATCH', 'DELETE'):

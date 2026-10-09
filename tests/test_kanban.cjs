@@ -7,10 +7,10 @@ function setup(response) {
   const column = {dataset: {status: 'todo'}};
   const select = {value: 'done', disabled: false};
   const priority = {value: 'high', disabled: false, dataset: {savedValue: 'normal'}};
-  const classes = new Set(), alerts = [];
+  const classes = new Set(), alerts = [], badge = {};
   const card = {dataset: {taskId: '1', deadline: ''}, closest: () => column,
     querySelectorAll: () => [select, priority],
-    querySelector: selector => selector === '.task-status-select' ? select : null,
+    querySelector: selector => selector === '.task-status-select' ? select : selector === '.task-priority' ? badge : null,
     classList: {toggle: (name, on) => on ? classes.add(name) : classes.delete(name)}};
   priority.closest = () => card;
   const elements = {
@@ -21,7 +21,7 @@ function setup(response) {
   };
   elements['meta[name="csrf-token"]'] = {content: 'test-csrf-token'};
   const requests = [];
-  const context = {Date, alert: message => alerts.push(message),
+  const context = {Date, URLSearchParams, alert: message => alerts.push(message),
     window: {location: {pathname: '/project/1'}}, location: {reload() {}},
     fetch: async (url, options) => { requests.push({url, options}); if (response instanceof Error) throw response; return response; },
     document: {addEventListener() {}, querySelectorAll: () => [],
@@ -29,7 +29,7 @@ function setup(response) {
         {appendChild: () => column.dataset.status = 'done'} : elements[selector] || null}
   };
   vm.createContext(context); vm.runInContext(source, context);
-  return {context, card, select, priority, column, classes, alerts, elements, requests};
+  return {context, card, select, priority, column, classes, alerts, elements, requests, badge};
 }
 (async () => {
   const success = setup({ok: true, status: 200, json: async () => ({success: true,
@@ -58,5 +58,22 @@ function setup(response) {
   assert.equal(priorityFailure.priority.value, 'normal');
   assert.equal(priorityFailure.priority.disabled, false);
   assert.equal(priorityFailure.requests[0].options.headers['X-CSRF-Token'], 'test-csrf-token');
+  const prioritySuccess = setup({ok: true, status: 200, json: async () => ({success: true})});
+  let reloads = 0;
+  prioritySuccess.context.location.reload = () => reloads++;
+  await prioritySuccess.context.changePriority(prioritySuccess.priority);
+  assert.equal(reloads, 0, 'Unfiltered board must not reload after changing priority');
+  assert.equal(prioritySuccess.priority.dataset.savedValue, 'high');
+  assert.equal(prioritySuccess.card.dataset.priority, 'high');
+  assert.equal(prioritySuccess.badge.textContent, 'Высокий');
+  prioritySuccess.context.window.location.search = '?priority=high';
+  prioritySuccess.priority.value = 'low';
+  await prioritySuccess.context.changePriority(prioritySuccess.priority);
+  assert.equal(reloads, 1, 'Active priority filter must be refreshed');
+  const cards = [{dataset: {priority: 'low', taskId: '1'}}, {dataset: {priority: 'urgent', taskId: '3'}},
+                 {dataset: {priority: 'urgent', taskId: '2'}}];
+  const ordered = [];
+  prioritySuccess.context.sortTaskCards({querySelectorAll: () => cards, appendChild: card => ordered.push(card.dataset.taskId)});
+  assert.deepEqual(ordered, ['2', '3', '1']);
   console.log('Kanban checks passed: save, live metrics, student progress, network errors, denied access, expired session.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

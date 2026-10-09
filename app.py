@@ -1010,7 +1010,7 @@ def get_student_progress(project_id):
 # STYLE + JAVASCRIPT
 # =========================================================
 
-PAGE_STYLE = '<script src="/static/kanban.js?v=20261006-route" defer></script>'
+PAGE_STYLE = '<script src="/static/kanban.js?v=20261009-polish" defer></script>'
 
 
 # =========================================================
@@ -1409,16 +1409,19 @@ def project(project_id):
 
     # ---------- фильтры (поиск, приоритет, только мои) ----------
 
-    search_query = request.args.get("q", "").strip()
+    search_query = request.args.get("q", "").strip()[:100]
     priority_filter = request.args.get("priority", "")
+    if priority_filter not in ("low", "normal", "high", "urgent"):
+        priority_filter = ""
     only_mine = current_user['role'] == 'student' and request.args.get("mine") == "1"
 
     tasks = list(all_tasks)
 
     if search_query:
+        normalized_query = search_query.lower()
         tasks = [
             task for task in tasks
-            if search_query.lower() in task["title"].lower()
+            if normalized_query in task["title"].lower()
         ]
 
     if priority_filter in ("low", "normal", "high", "urgent"):
@@ -1709,7 +1712,7 @@ def project(project_id):
             </select></label>''' if can_update else ''
 
         priority_control = f"""
-            <select class="task-priority-select" data-task-id="{task_id}" onchange="changePriority(this)">
+            <select class="task-priority-select" data-task-id="{task_id}" aria-label="Приоритет задачи: {task_title}" onchange="changePriority(this)">
                 <option value="low" {low_selected}>Низкий</option>
                 <option value="normal" {normal_selected}>Обычный</option>
                 <option value="high" {high_selected}>Высокий</option>
@@ -1725,6 +1728,7 @@ def project(project_id):
             draggable="{draggable}"
             data-task-id="{task_id}"
             data-deadline="{escape(task['deadline'] or '', quote=True)}"
+            data-priority="{escape(priority, quote=True)}"
         >
 
             <div class="task-title">

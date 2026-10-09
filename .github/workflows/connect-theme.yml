@@ -1,45 +1,29 @@
-name: Connect M-Flow theme
+name: Check M-Flow theme
 
 on:
   push:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   connect-theme:
-    # Do not create a follow-up bot commit that could bypass a deploy skip.
+    # Respect explicit deploy skips; this job never writes source or bot commits.
     if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip render]') && !contains(github.event.head_commit.message, '[render skip]')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Connect theme CSS
+      - name: Verify theme CSS without editing source
         run: |
           python - <<'PY'
           from pathlib import Path
 
           path = Path('app.py')
           text = path.read_text(encoding='utf-8')
-          marker = '<style>\n'
-          import_line = "@import url('/static/mflow-theme.css');\n"
-
-          if import_line not in text:
-              if marker not in text:
-                  raise SystemExit('Could not find PAGE_STYLE <style> block')
-              text = text.replace(marker, marker + import_line, 1)
-              path.write_text(text, encoding='utf-8')
-          else:
-              print('Theme is already connected')
+          if '/static/mflow-theme.css' not in text or not Path('static/mflow-theme.css').is_file():
+              raise SystemExit('Theme stylesheet is missing or not connected')
+          print('Theme is connected; source files are unchanged')
           PY
-
-      - name: Commit change
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app.py
-          git diff --cached --quiet && exit 0
-          git commit -m "Connect M-Flow fintech theme"
-          git push
