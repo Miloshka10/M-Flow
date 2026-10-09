@@ -312,6 +312,8 @@ def prepare_database():
 
     if os.environ.get("M_FLOW_DEBUG") == "1":
         for username, role in (("milosh", "student"), ("uchitel", "teacher")):
+            if conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+                continue
             conn.execute(
                 """
                 INSERT OR IGNORE INTO users (username, password, role)
@@ -324,7 +326,8 @@ def prepare_database():
     teacher_name = os.environ.get("M_FLOW_TEACHER_USER", "").strip()
     teacher_password = os.environ.get("M_FLOW_TEACHER_PASSWORD", "")
 
-    if teacher_name and len(teacher_password) >= 8:
+    if (teacher_name and len(teacher_password) >= 8
+            and not conn.execute("SELECT 1 FROM users WHERE username = ?", (teacher_name,)).fetchone()):
         conn.execute(
             """
             INSERT OR IGNORE INTO users (username, password, role)
