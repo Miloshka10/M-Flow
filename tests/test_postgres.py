@@ -131,10 +131,12 @@ class PostgresCabinetTests(fixtures.TeacherCabinetTests):
         self.assertEqual(len(self.notification_rows()), 1)
 
     def test_concurrent_assessment_retry_creates_one_notification(self):
+        token = self.module.new_session(self.module.get_db, self.module.SECRET_KEY, 1)
         def publish(_):
             client = self.module.app.test_client()
             with client.session_transaction() as session:
                 session['user_id'] = 1
+                session['auth_token'] = token
                 session['csrf_token'] = 'test-form-token'
             return client.post('/project/2/assessment', data=self.assessment_data()).status_code
         with ThreadPoolExecutor(max_workers=2) as pool:

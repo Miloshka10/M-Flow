@@ -11,6 +11,7 @@ from datetime import date, timedelta
 from werkzeug.security import generate_password_hash
 from unittest.mock import patch
 from html.parser import HTMLParser
+from auth_cases import AuthSecurityCases
 
 
 class FormTokens(HTMLParser):
@@ -35,7 +36,7 @@ class FormTokens(HTMLParser):
             self.current = None
 
 
-class TeacherCabinetTests(unittest.TestCase):
+class TeacherCabinetTests(AuthSecurityCases, unittest.TestCase):
     def seed_board_filters(self):
         self.seed_deadline_cases()
         conn = self.module.get_db()
@@ -471,7 +472,7 @@ class TeacherCabinetTests(unittest.TestCase):
 
     def setUp(self):
         conn = self.module.get_db()
-        for table in ("notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
+        for table in ("auth_sessions", "auth_limits", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
             conn.execute(f"DELETE FROM {table}")
         conn.executemany("INSERT INTO users(id, username, password, role) VALUES(?, ?, ?, ?)", [
             (1, "teacher-one", self.password, "teacher"),
@@ -546,8 +547,10 @@ class TeacherCabinetTests(unittest.TestCase):
             db.assert_not_called()
 
     def sign_in(self, user_id):
+        token = self.module.new_session(self.module.get_db, self.module.SECRET_KEY, user_id)
         with self.client.session_transaction() as session:
             session["user_id"] = user_id
+            session['auth_token'] = token
             session["csrf_token"] = "test-form-token"
 
     def post(self, path, **kwargs):
@@ -585,7 +588,9 @@ class TeacherCabinetTests(unittest.TestCase):
     def database_snapshot(self):
         conn = self.module.get_db()
         try:
-            return tuple(conn.iterdump())
+            # Domain invariants: explicit fixture logins may create technical sessions.
+            # Auth persistence and mutations are asserted separately in auth_cases.
+            return tuple(line for line in conn.iterdump() if not line.startswith('INSERT INTO "auth_'))
         finally:
             conn.close()
 
@@ -858,13 +863,16 @@ class TeacherCabinetTests(unittest.TestCase):
                 self.assertLessEqual(before[path], budget)
 
     def test_current_user_cache_is_request_scoped_and_tracks_session_changes(self):
+        second_token = self.module.new_session(self.module.get_db, self.module.SECRET_KEY, 2)
         with self.module.app.test_request_context('/'):
             self.module.session['user_id'] = 1
+            self.module.session['auth_token'] = self.module.new_session(self.module.get_db, self.module.SECRET_KEY, 1)
             with patch.object(self.module, 'get_db', wraps=self.module.get_db) as db:
                 self.assertEqual(self.module.get_current_user()['id'], 1)
                 self.assertEqual(self.module.get_current_user()['id'], 1)
                 self.assertEqual(db.call_count, 1)
                 self.module.session['user_id'] = 2
+                self.module.session['auth_token'] = second_token
                 self.assertEqual(self.module.get_current_user()['id'], 2)
                 self.assertEqual(db.call_count, 2)
                 self.module.session.clear()
@@ -906,6 +914,7 @@ class TeacherCabinetTests(unittest.TestCase):
         conn.close()
         with self.module.app.test_request_context('/'):
             self.module.session['user_id'] = 1
+            self.module.session['auth_token'] = self.module.new_session(self.module.get_db, self.module.SECRET_KEY, 1)
             projects = {p['id']: dict(p) for p in self.module.get_projects(with_counts=True)}
         self.assertEqual((projects[1]['total'], projects[1]['done'], projects[1]['active'], projects[1]['overdue']), (2, 0, 1, 1))
         self.assertEqual((projects[2]['total'], projects[2]['done'], projects[2]['overdue']), (1, 1, 0))

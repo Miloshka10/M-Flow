@@ -72,6 +72,8 @@ class DatabaseBackupTests(unittest.TestCase):
             conn.execute("PRAGMA user_version=7")
             conn.execute("""INSERT INTO notifications(recipient_id,project_id,event_key,title,message,target)
                 VALUES(2,1,'test:review','Этап принят','Закрытый комментарий — тест','/project/1/stages')""")
+            conn.execute("INSERT INTO auth_limits(bucket,hits,expires) VALUES('test-hmac-bucket',2,1900000000)")
+            conn.execute("INSERT INTO auth_sessions(token_hash,user_id,expires) VALUES('test-hmac-session',2,1900000000)")
             conn.commit()
 
     def snapshot(self, path):

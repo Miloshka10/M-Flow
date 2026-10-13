@@ -20,6 +20,10 @@ from werkzeug.security import (
 from html import escape
 import json
 import secrets
+import time
+from datetime import timedelta
+from auth_security import (initialize_auth, reserve_attempt, client_source, proxy_networks,
+                           new_session, revoke_session, fingerprint, SESSION_SECONDS, begin_auth_write)
 from collections import defaultdict
 from deadlines import business_today, deadline_info, deadline_text, parse_deadline, urgent_tasks, TIMEZONE_LABEL
 from deadlines import DEADLINE_FILTERS, TASK_SORTS, matches_deadline, task_sort_key
@@ -58,8 +62,12 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=not DEBUG_MODE,
+    PERMANENT_SESSION_LIFETIME=timedelta(seconds=SESSION_SECONDS),
     MAX_CONTENT_LENGTH=1024 * 1024,
 )
+TRUSTED_AUTH_PROXIES = proxy_networks(os.environ.get('M_FLOW_TRUSTED_PROXY_CIDRS', ''))
+# Unknown usernames still do one password verification, rather than returning early.
+DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
 
 
 def csrf_token():
@@ -264,6 +272,7 @@ def _prepare_database(conn):
     initialize_teamwork(conn)
     initialize_defenses(conn)
     initialize_notifications(conn)
+    initialize_auth(conn)
 
     project_columns = table_columns(conn, "projects")
 
@@ -394,12 +403,13 @@ def login_required(func):
 
 def get_current_user():
 
-    if "user_id" not in session:
+    if "user_id" not in session or not isinstance(session.get('auth_token'), str):
         return None
 
     # Cache only within this request, never across accounts or requests.
     user_id = session["user_id"]
-    if has_request_context() and getattr(g, "current_user_id", None) == user_id:
+    if (has_request_context() and getattr(g, "current_user_id", None) == user_id
+            and getattr(g, 'current_user_auth_token', None) == session['auth_token']):
         return g.current_user
 
     conn = get_db()
@@ -408,15 +418,17 @@ def get_current_user():
         """
         SELECT id, username, role
         FROM users
-        WHERE id = ?
+        WHERE id = ? AND EXISTS (SELECT 1 FROM auth_sessions s
+            WHERE s.user_id=users.id AND s.token_hash=? AND s.expires>?)
         """,
-        (session["user_id"],)
+        (session["user_id"], fingerprint(SECRET_KEY, 'session', session['auth_token']), int(time.time()))
     ).fetchone()
 
     conn.close()
 
     if has_request_context():
         g.current_user_id = user_id
+        g.current_user_auth_token = session['auth_token']
         g.current_user = user
 
     return user
@@ -1127,19 +1139,44 @@ def render_auth_page(mode, error=None, role="student"):
     )
 
 
+def auth_wait(mode, role, seconds):
+    seconds = max(1, int(seconds))
+    return (render_auth_page(mode, error=f'Слишком много попыток. Повторите через {seconds} сек.', role=role),
+            429, {'Retry-After': str(seconds)})
+
+
+def auth_attempt(action, username):
+    if 'auth_browser' not in session:
+        session['auth_browser'] = secrets.token_urlsafe(24)
+    source = client_source(request.remote_addr, request.headers.get('X-Forwarded-For', ''), TRUSTED_AUTH_PROXIES)
+    return reserve_attempt(get_db, SECRET_KEY, action, username, source, session['auth_browser'])
+
+
+def establish_session(user_id, token):
+    session.clear()
+    session['user_id'] = user_id
+    session['auth_token'] = token
+    csrf_token()
+
+
 def login_for_role(role):
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
+        retry, soft_retry = auth_attempt('login', username)
+        if retry:
+            return auth_wait('login', role, retry)
 
-        conn = get_db()
-        user = conn.execute(
-            "SELECT * FROM users WHERE username = ?",
-            (username,)
-        ).fetchone()
-
-        conn.close()
-        if user is None or not check_password_hash(user["password"], password):
+        with closing(get_db()) as conn:
+            user = conn.execute(
+                "SELECT * FROM users WHERE username = ?",
+                (username if len(username) <= 256 else '',)
+            ).fetchone()
+        valid_password = check_password_hash(user['password'] if user else DUMMY_PASSWORD_HASH,
+                                             password if len(password) <= 256 else '')
+        if user is None or not valid_password or len(password) > 256:
+            if soft_retry:
+                return auth_wait('login', role, soft_retry)
             return render_auth_page("login", error="Неверный логин или пароль.", role=role)
 
         if user["role"] != role:
@@ -1149,8 +1186,8 @@ def login_for_role(role):
                 "login", error=f'Это аккаунт {role_name}. Выберите «{switch_name}» для входа.', role=role
             )
 
-        session.clear()
-        session["user_id"] = user["id"]
+        token = new_session(get_db, SECRET_KEY, user['id'], session.get('auth_token'))
+        establish_session(user['id'], token)
         return redirect("/teacher" if user["role"] == "teacher" else "/")
 
     return render_auth_page("login", role=role)
@@ -1161,6 +1198,9 @@ def register_for_role(role):
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         repeat_password = request.form.get("repeat_password", "")
+        retry, _ = auth_attempt('register', username)
+        if retry:
+            return auth_wait('register', role, retry)
 
         if not username or not password:
             return render_auth_page("register", error="Заполните все поля.", role=role)
@@ -1174,31 +1214,26 @@ def register_for_role(role):
         if password != repeat_password:
             return render_auth_page("register", error="Пароли не совпадают.", role=role)
 
-        conn = get_db()
+        password_hash = generate_password_hash(password)
+        with closing(get_db()) as conn:
+            try:
+                begin_auth_write(conn)
+                existing = conn.execute('SELECT id FROM users WHERE username=?', (username,)).fetchone()
+                if existing is not None:
+                    return render_auth_page("register", error="Такой логин уже занят. Выберите другой или войдите в существующий аккаунт.", role=role)
+                new_user_id = insert_id(conn,
+                    'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
+                    (username, password_hash, role))
+                token = new_session(get_db, SECRET_KEY, new_user_id, session.get('auth_token'), connection=conn)
+                conn.commit()
+            except INTEGRITY_ERRORS:
+                conn.rollback()
+                return render_auth_page('register', error='Такой логин уже занят.', role=role)
+            except DATABASE_ERRORS:
+                conn.rollback()
+                raise DatabaseUnavailable('Регистрация временно недоступна. Повторите попытку позже.') from None
 
-        existing = conn.execute(
-            "SELECT id FROM users WHERE username = ?",
-            (username,)
-        ).fetchone()
-
-        if existing is not None:
-            conn.close()
-            return render_auth_page("register", error="Такой логин уже занят. Выберите другой или войдите в существующий аккаунт.", role=role)
-
-        try:
-            new_user_id = insert_id(conn,
-                "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                (username, generate_password_hash(password), role)
-            )
-            conn.commit()
-        except INTEGRITY_ERRORS:
-            conn.rollback()
-            conn.close()
-            return render_auth_page("register", error="Такой логин уже занят.", role=role)
-        conn.close()
-
-        session.clear()
-        session["user_id"] = new_user_id
+        establish_session(new_user_id, token)
         return redirect("/teacher" if role == "teacher" else "/")
 
     return render_auth_page("register", role=role)
@@ -1316,6 +1351,7 @@ def logout():
 
     user = get_current_user()
     target = "/teacher/login" if user is not None and user["role"] == "teacher" else "/login"
+    revoke_session(get_db, SECRET_KEY, session.get('auth_token'))
     session.clear()
 
     return redirect(target)
