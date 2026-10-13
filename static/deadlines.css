@@ -19,6 +19,10 @@
 .hot-strip li {margin-top:6px;overflow-wrap:anywhere}
 .hot-strip a {color:var(--mf-text)}
 .teacher-filters select {flex:0 1 300px;max-width:100%}
+.task-filters select {flex:1 1 200px;max-width:100%}
+.task-filters input[type="search"] {flex-basis:280px}
+.board-filter-summary {font-size:13px;color:var(--mf-muted);margin:12px 0}
+.board-filter-empty {padding:16px;margin:12px 0;border:1px solid var(--mf-line);border-radius:12px;background:var(--mf-panel);color:var(--mf-text)}
 .teacher-health.overdue {background:#fff3d3;color:#855f14}
 [data-theme="dark"] .task-deadline.deadline-overdue,[data-theme="dark"] .due-label.deadline-overdue {color:#edd191;background:#3c3321}
 html[data-theme="dark"] .teacher-health.overdue {color:#edd191;background:#3c3321;border-color:var(--mf-line)}
@@ -27,4 +31,5 @@ html[data-theme="dark"] .teacher-health.overdue {color:#edd191;background:#3c332
   .upcoming-list a {align-items:flex-start;flex-direction:column;gap:10px}
   .due-label {flex-shrink:1;max-width:100%}
   .teacher-filters select {flex-basis:100%}
+  .task-filters select {flex-basis:100%}
 }

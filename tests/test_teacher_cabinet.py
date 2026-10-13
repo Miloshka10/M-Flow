@@ -6,6 +6,7 @@ import unittest
 import subprocess
 import sys
 import sqlite3
+import re
 from datetime import date, timedelta
 from werkzeug.security import generate_password_hash
 from unittest.mock import patch
@@ -35,6 +36,117 @@ class FormTokens(HTMLParser):
 
 
 class TeacherCabinetTests(unittest.TestCase):
+    def seed_board_filters(self):
+        self.seed_deadline_cases()
+        conn = self.module.get_db()
+        conn.execute("UPDATE tasks SET priority='high' WHERE id IN (20,21,22)")
+        conn.executemany("INSERT INTO tasks(id,project_id,title,deadline,status,assignee_id,priority) VALUES(?,2,?,?,?,?,?)", [
+            (27, 'Seventh day', '2026-10-20', 'progress', 3, 'high'),
+            (28, 'Eighth day', '2026-10-21', 'todo', 3, 'high'),
+            (29, 'Done today', '2026-10-13', 'done', 3, 'high'),
+            (30, 'Missing empty date', '', 'progress', None, 'high'),
+            (31, 'Past assigned task', '2026-10-12', 'progress', 3, 'high'),
+            (32, 'Tomorrow assigned task', '2026-10-14', 'todo', 3, 'high'),
+            (33, 'Far future', '9999-12-31', 'todo', 3, 'high'),
+            (34, 'Another today', '2026-10-13', 'todo', 3, 'urgent'),
+        ])
+        conn.commit()
+        conn.close()
+
+    def board_page(self, query='', user=3):
+        self.sign_in(user)
+        with patch.object(self.module, 'business_today', return_value=date(2026, 10, 13)):
+            response = self.client.get('/project/2' + query)
+        self.assertEqual(response.status_code, 200)
+        return response.text
+
+    @staticmethod
+    def board_ids(html):
+        return [int(value) for value in re.findall(r'\bid="task-(\d+)"', html)]
+
+    def test_board_deadline_filter_matrix_and_no_get_writes(self):
+        self.seed_board_filters()
+        before = self.database_snapshot()
+        for mode, expected in [('overdue', {24,31}), ('today', {20,34}), ('tomorrow', {21,32}),
+                               ('week', {20,21,22,27,32,34}), ('none', {3,30})]:
+            with self.subTest(mode=mode):
+                page = self.board_page('?due=' + mode)
+                self.assertEqual(set(self.board_ids(page)), expected)
+                self.assertIn(f'value="{mode}" selected', page)
+                self.assertIn('data-board-refresh="1"', page)
+                shortcuts = page.split('data-deadline-list>')[1].split('</ul>')[0]
+                self.assertTrue(set(int(n) for n in re.findall(r'#task-(\d+)', shortcuts)) <= expected)
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_board_combined_filters_and_url_selection_are_preserved(self):
+        self.seed_board_filters()
+        page = self.board_page('?q=assigned&priority=high&mine=1&due=tomorrow&sort=deadline')
+        self.assertEqual(self.board_ids(page), [32])
+        for fragment in ('name="q" value="assigned"', 'value="high" selected', 'value="tomorrow" selected',
+                         'value="deadline" selected', 'value="1" checked', 'action="/project/2#task-board"',
+                         'class="filter-reset" href="/project/2"', 'Показано 1 из 15 задач'):
+            self.assertIn(fragment, page)
+        self.assertEqual(self.board_ids(self.board_page('?due=overdue&mine=1')), [31])
+        self.assertEqual(set(self.board_ids(self.board_page('?due=overdue&mine=1', user=1))), {24,31})
+        self.assertNotIn('name="mine"', self.board_page('?mine=1', user=1))
+        empty = self.board_page('?due=tomorrow&q=No-matching-title')
+        self.assertEqual(self.board_ids(empty), [])
+        self.assertIn('Нет задач по выбранным условиям', empty)
+        self.assertEqual(empty.count('Нет задач по фильтрам'), 3)
+
+    def test_board_deadline_order_is_stable_inside_each_status(self):
+        self.seed_board_filters()
+        page = self.board_page('?sort=deadline')
+        # All todo, then progress, then done: status columns never mix.
+        self.assertEqual(self.board_ids(page), [24,20,34,32,22,28,33,26, 31,21,27,30, 23,29,3])
+        self.assertIn('data-board-refresh="1"', page)
+        priority = self.board_page('?sort=priority')
+        self.assertEqual(self.board_ids(priority)[:8], [34,20,22,28,32,33,24,26])
+        self.assertIn('data-board-refresh="0"', priority)
+
+    def test_board_invalid_url_parameters_normalize_without_leaks_or_mutation(self):
+        self.seed_board_filters()
+        before = self.database_snapshot()
+        plain = self.board_page()
+        for query in ('?due=bad&sort=bad&priority=bad&mine=true', '?due=%3Cscript%3E&sort=__proto__'):
+            self.assertEqual(self.board_page(query), plain)
+        escaped = self.board_page('?q=%22%3E%3Cscript%3Ealert(1)%3C/script%3E')
+        self.assertIn('&lt;script&gt;', escaped)
+        self.assertNotIn('<script>alert(1)</script>', escaped)
+        for query in ('?due=overdue', '?sort=deadline&mine=1', '?q=Private&due=week'):
+            self.assertEqual(self.client.get('/project/3' + query).status_code, 403)
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_board_after_successful_mutation_returns_correct_filtered_view(self):
+        self.seed_board_filters()
+        self.sign_in(3)
+        self.assertIn(31, self.board_ids(self.board_page('?due=overdue')))
+        self.assertEqual(self.post('/project/2/status', json=dict(task_id=31, status='done')).status_code, 200)
+        self.assertNotIn(31, self.board_ids(self.board_page('?due=overdue')))
+        self.assertEqual(self.post('/project/2/status', json=dict(task_id=31, status='progress')).status_code, 200)
+        self.assertIn(31, self.board_ids(self.board_page('?due=overdue')))
+        self.assertEqual(self.post('/project/2/priority', json=dict(task_id=32, priority='low')).status_code, 200)
+        self.assertEqual(self.board_ids(self.board_page('?priority=high&due=tomorrow&mine=1')), [])
+        self.assertEqual(self.board_ids(self.board_page('?priority=low&due=tomorrow&mine=1')), [32])
+        before = self.database_snapshot()
+        self.sign_in(1)
+        self.assertEqual(self.post('/project/2/status', json=dict(task_id=20, status='done')).status_code, 403)
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_board_filters_and_sort_add_no_queries_with_many_tasks(self):
+        self.seed_board_filters()
+        self.sign_in(3)
+        paths = ('/project/2', '/project/2?due=week&sort=deadline&priority=high&mine=1&q=day')
+        before = [self.count_page_queries(path) for path in paths]
+        self.assertEqual(before[0], before[1])
+        conn = self.module.get_db()
+        conn.executemany('INSERT INTO tasks(id,project_id,title,deadline,assignee_id) VALUES(?,2,?,?,3)',
+                         [(100+n, f'Extra task {n}', '2026-10-13') for n in range(60)])
+        conn.commit()
+        conn.close()
+        self.assertEqual([self.count_page_queries(path) for path in paths], before)
+        self.assertLessEqual(before[0], 10)
+
     def seed_deadline_cases(self):
         conn = self.module.get_db()
         conn.execute("UPDATE tasks SET deadline='2026-10-11' WHERE id=1")

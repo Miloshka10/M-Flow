@@ -60,6 +60,7 @@ async function moveTask(card, target) {
   if (previous === target) return;
   try {
     const result = await saveTask(card, 'status', target);
+    if (needsBoardRefresh()) { location.reload(); return; }
     document.querySelector('.kanban-column[data-status="' + target + '"] .kanban-cards').appendChild(card);
     sortTaskCards(card.parentElement);
     if (select) select.value = target;
@@ -98,6 +99,10 @@ function updateDeadlineStrip(rows) {
   strip.hidden = !rows.length;
 }
 function changeTaskStatus(select) { return moveTask(select.closest('.task-card'), select.value); }
+function needsBoardRefresh() {
+  // Server-normalized filters/sort are authoritative; never recalculate dates here.
+  return document.querySelector('[data-board-refresh]')?.dataset.boardRefresh === '1';
+}
 function sortTaskCards(container) {
   if (!container) return;
   const ranks = {urgent: 1, high: 2, normal: 3, low: 4};
@@ -112,6 +117,7 @@ async function changePriority(select) {
   const next = select.value;
   try {
     await saveTask(card, 'priority', next);
+    if (needsBoardRefresh()) { location.reload(); return; }
     select.dataset.savedValue = next;
     card.dataset.priority = next;
     const badge = card.querySelector('.task-priority');
@@ -119,8 +125,6 @@ async function changePriority(select) {
       badge.className = 'task-priority priority-' + next;
       badge.textContent = {low: 'Низкий', normal: 'Обычный', high: 'Высокий', urgent: 'Срочный'}[next];
     }
-    const filter = new URLSearchParams(window.location.search || '').get('priority');
-    if (['low', 'normal', 'high', 'urgent'].includes(filter)) { location.reload(); return; }
     sortTaskCards(card.parentElement);
     const message = document.querySelector('#board-status');
     if (message) { message.hidden = false; message.textContent = 'Приоритет задачи сохранён.'; }

@@ -22,6 +22,7 @@ import json
 import secrets
 from collections import defaultdict
 from deadlines import business_today, deadline_info, deadline_text, parse_deadline, urgent_tasks, TIMEZONE_LABEL
+from deadlines import DEADLINE_FILTERS, TASK_SORTS, matches_deadline, task_sort_key
 from notifications import (initialize_notifications, notify, notify_project,
                            notification_feed, mark_read, render_bell, render_items)
 from project_rules import has_project_teacher
@@ -126,7 +127,7 @@ def render_page(html):
         '<script src="/static/motion.js?v=20261005-controls"></script>'
         '<link rel="stylesheet" href="/static/product-design.css?v=20261006">'
         '<link rel="stylesheet" href="/static/notifications.css?v=20261013">'
-        '<link rel="stylesheet" href="/static/deadlines.css?v=20261013">'
+        '<link rel="stylesheet" href="/static/deadlines.css?v=20261013-filters">'
         '<script src="/static/dashboard.js?v=20261006" defer></script>'
             f'</head><body id="page-content"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
@@ -1026,7 +1027,7 @@ def get_student_progress(project_id):
 # STYLE + JAVASCRIPT
 # =========================================================
 
-PAGE_STYLE = '<script src="/static/kanban.js?v=20261013-deadlines" defer></script>'
+PAGE_STYLE = '<script src="/static/kanban.js?v=20261013-filters" defer></script>'
 
 
 # =========================================================
@@ -1424,13 +1425,21 @@ def project(project_id):
     finally:
         stage_conn.close()
 
-    # ---------- фильтры (поиск, приоритет, только мои) ----------
+    # One calendar snapshot for filters, labels, metrics and project summary.
+    deadline_today = business_today()
+    # ---------- фильтры (поиск, приоритет, только мои, срок) ----------
 
     search_query = request.args.get("q", "").strip()[:100]
     priority_filter = request.args.get("priority", "")
     if priority_filter not in ("low", "normal", "high", "urgent"):
         priority_filter = ""
     only_mine = current_user['role'] == 'student' and request.args.get("mine") == "1"
+    deadline_filter = request.args.get('due', '')
+    if deadline_filter not in DEADLINE_FILTERS:
+        deadline_filter = ''
+    sort_mode = request.args.get('sort', 'priority')
+    if sort_mode not in TASK_SORTS:
+        sort_mode = 'priority'
 
     tasks = list(all_tasks)
 
@@ -1453,10 +1462,15 @@ def project(project_id):
             if task["assignee_id"] == current_user["id"]
         ]
 
-    filters_active = bool(search_query or priority_filter or only_mine)
+    if deadline_filter:
+        tasks = [task for task in tasks if matches_deadline(
+            deadline_info(task['deadline'], task['status'], deadline_today), deadline_filter)]
+    tasks.sort(key=lambda task: task_sort_key(task, sort_mode))
+    filters_active = bool(search_query or priority_filter or only_mine or deadline_filter)
+    refresh_board = filters_active or sort_mode != 'priority'
 
-    deadline_today = business_today()
-    near_tasks = urgent_tasks(all_tasks, deadline_today)
+    # Every shortcut must point to a card that is visible under these filters.
+    near_tasks = urgent_tasks(tasks, deadline_today)
     hot_items = ''.join(f'<li><a href="#task-{item["id"]}">{escape(item["title"])} — {escape(item["text"])}</a></li>'
                         for item in near_tasks)
     hot_html = (f'<div class="hot-strip" data-deadline-strip {"hidden" if not near_tasks else ""}>'
@@ -1470,12 +1484,16 @@ def project(project_id):
     mine_filter = f'<label><input type="checkbox" name="mine" value="1" {mine_checked}> Только мои</label>' if current_user['role'] == 'student' else ''
     reset_link = (
         f'<a class="filter-reset" href="/project/{project_id}">Сбросить</a>'
-        if filters_active
+        if refresh_board
         else ""
     )
+    deadline_options = ''.join(f'<option value="{value}" {"selected" if value == deadline_filter else ""}>{label}</option>'
+                               for value, label in DEADLINE_FILTERS.items())
+    sort_options = ''.join(f'<option value="{value}" {"selected" if value == sort_mode else ""}>{label}</option>'
+                           for value, label in TASK_SORTS.items())
 
     filters_html = f"""
-    <form method="get" class="task-filters">
+    <form method="get" class="task-filters" action="/project/{project_id}#task-board">
         <input type="search" name="q" value="{escape(search_query)}" placeholder="Поиск по названию задачи" aria-label="Поиск по названию задачи">
         <select name="priority" aria-label="Фильтр приоритета">
             <option value="">Любой приоритет</option>
@@ -1484,11 +1502,17 @@ def project(project_id):
             <option value="high" {selected("high")}>Высокий</option>
             <option value="urgent" {selected("urgent")}>Срочный</option>
         </select>
+        <select name="due" aria-label="Фильтр срока">{deadline_options}</select>
+        <select name="sort" aria-label="Сортировка задач">{sort_options}</select>
         {mine_filter}
         <button type="submit">Найти</button>
         {reset_link}
     </form>
     """
+    filter_summary = (f'<p class="board-filter-summary">Показано {len(tasks)} из {len(all_tasks)} задач. '
+                      'Показатели проекта учитывают все задачи команды.</p>')
+    if filters_active and not tasks:
+        filter_summary += '<div class="board-filter-empty" role="status">Нет задач по выбранным условиям. Измените фильтры или нажмите «Сбросить».</div>'
 
 
     todo_tasks = [
@@ -1751,9 +1775,9 @@ def project(project_id):
 
         if not cards:
 
-            cards = """
+            cards = f"""
             <div class="kanban-empty">
-                Пока нет задач
+                {"Нет задач по фильтрам" if filters_active else "Пока нет задач"}
             </div>
             """
 
@@ -2055,7 +2079,7 @@ def project(project_id):
                 </section>
 
 
-                <div class="kanban-wrapper" id="task-board">
+                <div class="kanban-wrapper" id="task-board" data-board-refresh="{int(refresh_board)}">
 
                     <div class="section-title">
 
@@ -2076,6 +2100,7 @@ def project(project_id):
                     {hot_html}
 
                     {filters_html}
+                    {filter_summary}
 
                     <p id="board-status" role="status" aria-live="polite" hidden></p>
 

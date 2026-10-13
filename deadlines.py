@@ -3,6 +3,30 @@ from datetime import date, datetime, timedelta, timezone
 
 MOSCOW = timezone(timedelta(hours=3), 'MSK')
 TIMEZONE_LABEL = 'Москва (UTC+3)'
+DEADLINE_FILTERS = {'': 'Все задачи', 'overdue': 'Просроченные', 'today': 'Сегодня',
+                    'tomorrow': 'Завтра', 'week': 'В ближайшие 7 дней', 'none': 'Без срока'}
+TASK_SORTS = {'priority': 'По приоритету', 'deadline': 'По ближайшему сроку'}
+
+
+def matches_deadline(info, mode):
+    if not mode:
+        return True
+    if mode == 'none':
+        return info['state'] == 'unset'
+    if not info['active']:
+        return False
+    if mode == 'week':
+        # Includes today through day seven; overdue work has a separate filter.
+        return 0 <= info['days'] <= 7
+    return info['state'] == mode
+
+
+def task_sort_key(task, mode='priority'):
+    if mode == 'deadline':
+        due = parse_deadline(task['deadline'])
+        # Missing and malformed dates come after every real date, including 9999-12-31.
+        return (due is None, due or date.max, task['id'])
+    return ({'urgent': 1, 'high': 2, 'normal': 3, 'low': 4}.get(task['priority'], 3), task['id'])
 
 
 def business_today(now=None):

@@ -1,10 +1,36 @@
 """Calendar boundaries without any database or local-device timezone dependency."""
 import unittest
 from datetime import date, datetime, timedelta, timezone
-from deadlines import business_today, deadline_info, deadline_text, parse_deadline, urgent_tasks
+from deadlines import business_today, deadline_info, deadline_text, parse_deadline, urgent_tasks, matches_deadline, task_sort_key
 
 
 class DeadlineTests(unittest.TestCase):
+    def test_filter_week_includes_today_and_seventh_day_not_overdue_or_eighth(self):
+        today = date(2026, 12, 31)
+        for offset in (-1, 0, 1, 7, 8):
+            info = deadline_info((today + timedelta(days=offset)).isoformat(), today=today)
+            self.assertEqual(matches_deadline(info, 'week'), 0 <= offset <= 7)
+            self.assertEqual(matches_deadline(info, 'overdue'), offset < 0)
+            self.assertEqual(matches_deadline(info, 'today'), offset == 0)
+            self.assertEqual(matches_deadline(info, 'tomorrow'), offset == 1)
+
+    def test_filters_exclude_done_and_malformed_but_none_includes_missing(self):
+        for raw in ('2026-01-01', '2026-10-13', '2026-10-14'):
+            info = deadline_info(raw, 'done', date(2026, 10, 13))
+            for mode in ('today', 'tomorrow', 'week', 'overdue'):
+                self.assertFalse(matches_deadline(info, mode))
+        for raw in (None, ''):
+            self.assertTrue(matches_deadline(deadline_info(raw), 'none'))
+            self.assertTrue(matches_deadline(deadline_info(raw, 'done'), 'none'))
+        self.assertFalse(matches_deadline(deadline_info('bad'), 'none'))
+
+    def test_deadline_sort_has_stable_ids_and_no_priority_tiebreak(self):
+        tasks = [dict(id=n, deadline=due, priority=priority) for n, due, priority in
+                 [(5, '', 'urgent'), (4, 'wrong', 'high'), (3, '9999-12-31', 'low'),
+                  (2, '2026-10-13', 'urgent'), (1, '2026-10-13', 'low')]]
+        self.assertEqual([t['id'] for t in sorted(tasks, key=lambda t: task_sort_key(t, 'deadline'))], [1, 2, 3, 4, 5])
+        self.assertEqual([t['id'] for t in sorted(tasks, key=task_sort_key)], [2, 5, 4, 1, 3])
+
     def test_moscow_midnight_independent_of_clock_timezone(self):
         before = datetime(2026, 12, 31, 20, 59, 59, tzinfo=timezone.utc)
         after = before + timedelta(seconds=1)

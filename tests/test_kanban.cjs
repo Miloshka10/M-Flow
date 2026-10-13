@@ -18,6 +18,7 @@ function setup(response) {
     '[data-project-progress]': {}, '[data-project-progress-fill]': {style: {}},
     '[data-project-progress-text]': {}, '#board-status': {hidden: true},
     '[data-workspace-task-summary]': {}, '[data-task-deadline]': {},
+    '[data-board-refresh]': {dataset: {boardRefresh: '0'}},
     '[data-student-progress="3"]': {}, '[data-deadline-strip]': {hidden: false},
     '[data-deadline-list]': {children: [], replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); }}
   };
@@ -84,10 +85,38 @@ function setup(response) {
   assert.equal(prioritySuccess.priority.dataset.savedValue, 'high');
   assert.equal(prioritySuccess.card.dataset.priority, 'high');
   assert.equal(prioritySuccess.badge.textContent, 'Высокий');
-  prioritySuccess.context.window.location.search = '?priority=high';
+  prioritySuccess.elements['[data-board-refresh]'].dataset.boardRefresh = '1';
   prioritySuccess.priority.value = 'low';
   await prioritySuccess.context.changePriority(prioritySuccess.priority);
   assert.equal(reloads, 1, 'Active priority filter must be refreshed');
+  const filteredStatus = setup({ok: true, status: 200, json: async () => ({success: true})});
+  filteredStatus.elements['[data-board-refresh]'].dataset.boardRefresh = '1';
+  let statusReloads = 0;
+  filteredStatus.context.location.reload = () => statusReloads++;
+  await filteredStatus.context.moveTask(filteredStatus.card, 'done');
+  assert.equal(statusReloads, 1, 'Filtered or deadline-sorted board reloads after confirmed status save');
+  assert.equal(filteredStatus.column.dataset.status, 'todo', 'No premature local relocation before refreshed server view');
+  assert.equal(filteredStatus.elements['#board-status'].hidden, true);
+  const filteredFailure = setup({ok: false, status: 400, json: async () => ({success: false, error: 'Форма устарела'})});
+  filteredFailure.elements['[data-board-refresh]'].dataset.boardRefresh = '1';
+  let failedReloads = 0;
+  filteredFailure.context.location.reload = () => failedReloads++;
+  await filteredFailure.context.moveTask(filteredFailure.card, 'done');
+  await filteredFailure.context.changePriority(filteredFailure.priority);
+  assert.equal(failedReloads, 0, 'Denied save never reloads or presents success');
+  assert.equal(filteredFailure.select.value, 'todo');
+  assert.equal(filteredFailure.priority.value, 'normal');
+  // An in-flight save may not mutate the visible board or signal success.
+  const pending = setup({});
+  let finishSave;
+  pending.context.fetch = () => new Promise(resolve => { finishSave = resolve; });
+  const moving = pending.context.moveTask(pending.card, 'done');
+  assert.equal(pending.column.dataset.status, 'todo');
+  assert.equal(pending.select.disabled, true);
+  assert.equal(pending.elements['#board-status'].hidden, true);
+  finishSave({ok: true, status: 200, json: async () => ({success: true})});
+  await moving;
+  assert.equal(pending.column.dataset.status, 'done');
   const cards = [{dataset: {priority: 'low', taskId: '1'}}, {dataset: {priority: 'urgent', taskId: '3'}},
                  {dataset: {priority: 'urgent', taskId: '2'}}];
   const ordered = [];
