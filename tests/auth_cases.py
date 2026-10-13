@@ -114,6 +114,27 @@ class AuthSecurityCases:
             self.assertEqual(self.attempt(name='new-pupil-4', browser='new-pupil', action='register')[0], 600)
             self.assertEqual(self.attempt(name='next-pupil', browser='next-pupil', action='register')[0], 0)
 
+    def test_auth_successful_registration_and_logout_do_not_reset_browser_budget(self):
+        with patch('auth_security.time.time', return_value=200000):
+            browser = None
+            for n in range(10):
+                path = '/register' if n % 2 else '/teacher/register'
+                response = self.post(path, data=dict(username=f'new-account-{n}', password='test-password', repeat_password='test-password'))
+                self.assertEqual(response.status_code, 302)
+                with self.client.session_transaction() as session:
+                    if browser is None:
+                        browser = session['auth_browser']
+                    self.assertEqual(session['auth_browser'], browser)
+                self.assertEqual(self.post('/logout').status_code, 302)
+                with self.client.session_transaction() as session:
+                    self.assertEqual(session['auth_browser'], browser)
+                    self.assertNotIn('user_id', session)
+                    self.assertNotIn('auth_token', session)
+            response = self.post('/register', data=dict(username='new-account-11', password='test-password', repeat_password='test-password'))
+            self.assertEqual(response.status_code, 429)
+            with closing(self.module.get_db()) as conn:
+                self.assertIsNone(conn.execute("SELECT id FROM users WHERE username='new-account-11'").fetchone())
+
     def test_auth_proxy_headers_default_ignored_and_explicit_trust_stops_at_untrusted_hop(self):
         self.assertEqual(security.client_source('192.0.2.1', '198.51.100.1'), '192.0.2.1')
         nets = security.proxy_networks('10.0.0.0/24')

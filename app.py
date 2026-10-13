@@ -1153,7 +1153,10 @@ def auth_attempt(action, username):
 
 
 def establish_session(user_id, token):
+    browser = session.get('auth_browser')
     session.clear()
+    if isinstance(browser, str):
+        session['auth_browser'] = browser
     session['user_id'] = user_id
     session['auth_token'] = token
     csrf_token()
@@ -1352,7 +1355,10 @@ def logout():
     user = get_current_user()
     target = "/teacher/login" if user is not None and user["role"] == "teacher" else "/login"
     revoke_session(get_db, SECRET_KEY, session.get('auth_token'))
+    browser = session.get('auth_browser')
     session.clear()
+    if isinstance(browser, str):
+        session['auth_browser'] = browser
 
     return redirect(target)
 
