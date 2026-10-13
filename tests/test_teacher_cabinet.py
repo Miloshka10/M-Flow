@@ -35,6 +35,196 @@ class FormTokens(HTMLParser):
 
 
 class TeacherCabinetTests(unittest.TestCase):
+    def notification_rows(self):
+        from contextlib import closing
+        with closing(self.module.get_db()) as conn:
+            return [dict(row) for row in conn.execute('SELECT * FROM notifications ORDER BY id')]
+
+    def add_notification_team(self):
+        # Owner and member are intentionally duplicated; two legitimate teachers.
+        self.add_candidate()
+        conn = self.module.get_db()
+        conn.executemany('INSERT INTO project_members(project_id,user_id) VALUES(2,?)', [(2,), (4,)])
+        conn.commit()
+        conn.close()
+
+    def test_notifications_team_stage_recipients_and_revision_deduplication(self):
+        self.add_notification_team()
+        self.sign_in(3)
+        data = dict(number='1', revision='0', action='submit', result='Результат команды')
+        self.assertEqual(self.post('/project/2/stages', data=data).status_code, 302)
+        self.assertEqual([row['recipient_id'] for row in self.notification_rows()], [1, 2])
+        self.assertEqual(self.post('/project/2/stages', data=data).status_code, 400)
+        self.assertEqual(len(self.notification_rows()), 2)
+        self.sign_in(1)
+        review = dict(number='1', revision='1', action='return', teacher_comment='<script>Исправить</script>')
+        self.assertEqual(self.post('/project/2/stages', data=review).status_code, 302)
+        rows = self.notification_rows()
+        self.assertEqual({row['recipient_id'] for row in rows[2:]}, {3, 4})
+        self.assertTrue(all(row['message'] == review['teacher_comment'] for row in rows[2:]))
+        self.sign_in(4)
+        page = self.client.get('/notifications')
+        self.assertIn('&lt;script&gt;Исправить&lt;/script&gt;', page.text)
+        self.assertNotIn('<script>Исправить</script>', page.text)
+
+    def test_notifications_reports_are_atomic_and_identical_retry_is_not_new_report(self):
+        self.sign_in(3)
+        path = '/project/1/task/1/update'
+        self.assertEqual(self.post(path, data={'body': 'Новый отчёт'}).status_code, 302)
+        before = self.database_snapshot()
+        self.assertEqual(self.post(path, data={'body': 'Новый отчёт'}).status_code, 302)
+        self.assertEqual(self.database_snapshot(), before)
+        rows = self.notification_rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['recipient_id'], 1)
+        self.assertEqual(rows[0]['target'], '/project/1#task-1')
+        with patch.object(self.module, 'notify_project', side_effect=RuntimeError('test rollback')):
+            with self.assertRaises(RuntimeError):
+                self.module.add_task_update(1, 1, 3, 'Не должен сохраниться')
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_notifications_drafts_are_silent_and_defense_review_goes_to_team(self):
+        self.add_notification_team()
+        self.sign_in(3)
+        path = '/project/2/defense'
+        draft = dict(revision='0', action='save', video_url='https://example.com/video')
+        self.assertEqual(self.post(path, data=draft).status_code, 302)
+        self.assertEqual(self.notification_rows(), [])
+        submit = dict(revision='1', action='submit', video_url='https://example.com/video')
+        self.assertEqual(self.post(path, data=submit).status_code, 302)
+        self.assertEqual(self.post(path, data=submit).status_code, 400)
+        self.assertEqual(len(self.notification_rows()), 2)
+        self.sign_in(2)
+        self.assertEqual(self.post(path, data=dict(revision='2', action='accept', teacher_comment='Отлично')).status_code, 302)
+        rows = self.notification_rows()
+        self.assertEqual({row['recipient_id'] for row in rows[2:]}, {3, 4})
+        self.assertTrue(all(row['message'] == 'Отлично' for row in rows[2:]))
+
+    def test_notifications_assessment_is_personal_and_only_changed_publication_notifies(self):
+        self.add_notification_team()
+        self.sign_in(1)
+        draft = self.assessment_data('draft')
+        self.assertEqual(self.post('/project/2/assessment', data=draft).status_code, 302)
+        self.assertEqual(self.notification_rows(), [])
+        published = self.assessment_data()
+        self.assertEqual(self.post('/project/2/assessment', data=published).status_code, 302)
+        self.assertEqual(self.post('/project/2/assessment', data=published).status_code, 302)
+        rows = self.notification_rows()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['recipient_id'], 3)
+        self.assertIn('45 / 45', rows[0]['message'])
+        changed = self.assessment_data()
+        changed['note'] = 'Дополнительный комментарий'
+        self.assertEqual(self.post('/project/2/assessment', data=changed).status_code, 302)
+        self.assertEqual(len(self.notification_rows()), 2)
+        self.sign_in(4)
+        self.assertNotIn('Оценка проекта опубликована', self.client.get('/notifications').text)
+
+    def test_notifications_opening_never_marks_read_and_marking_is_idempotent(self):
+        self.stage_post(3)
+        self.sign_in(1)
+        before = self.database_snapshot()
+        for path in ('/', '/notifications'):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('непрочитанных 1', response.text)
+            self.assertEqual(response.headers['Cache-Control'], 'no-store')
+        self.assertEqual(self.database_snapshot(), before)
+        nid = self.notification_rows()[0]['id']
+        self.assertEqual(self.post(f'/notifications/{nid}/read').status_code, 302)
+        read_at = self.notification_rows()[0]['read_at']
+        self.assertIsNotNone(read_at)
+        self.assertEqual(self.post(f'/notifications/{nid}/read').status_code, 302)
+        self.assertEqual(self.notification_rows()[0]['read_at'], read_at)
+        self.assertIn('непрочитанных 0', self.client.get('/notifications').text)
+
+    def test_notifications_foreign_mark_all_and_expired_session_are_protected(self):
+        self.stage_post(3)
+        nid = self.notification_rows()[0]['id']
+        self.sign_in(2)
+        self.assertEqual(self.post(f'/notifications/{nid}/read').status_code, 404)
+        self.assertNotIn('Этап 1 отправлен', self.client.get('/notifications').text)
+        self.assertEqual(self.post('/notifications/read-all').status_code, 302)
+        self.assertIsNone(self.notification_rows()[0]['read_at'])
+        self.sign_in(1)
+        for path in (f'/notifications/{nid}/read', '/notifications/read-all'):
+            self.assertEqual(self.client.get(path).status_code, 405)
+            self.assertEqual(self.client.post(path).status_code, 400)
+            self.assertEqual(self.client.post(path, data={'csrf_token': 'bad'}).status_code, 400)
+        self.assertIsNone(self.notification_rows()[0]['read_at'])
+        with self.client.session_transaction() as session:
+            session.clear()
+        self.assertEqual(self.client.get('/notifications').status_code, 302)
+        self.assertEqual(self.client.post('/notifications/read-all', json={}).status_code, 401)
+        self.assertIsNone(self.notification_rows()[0]['read_at'])
+
+    def test_notifications_removed_members_cannot_read_old_events(self):
+        self.sign_in(3)
+        self.post('/project/2/stages', data=dict(number='1', revision='0', action='submit', result='Тема'))
+        nid = self.notification_rows()[0]['id']
+        conn = self.module.get_db()
+        conn.execute('DELETE FROM project_members WHERE project_id=2 AND user_id=1')
+        conn.commit()
+        conn.close()
+        self.sign_in(1)
+        self.assertNotIn('Этап 1 отправлен', self.client.get('/notifications').text)
+        self.assertEqual(self.post(f'/notifications/{nid}/read').status_code, 404)
+        self.post('/notifications/read-all')
+        self.assertIsNone(self.notification_rows()[0]['read_at'])
+
+    def test_notifications_reinitialization_preserves_history_and_does_not_backfill(self):
+        self.assertEqual(self.notification_rows(), [])  # Existing report has no synthetic event.
+        self.module.prepare_database()
+        self.assertEqual(self.notification_rows(), [])
+        self.stage_post(3)
+        self.sign_in(1)
+        self.post('/notifications/read-all')
+        before = self.notification_rows()
+        self.module.prepare_database()
+        self.module.prepare_database()
+        self.assertEqual(self.notification_rows(), before)
+
+    def test_notifications_stage_notification_failure_rolls_back_result(self):
+        before = self.database_snapshot()
+        with patch('project_stages.notify_project', side_effect=RuntimeError('test rollback')):
+            with self.assertRaises(RuntimeError):
+                self.stage_post(3)
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_notifications_defense_failure_rolls_back_result(self):
+        self.sign_in(3)
+        before = self.database_snapshot()
+        with patch('video_defense.notify_project', side_effect=RuntimeError('test rollback')):
+            with self.assertRaises(RuntimeError):
+                self.post('/project/2/defense', data=dict(revision='0', action='submit', video_url='https://example.com/video'))
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_notifications_assessment_failure_rolls_back_result(self):
+        self.sign_in(1)
+        before = self.database_snapshot()
+        with patch.object(self.module, 'notify', side_effect=RuntimeError('test rollback')):
+            with self.assertRaises(RuntimeError):
+                self.post('/project/2/assessment', data=self.assessment_data())
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_notifications_feed_is_bounded_and_has_safe_pagination(self):
+        from notifications import notify
+        conn = self.module.get_db()
+        for n in range(35):
+            notify(conn, 1, f'test:{n}', f'Событие {n}', '', '/project/1/stages', [1])
+        conn.commit()
+        conn.close()
+        self.sign_in(1)
+        page = self.client.get('/notifications')
+        self.assertIn('Более ранние', page.text)
+        self.assertNotIn('<strong>Событие 0</strong>', page.text)
+        oldest_visible = self.notification_rows()[5]['id']
+        older = self.client.get(f'/notifications?before={oldest_visible}')
+        self.assertIn('<strong>Событие 0</strong>', older.text)
+        self.assertNotIn('Более ранние', older.text)
+        for value in ('bad', '0', str(2**64)):
+            self.assertEqual(self.client.get('/notifications?before=' + value).status_code, 400)
+
     @classmethod
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()
@@ -60,7 +250,7 @@ class TeacherCabinetTests(unittest.TestCase):
 
     def setUp(self):
         conn = self.module.get_db()
-        for table in ("project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
+        for table in ("notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
             conn.execute(f"DELETE FROM {table}")
         conn.executemany("INSERT INTO users(id, username, password, role) VALUES(?, ?, ?, ?)", [
             (1, "teacher-one", self.password, "teacher"),
@@ -440,7 +630,8 @@ class TeacherCabinetTests(unittest.TestCase):
                          [(f'Card {n}',) for n in range(30)])
         conn.commit()
         conn.close()
-        for path, budget in zip(paths, (7, 7, 8)):
+        # Two constant queries for the shared notification count + preview.
+        for path, budget in zip(paths, (9, 9, 10)):
             with self.subTest(path=path):
                 self.assertEqual(self.count_page_queries(path), before[path])
                 self.assertLessEqual(before[path], budget)
@@ -536,7 +727,7 @@ class TeacherCabinetTests(unittest.TestCase):
         self.assertIn('class="project-row project-tile"', page)
         self.assertIn('<details id="project-create"', page)
         self.assertIn('for="project-name"', page)
-        self.assertEqual(len(FormTokens(page).forms), 2)  # Logout and project create.
+        self.assertEqual(len(FormTokens(page).forms), 3)  # Logout, project create, read notifications.
         for path in ('/project/1', '/project/1/stages', '/project/1/defense', '/profile', '/settings'):
             self.assertIn('/static/product-design.css', self.client.get(path).text)
 

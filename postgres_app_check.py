@@ -15,19 +15,19 @@ import time
 
 import psycopg
 from psycopg import sql
-from postgres_backup import BackupError, REQUIRED_TABLES, file_hash
+from postgres_backup import BackupError, REQUIRED_TABLES, OPTIONAL_TABLES, file_hash
 from postgres_restore_check import test_environment
 
 STEPS = {'snapshot', 'startup', 'accounts', 'project', 'tasks', 'stages',
          'defense', 'assessment', 'permissions', 'persistence', 'complete'}
-STEPS.update('snapshot_' + table for table in REQUIRED_TABLES)
+STEPS.update('snapshot_' + table for table in REQUIRED_TABLES | OPTIONAL_TABLES)
 STEP_NAMES = dict(snapshot='Снимок таблиц', startup='Инициализация приложения',
                   accounts='Регистрация и вход', project='Проект и участники',
                   tasks='Задача и отчёт', stages='Пять этапов', defense='Видеозащита',
                   assessment='Оценивание', permissions='Права доступа и CSRF',
                   persistence='Сохранение данных', complete='Готово')
 CURRENT_STEP = 'snapshot'
-STEP_NAMES.update(('snapshot_' + table, 'Снимок: ' + table) for table in REQUIRED_TABLES)
+STEP_NAMES.update(('snapshot_' + table, 'Снимок: ' + table) for table in REQUIRED_TABLES | OPTIONAL_TABLES)
 
 
 def progress(step):
@@ -124,8 +124,13 @@ def fingerprint(url):
             cursor.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
             cursor.execute("SET LOCAL statement_timeout='30s'")
             cursor.execute("SET LOCAL lock_timeout='10s'")
-            for table in sorted(REQUIRED_TABLES):
+            cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'")
+            available = {row[0] for row in cursor}
+            for table in sorted(REQUIRED_TABLES | OPTIONAL_TABLES):
                 progress('snapshot_' + table)
+                if table in OPTIONAL_TABLES and table not in available:
+                    digest.update(json.dumps([table, []], ensure_ascii=False).encode('utf-8'))
+                    continue
                 cursor.execute(sql.SQL('SELECT * FROM public.{}').format(sql.Identifier(table)))
                 rows = sorted(json.dumps(row, default=str, ensure_ascii=False) for row in cursor)
                 digest.update(json.dumps([table, rows], ensure_ascii=False).encode('utf-8'))

@@ -17,7 +17,7 @@ import uuid
 import psycopg
 from psycopg import sql
 from database import validate_postgres_url, DatabaseUnavailable
-from database_backup import BackupError, REQUIRED_TABLES, _private_destination
+from database_backup import BackupError, REQUIRED_TABLES, OPTIONAL_TABLES, _private_destination
 
 
 ROOT = Path(__file__).resolve().parent
@@ -121,7 +121,7 @@ def create_backup(url, directory):
                 if not REQUIRED_TABLES.issubset(available):
                     raise BackupError("Источник не содержит всех таблиц M-Flow в public.")
                 counts = {table: conn.execute(sql.SQL("SELECT COUNT(*) FROM public.{}").format(sql.Identifier(table))).fetchone()[0]
-                          for table in sorted(REQUIRED_TABLES)}
+                          for table in sorted(REQUIRED_TABLES | (OPTIONAL_TABLES & available))}
                 snapshot = conn.execute("SELECT pg_export_snapshot()").fetchone()[0]
                 version = conn.info.server_version
                 if version >= 190000:

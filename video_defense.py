@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 from teamwork import hidden_token
 from project_rules import has_project_teacher, TEACHER_REQUIRED
 from database import execute_schema, begin_project_write
+from notifications import notify_project
 
 DEFENSE_STATES = {"draft": "Черновик", "submitted": "На проверке", "accepted": "Защита принята", "returned": "Нужна доработка"}
 
@@ -73,6 +74,13 @@ def change_defense(conn, project_id, user, form):
             description=excluded.description,state=excluded.state,teacher_comment=excluded.teacher_comment,
             author_id=excluded.author_id,reviewer_id=excluded.reviewer_id,revision=excluded.revision,updated_at=CAST(CURRENT_TIMESTAMP AS TEXT)""",
             (project_id,current['video_url'],current['description'],current['state'],current['teacher_comment'],current['author_id'],current['reviewer_id'],current['revision']+1))
+        if action == 'submit':
+            notify_project(conn, project_id, 'teacher', f'defense:{project_id}:{current["revision"] + 1}',
+                           'Видеозащита отправлена на проверку', '', f'/project/{project_id}/defense')
+        elif action in ('accept', 'return'):
+            notify_project(conn, project_id, 'student', f'defense:{project_id}:{current["revision"] + 1}',
+                           'Видеозащита принята' if action == 'accept' else 'Видеозащита: нужна доработка',
+                           current['teacher_comment'], f'/project/{project_id}/defense')
         conn.commit()
         return {"save": "Черновик записи сохранён.", "submit": "Запись защиты отправлена учителю.",
                 "accept": "Видеозащита принята.", "return": "Запись возвращена на доработку."}[action]

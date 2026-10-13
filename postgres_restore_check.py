@@ -9,7 +9,7 @@ import sys
 import psycopg
 from psycopg import sql
 from database import DatabaseUnavailable
-from postgres_backup import (BackupError, REQUIRED_TABLES, archive_check,
+from postgres_backup import (BackupError, REQUIRED_TABLES, OPTIONAL_TABLES, archive_check,
                              connection_environment, file_hash, run_private, tool_path)
 
 TEST_DATABASE = "mflow_restore_check"
@@ -34,6 +34,13 @@ def require_empty(conn):
         raise BackupError("Тестовая база уже содержит таблицы или другие объекты. Ничего не удалено; восстановление отменено.")
 
 
+def manifest_tables(manifest):
+    tables = set(manifest.get('counts', {}))
+    if not REQUIRED_TABLES.issubset(tables) or not tables.issubset(REQUIRED_TABLES | OPTIONAL_TABLES):
+        raise BackupError("Нет контрольных количеств для всех таблиц.")
+    return tables
+
+
 def restore_check(url, archive):
     env = test_environment(url)
     archive = Path(archive).resolve()
@@ -43,8 +50,7 @@ def restore_check(url, archive):
     manifest = json.loads(archive.with_name('verification.json').read_text(encoding='utf-8'))
     if manifest.get('sha256') != file_hash(archive):
         raise BackupError("Контрольная сумма копии не совпадает; восстановление отменено.")
-    if set(manifest.get('counts', {})) != REQUIRED_TABLES:
-        raise BackupError("Нет контрольных количеств для всех таблиц.")
+    checked_tables = manifest_tables(manifest)
     restore = tool_path('pg_restore')
     archive_check(archive, restore)
     try:
@@ -58,10 +64,10 @@ def restore_check(url, archive):
             with conn.transaction():
                 conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
                 tables = {row[0] for row in conn.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'")}
-                if not REQUIRED_TABLES.issubset(tables):
+                if not checked_tables.issubset(tables):
                     raise BackupError("После восстановления отсутствуют обязательные таблицы.")
                 counts = {table: conn.execute(sql.SQL('SELECT COUNT(*) FROM public.{}').format(sql.Identifier(table))).fetchone()[0]
-                          for table in sorted(REQUIRED_TABLES)}
+                          for table in sorted(checked_tables)}
                 if counts != manifest['counts']:
                     raise BackupError("Количество записей не совпало с копией; проверка не пройдена.")
                 invalid = conn.execute("SELECT COUNT(*) FROM pg_constraint WHERE contype IN ('f','c') AND NOT convalidated").fetchone()[0]

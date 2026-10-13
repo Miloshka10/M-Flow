@@ -18,7 +18,7 @@ import database
 
 
 TEST_URL = os.environ.get("M_FLOW_TEST_POSTGRES_URL", "")
-TABLES = ("project_defenses", "team_member_roles", "team_invitations", "student_profiles",
+TABLES = ("notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles",
           "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users")
 
 
@@ -104,6 +104,7 @@ class PostgresCabinetTests(fixtures.TeacherCabinetTests):
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             self.assertEqual(sorted(pool.map(lambda _: submit(), range(2))), ["saved", "stale"])
+        self.assertEqual([row['recipient_id'] for row in self.notification_rows()], [1])
 
     def test_concurrent_defense_submission_has_one_winner(self):
         from video_defense import change_defense
@@ -119,6 +120,26 @@ class PostgresCabinetTests(fixtures.TeacherCabinetTests):
 
         with ThreadPoolExecutor(max_workers=2) as pool:
             self.assertEqual(sorted(pool.map(lambda _: submit(), range(2))), ["saved", "stale"])
+        self.assertEqual([row['recipient_id'] for row in self.notification_rows()], [1])
+
+    def test_concurrent_report_retry_creates_one_report_and_notification(self):
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            self.assertEqual(list(pool.map(lambda _: self.module.add_task_update(1, 1, 3, 'Одинаковый отчёт'), range(2))),
+                             [True, True])
+        with closing(self.module.get_db()) as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM task_updates WHERE body='Одинаковый отчёт'").fetchone()[0], 1)
+        self.assertEqual(len(self.notification_rows()), 1)
+
+    def test_concurrent_assessment_retry_creates_one_notification(self):
+        def publish(_):
+            client = self.module.app.test_client()
+            with client.session_transaction() as session:
+                session['user_id'] = 1
+                session['csrf_token'] = 'test-form-token'
+            return client.post('/project/2/assessment', data=self.assessment_data()).status_code
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            self.assertEqual(list(pool.map(publish, range(2))), [302, 302])
+        self.assertEqual([row['recipient_id'] for row in self.notification_rows()], [3])
 
 
 if __name__ == "__main__":

@@ -22,6 +22,8 @@ from html import escape
 import json
 import secrets
 from collections import defaultdict
+from notifications import (initialize_notifications, notify, notify_project,
+                           notification_feed, mark_read, render_bell, render_items)
 from project_rules import has_project_teacher
 from dashboard_view import student_dashboard
 from project_workspace import render_workspace, task_deadline
@@ -123,6 +125,7 @@ def render_page(html):
         '<script src="/static/preferences.js?v=20261005"></script>'
         '<script src="/static/motion.js?v=20261005-controls"></script>'
         '<link rel="stylesheet" href="/static/product-design.css?v=20261006">'
+        '<link rel="stylesheet" href="/static/notifications.css?v=20261013">'
         '<script src="/static/dashboard.js?v=20261006" defer></script>'
             f'</head><body id="page-content"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
@@ -258,6 +261,7 @@ def _prepare_database(conn):
     initialize_stages(conn)
     initialize_teamwork(conn)
     initialize_defenses(conn)
+    initialize_notifications(conn)
 
     project_columns = table_columns(conn, "projects")
 
@@ -746,33 +750,31 @@ def delete_task(project_id, task_id):
 
 
 def add_task_update(project_id, task_id, user_id, body):
-
     conn = get_db()
-
-    task = conn.execute(
-        """
-        SELECT id
-        FROM tasks
-        WHERE id = ? AND project_id = ?
-        """,
-        (task_id, project_id)
-    ).fetchone()
-
-    if task is None:
+    try:
+        begin_project_write(conn, project_id)
+        task = conn.execute('SELECT id FROM tasks WHERE id=? AND project_id=? AND assignee_id=?',
+                            (task_id, project_id, user_id)).fetchone()
+        if task is None:
+            conn.rollback()
+            return False
+        # An identical repeat of the latest report is not a new report.
+        previous = conn.execute('SELECT user_id,body FROM task_updates WHERE task_id=? ORDER BY id DESC LIMIT 1',
+                                (task_id,)).fetchone()
+        if previous and previous['user_id'] == user_id and previous['body'] == body:
+            conn.rollback()
+            return True
+        update_id = insert_id(conn, 'INSERT INTO task_updates(task_id,user_id,body) VALUES(?,?,?)',
+                              (task_id, user_id, body))
+        notify_project(conn, project_id, 'teacher', f'report:{update_id}',
+                       'Новый отчёт по задаче', '', f'/project/{project_id}#task-{task_id}')
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
         conn.close()
-        return False
-
-    conn.execute(
-        """
-        INSERT INTO task_updates (task_id, user_id, body)
-        VALUES (?, ?, ?)
-        """,
-        (task_id, user_id, body)
-    )
-
-    conn.commit()
-    conn.close()
-    return True
 
 
 def get_task_update_history(project_id):
@@ -1256,6 +1258,7 @@ def profile():
         PAGE_STYLE
         + f"""
         <div class="container">
+            {render_header(user)}
             <div class="profile-card">
                 <a class="back" href="/">← На главную</a>
                 <h1>Профиль</h1>
@@ -2567,7 +2570,8 @@ def submit_task_update(project_id, task_id):
             403
         )
 
-    add_task_update(project_id, task_id, user["id"], body)
+    if not add_task_update(project_id, task_id, user["id"], body):
+        return render_error_page('Нет доступа', 'Задача удалена или назначена другому участнику.', 403)
     flash("Отчёт сохранён в истории задачи.", "success")
     return redirect(f"/project/{project_id}")
 
@@ -2687,6 +2691,9 @@ def percent(done, total):
 
 def render_header(user):
     nav = teacher_nav(user)
+    with closing(get_db()) as conn:
+        count, rows = notification_feed(conn, user['id'])
+    bell = render_bell(count, rows, csrf_input())
     return f"""
     <header class="main-header">
         <a href="/" class="brand">M<span>-</span>Flow</a>
@@ -2696,12 +2703,46 @@ def render_header(user):
                 <small>{"Учитель" if user["role"] == "teacher" else "Ученик"}</small>
             </div>
             <div class="avatar">{escape(user["username"][0].upper())}</div>
+            {bell}
             {nav}
             <a href="/profile" class="logout">Профиль</a>
             {logout_form()}
         </div>
     </header>
     """
+
+
+@app.route('/notifications')
+@login_required
+def notifications_page():
+    user = get_current_user()
+    before = request.args.get('before')
+    if before is not None:
+        try:
+            before = int(before)
+        except (ValueError, TypeError):
+            before = 0
+        if not valid_database_id(before):
+            return render_error_page('Некорректный адрес', 'Проверьте номер страницы уведомлений.', 400)
+    with closing(get_db()) as conn:
+        count, rows = notification_feed(conn, user['id'], before, limit=31)
+    older = (f'<a class="action-link" href="/notifications?before={rows[29]["id"]}">Более ранние</a>'
+             if len(rows) > 30 else '')
+    return render_page(PAGE_STYLE + f'''<div class="container">{render_header(user)}
+        <main class="notifications-page"><h1>Уведомления</h1><p>Непрочитанных: {count}</p>
+        <form method="post" action="/notifications/read-all">{csrf_input()}
+        <button class="secondary" type="submit">Прочитать все</button></form>
+        {render_items(rows[:30], csrf_input())}{older}</main></div>''')
+
+
+@app.route('/notifications/<int:notification_id>/read', methods=['POST'])
+@app.route('/notifications/read-all', methods=['POST'])
+@login_required
+def read_notifications(notification_id=None):
+    with closing(get_db()) as conn:
+        if not mark_read(conn, get_current_user()['id'], notification_id):
+            return render_error_page('Уведомление не найдено', 'Уведомление недоступно вашему аккаунту.', 404)
+    return redirect('/notifications')
 
 
 @app.route('/settings')
@@ -2954,6 +2995,13 @@ def project_assessment(project_id):
                 if len(note) > 1000:
                     raise ValueError("Примечание должно содержать не больше 1000 символов.")
                 scores = parse_scores(request.form, publish=action == "published")
+                begin_project_write(conn, project_id)
+                # Re-read under the same project lock as other review mutations.
+                previous = conn.execute('SELECT * FROM project_assessments WHERE project_id=? AND student_id=? AND teacher_id=?',
+                                        (project_id, selected['id'], user['id'])).fetchone()
+                changed = (previous is None or previous['state'] != action or previous['note'] != note
+                           or previous['student_name'] != student_name or load_scores(previous) != scores
+                           or previous['rubric_version'] != RUBRIC_VERSION)
                 conn.execute("""INSERT INTO project_assessments
                     (project_id, student_id, teacher_id, student_name, rubric_version, scores_json, note, state)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -2963,16 +3011,27 @@ def project_assessment(project_id):
                     updated_at=CAST(CURRENT_TIMESTAMP AS TEXT)""",
                     (project_id, selected["id"], user["id"], student_name, RUBRIC_VERSION,
                      json.dumps(scores), note, action))
+                if action == 'published' and changed:
+                    total, grade = summarize(scores)
+                    notify(conn, project_id, 'assessment:' + secrets.token_hex(16),
+                           'Оценка проекта опубликована',
+                           f'Баллы: {total} / {MAX_SCORE}. Оценка: {grade}.' + (f' {note}' if note else ''),
+                           f'/project/{project_id}/assessment', [selected['id']])
                 conn.commit()
                 conn.close()
                 flash("Оценка опубликована." if action == "published" else "Черновик сохранён. Ученику он не виден.")
                 return redirect(f"/project/{project_id}/assessment?student_id={selected['id']}")
             except ValueError as exc:
+                conn.rollback()
                 error = str(exc)
                 status = 400
                 # Keep valid entered values without treating missing criteria as zero.
                 scores = {key: int(request.form[f"criterion_{key}"]) if request.form.get(f"criterion_{key}") in
                           {str(v) for v in range(maximum + 1)} else None for key, _, maximum in CRITERIA}
+            except Exception:
+                conn.rollback()
+                conn.close()
+                raise
         links = " ".join(f'<a class="assessment-person" href="?student_id={s["id"]}" aria-current="{str(s["id"] == selected["id"]).lower()}">{escape(s["username"])}</a>' for s in students)
         fields = ""
         for key, label, maximum in CRITERIA:

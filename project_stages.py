@@ -4,6 +4,7 @@ from html import escape
 from urllib.parse import urlsplit
 from project_rules import has_project_teacher, TEACHER_REQUIRED
 from database import execute_schema, begin_project_write
+from notifications import notify_project
 
 STAGES = (
     (1, "Выбор темы и согласование с учителем"),
@@ -130,6 +131,15 @@ def change_stage(conn, project_id, user, form):
             teacher_comment=excluded.teacher_comment, submitted_by=excluded.submitted_by,
             reviewed_by=excluded.reviewed_by, revision=excluded.revision, updated_at=CAST(CURRENT_TIMESTAMP AS TEXT)""",
             (project_id, current["number"], state, result, url, comment, submitted_by, reviewed_by, current["revision"] + 1))
+        if action == 'submit':
+            notify_project(conn, project_id, 'teacher',
+                f'stage:{project_id}:{current["number"]}:{current["revision"] + 1}',
+                f'Этап {current["number"]} отправлен на проверку', '', f'/project/{project_id}/stages')
+        elif action in ('accept', 'return'):
+            notify_project(conn, project_id, 'student',
+                f'stage:{project_id}:{current["number"]}:{current["revision"] + 1}',
+                f'Этап {current["number"]}: ' + ('принят' if action == 'accept' else 'нужна доработка'),
+                comment, f'/project/{project_id}/stages')
         conn.commit()
         return {"save": "Результат этапа сохранён.", "submit": "Этап отправлен учителю на проверку.",
                 "accept": "Этап принят. Следующий этап открыт.", "return": "Этап возвращён на доработку."}[action] if not (action == "accept" and current["number"] == 5) else "Все пять этапов проекта приняты!"

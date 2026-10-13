@@ -247,7 +247,7 @@ class ProjectWorkspaceTests(unittest.TestCase):
         for user in (1,3):
             self.fixture.sign_in(user)
             self.assertEqual(self.fixture.count_page_queries('/project/2'), before[user])
-            self.assertLessEqual(before[user], 8)
+            self.assertLessEqual(before[user], 10)  # Includes count + notification preview.
 
     def test_long_unbroken_user_text_is_escaped_and_feedback_has_keyboard_scroll_access(self):
         title = '<img src=x onerror=alert(1)>' + 'Д' * 50

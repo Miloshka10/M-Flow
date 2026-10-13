@@ -5,6 +5,14 @@ from postgres_backup import BackupError
 
 
 class RestoreGuardTests(unittest.TestCase):
+    def test_old_and_notification_archives_have_compatible_manifest(self):
+        old = dict(counts={table: 0 for table in restore.REQUIRED_TABLES})
+        self.assertEqual(restore.manifest_tables(old), restore.REQUIRED_TABLES)
+        new = dict(counts={**old['counts'], 'notifications': 3})
+        self.assertEqual(restore.manifest_tables(new), restore.REQUIRED_TABLES | {'notifications'})
+        with self.assertRaises(BackupError):
+            restore.manifest_tables(dict(counts={**old['counts'], 'unknown_table': 1}))
+
     def test_production_url_rejected_before_connection(self):
         with patch.object(restore.psycopg, 'connect') as connect:
             with self.assertRaises(BackupError):

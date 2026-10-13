@@ -1,0 +1,40 @@
+/* Inherits the existing palette, themes and reduced-motion preferences. */
+.notification-bell { position: relative; flex-shrink: 0; }
+.notification-bell > summary { display: flex; align-items: center; justify-content: center;
+  gap: 5px; min-width: 44px; min-height: 44px; padding: 8px; cursor: pointer;
+  list-style: none; border: 1px solid var(--mf-line); border-radius: 14px;
+  background: var(--mf-card); color: var(--mf-text); }
+.notification-bell > summary::-webkit-details-marker { display: none; }
+.notification-bell[open] > summary { background: var(--mf-accent-soft); }
+.notification-count { border-radius: 12px; padding: 0 6px; background: var(--mf-action);
+  color: #222226; font-size: 12px; font-weight: 700; }
+.notification-panel { position: absolute; top: calc(100% + 8px); right: 0; z-index: 50;
+  width: min(380px, calc(100vw - 32px)); max-height: min(70vh, 560px); overflow-y: auto;
+  box-sizing: border-box; padding: 18px; border: 1px solid var(--mf-line);
+  border-radius: 18px; background: var(--mf-card); color: var(--mf-text);
+  box-shadow: 0 8px 32px #0002; }
+.notification-panel h2 { margin: 0 0 12px; font-size: 20px; }
+.notification-list { list-style: none; margin: 16px 0; padding: 0; }
+.notification-item { border: 1px solid var(--mf-line); border-radius: 14px;
+  padding: 12px; margin: 10px 0; overflow-wrap: anywhere; }
+.notification-item.is-unread { border-left: 4px solid var(--mf-action); background: var(--mf-accent-soft); }
+.notification-item a { display: grid; gap: 4px; color: var(--mf-text); }
+.notification-item a:hover strong { text-decoration: underline; }
+.notification-item a span { font-size: 13px; white-space: pre-wrap; }
+.notification-panel .notification-item a span:last-child { display: -webkit-box;
+  -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.notification-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  justify-content: space-between; margin-top: 10px; font-size: 12px; color: var(--mf-muted); }
+.notification-panel form, .notification-meta form { margin: 0; }
+.notification-panel > form { margin-top: 8px; }
+body .notification-meta button { min-height: 44px; padding: 8px 12px; font-size: 12px; }
+.notifications-page { max-width: 760px; margin: 32px auto; }
+.notification-empty { color: var(--mf-muted); }
+@media (max-width: 800px) {
+  .notification-bell { position: static; }
+  .main-header { position: relative; }
+  .notification-panel { top: 100%; right: 0; width: 100%; max-width: 100%; }
+}
+@media (forced-colors: active) {
+  .notification-item.is-unread { border-left-color: Highlight; }
+}

@@ -70,6 +70,8 @@ class DatabaseBackupTests(unittest.TestCase):
                 role_text,message,state,updated_at) VALUES(1,2,?,'Инженер','Приглашение — тест',?,'2026-10-09 12:00:00')""",
                 [(2, "accepted"), (3, "pending")])
             conn.execute("PRAGMA user_version=7")
+            conn.execute("""INSERT INTO notifications(recipient_id,project_id,event_key,title,message,target)
+                VALUES(2,1,'test:review','Этап принят','Закрытый комментарий — тест','/project/1/stages')""")
             conn.commit()
 
     def snapshot(self, path):

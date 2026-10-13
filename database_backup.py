@@ -18,6 +18,8 @@ REQUIRED_TABLES = frozenset((
     "project_stages", "project_defenses", "project_assessments",
     "student_profiles", "team_invitations", "team_member_roles",
 ))
+# Older private archives remain restorable. New tables are checked when present.
+OPTIONAL_TABLES = frozenset(('notifications',))
 PUBLIC_DIRECTORIES = frozenset(("static", "public", "www", "wwwroot", "htdocs"))
 
 
