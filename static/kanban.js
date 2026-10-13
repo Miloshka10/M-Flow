@@ -15,6 +15,8 @@ function updateKanbanCounts() {
 async function saveTask(card, endpoint, value) {
   if (card.dataset.saving === '1') throw new Error('Дождитесь сохранения задачи.');
   card.dataset.saving = '1';
+  const message = document.querySelector('#board-status');
+  if (message) { message.hidden = true; message.textContent = ''; }
   const controls = card.querySelectorAll('select');
   controls.forEach(control => control.disabled = true);
   try {
@@ -27,7 +29,10 @@ async function saveTask(card, endpoint, value) {
     let result;
     try { result = await response.json(); }
     catch (_) { throw new Error('Сервер вернул неожиданный ответ. Повторите попытку позже.'); }
-    if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось сохранить задачу.');
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+      throw new Error('Сервер вернул неожиданный ответ. Повторите попытку позже.');
+    }
+    if (!response.ok || result.success !== true) throw new Error(result.error || 'Не удалось сохранить задачу.');
     return result;
   } catch (error) {
     if (error instanceof TypeError) throw new Error('Не удалось связаться с сервером. Проверьте соединение и повторите попытку.');

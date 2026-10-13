@@ -73,10 +73,26 @@ function setup(response) {
     assert.equal(failure.alerts.length, 1);
   }
   const priorityFailure = setup(new Error('offline'));
+  priorityFailure.elements['#board-status'].hidden = false;
+  priorityFailure.elements['#board-status'].textContent = 'Приоритет задачи сохранён.';
   await priorityFailure.context.changePriority(priorityFailure.priority);
+  assert.equal(priorityFailure.elements['#board-status'].hidden, true);
+  assert.equal(priorityFailure.elements['#board-status'].textContent, '');
   assert.equal(priorityFailure.priority.value, 'normal');
   assert.equal(priorityFailure.priority.disabled, false);
   assert.equal(priorityFailure.requests[0].options.headers['X-CSRF-Token'], 'test-csrf-token');
+  for (const payload of [null, [], 'not-an-object', 42]) {
+    const malformed = setup({ok: true, status: 200, json: async () => payload});
+    await malformed.context.moveTask(malformed.card, 'done');
+    assert.match(malformed.alerts[0], /неожиданный ответ/);
+    assert.equal(malformed.column.dataset.status, 'todo');
+    assert.equal(malformed.select.value, 'todo');
+    assert.equal(malformed.select.disabled, false);
+  }
+  const invalidSuccess = setup({ok: true, status: 200, json: async () => ({success: 'false'})});
+  await invalidSuccess.context.moveTask(invalidSuccess.card, 'done');
+  assert.equal(invalidSuccess.column.dataset.status, 'todo');
+  assert.equal(invalidSuccess.alerts.length, 1);
   const prioritySuccess = setup({ok: true, status: 200, json: async () => ({success: true})});
   let reloads = 0;
   prioritySuccess.context.location.reload = () => reloads++;

@@ -262,6 +262,45 @@ class TeacherCabinetTests(AuthSecurityCases, unittest.TestCase):
         with closing(self.module.get_db()) as conn:
             return [dict(row) for row in conn.execute('SELECT * FROM notifications ORDER BY id')]
 
+    def test_notification_first_page_reuses_header_queries_but_older_header_stays_latest(self):
+        conn = self.module.get_db()
+        for uid, pid, prefix in ((3, 2, 'student'), (1, 2, 'teacher'), (2, 3, 'private')):
+            conn.executemany('''INSERT INTO notifications(recipient_id,project_id,event_key,title,target)
+                VALUES(?,?,?,?,?)''', [(uid, pid, f'{prefix}:{n}', f'{prefix}-item-{n:02d}', f'/project/{pid}') for n in range(40)])
+        conn.commit()
+        conn.close()
+        for uid, prefix in ((3, 'student'), (1, 'teacher')):
+            self.sign_in(uid)
+            before = self.database_snapshot()
+            self.assertEqual(self.count_page_queries('/notifications'), 3)  # Previously 5.
+            page = self.client.get('/notifications').text
+            bell = page.split('<section class="notification-panel"')[1].split('</section>')[0]
+            main = page.split('class="notifications-page"')[1]
+            self.assertEqual(bell.count('class="notification-item'), 12)
+            self.assertEqual(main.count('class="notification-item'), 30)
+            self.assertIn(prefix + '-item-39', bell)
+            self.assertIn('Непрочитанных: 40', main)
+            self.assertNotIn('private-item', page)
+            cursor = int(re.search(r'/notifications\?before=(\d+)', main).group(1))
+            older = self.client.get('/notifications?before=' + str(cursor)).text
+            older_bell = older.split('<section class="notification-panel"')[1].split('</section>')[0]
+            older_main = older.split('class="notifications-page"')[1]
+            self.assertIn(prefix + '-item-39', older_bell)
+            self.assertNotIn(prefix + '-item-39', older_main)
+            self.assertEqual(self.count_page_queries('/notifications?before=' + str(cursor)), 5)
+            self.assertEqual(self.database_snapshot(), before)
+
+    def test_current_user_query_failure_always_closes_connection(self):
+        from unittest.mock import Mock
+        conn = Mock()
+        conn.execute.side_effect = RuntimeError('isolated-test-failure')
+        with self.module.app.test_request_context('/'):
+            self.module.session.update(user_id=3, auth_token='test-token')
+            with patch.object(self.module, 'get_db', return_value=conn):
+                with self.assertRaises(RuntimeError):
+                    self.module.get_current_user()
+        conn.close.assert_called_once()
+
     def add_notification_team(self):
         # Owner and member are intentionally duplicated; two legitimate teachers.
         self.add_candidate()

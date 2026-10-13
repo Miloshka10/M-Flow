@@ -412,19 +412,16 @@ def get_current_user():
             and getattr(g, 'current_user_auth_token', None) == session['auth_token']):
         return g.current_user
 
-    conn = get_db()
-
-    user = conn.execute(
-        """
-        SELECT id, username, role
-        FROM users
-        WHERE id = ? AND EXISTS (SELECT 1 FROM auth_sessions s
-            WHERE s.user_id=users.id AND s.token_hash=? AND s.expires>?)
-        """,
-        (session["user_id"], fingerprint(SECRET_KEY, 'session', session['auth_token']), int(time.time()))
-    ).fetchone()
-
-    conn.close()
+    with closing(get_db()) as conn:
+        user = conn.execute(
+            """
+            SELECT id, username, role
+            FROM users
+            WHERE id = ? AND EXISTS (SELECT 1 FROM auth_sessions s
+                WHERE s.user_id=users.id AND s.token_hash=? AND s.expires>?)
+            """,
+            (session["user_id"], fingerprint(SECRET_KEY, 'session', session['auth_token']), int(time.time()))
+        ).fetchone()
 
     if has_request_context():
         g.current_user_id = user_id
@@ -1039,7 +1036,7 @@ def get_student_progress(project_id):
 # STYLE + JAVASCRIPT
 # =========================================================
 
-PAGE_STYLE = '<script src="/static/kanban.js?v=20261013-filters" defer></script>'
+PAGE_STYLE = '<script src="/static/kanban.js?v=20261013-polish" defer></script>'
 
 
 # =========================================================
@@ -2719,10 +2716,13 @@ def percent(done, total):
     return round(done / total * 100) if total else 0
 
 
-def render_header(user):
+def render_header(user, notification_data=None):
     nav = teacher_nav(user)
-    with closing(get_db()) as conn:
-        count, rows = notification_feed(conn, user['id'])
+    if notification_data is None:
+        with closing(get_db()) as conn:
+            count, rows = notification_feed(conn, user['id'])
+    else:
+        count, rows = notification_data
     bell = render_bell(count, rows, csrf_input())
     return f"""
     <header class="main-header">
@@ -2758,7 +2758,10 @@ def notifications_page():
         count, rows = notification_feed(conn, user['id'], before, limit=31)
     older = (f'<a class="action-link" href="/notifications?before={rows[29]["id"]}">Более ранние</a>'
              if len(rows) > 30 else '')
-    return render_page(PAGE_STYLE + f'''<div class="container">{render_header(user)}
+    # The first page already contains the latest header items. Reuse only within
+    # this response; older pages must still fetch the latest items for the bell.
+    header = render_header(user, (count, rows[:12]) if before is None else None)
+    return render_page(PAGE_STYLE + f'''<div class="container">{header}
         <main class="notifications-page"><h1>Уведомления</h1><p>Непрочитанных: {count}</p>
         <form method="post" action="/notifications/read-all">{csrf_input()}
         <button class="secondary" type="submit">Прочитать все</button></form>
