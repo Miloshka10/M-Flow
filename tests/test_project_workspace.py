@@ -220,11 +220,11 @@ class ProjectWorkspaceTests(unittest.TestCase):
         today = date(2026,10,6)
         tasks = [dict(status='todo',deadline='2026-10-15'), dict(status='done',deadline='2026-01-01'),
                  dict(status='todo',deadline='wrong'), dict(status='progress',deadline='2026-10-06')]
-        self.assertEqual(task_deadline(tasks,today), 'Срок сегодня: 06.10.2026')
+        self.assertEqual(task_deadline(tasks,today), 'Сегодня · 06.10.2026')
         tasks.append(dict(status='todo',deadline='2026-10-01'))
-        self.assertEqual(task_deadline(tasks,today), 'Просроченный срок: 01.10.2026')
+        self.assertEqual(task_deadline(tasks,today), 'Просрочено на 5 дней · 01.10.2026')
         self.assertEqual(task_deadline([],today), 'Нет незавершённых задач со сроком')
-        self.assertEqual(task_deadline(tasks[:1],today), 'Ближайший срок: 15.10.2026')
+        self.assertEqual(task_deadline(tasks[:1],today), 'Осталось 9 дней · 15.10.2026')
         self.fixture.sign_in(3)
         result = self.fixture.post('/project/1/status', json={'task_id':1,'status':'done'})
         self.assertEqual(result.status_code, 200)

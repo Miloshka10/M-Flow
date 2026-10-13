@@ -1,5 +1,5 @@
 """Read-only project overview. Presentation never grants mutation permissions."""
-from datetime import date
+from deadlines import business_today, deadline_info, deadline_text
 from html import escape
 
 from grading import MAX_SCORE, load_scores, summarize
@@ -8,22 +8,15 @@ from video_defense import DEFENSE_STATES
 
 
 def task_deadline(tasks, today=None):
-    today = today or date.today()
+    today = today or business_today()
     deadlines = []
     for task in tasks:
-        if task['status'] == 'done' or not task['deadline']:
-            continue
-        try:
-            due = date.fromisoformat(task['deadline'])
-        except ValueError:
-            continue
-        if due.isoformat() == task['deadline']:
-            deadlines.append(due)
+        info = deadline_info(task['deadline'], task['status'], today)
+        if info['active']:
+            deadlines.append(info)
     if not deadlines:
         return 'Нет незавершённых задач со сроком'
-    due = min(deadlines)
-    label = 'Просроченный срок' if due < today else 'Срок сегодня' if due == today else 'Ближайший срок'
-    return f'{label}: {due.strftime("%d.%m.%Y")}'
+    return deadline_text(min(deadlines, key=lambda info: info['date']))
 
 
 def next_step(stages, role, owner, has_teacher, defense, has_published=False):
@@ -78,7 +71,7 @@ def next_step(stages, role, owner, has_teacher, defense, has_published=False):
                 'Опубликованной оценки пока нет. Дождись решения учителя; баллы не выставляются автоматически.', 'assessment', 'Посмотреть свои оценки')
 
 
-def render_workspace(project_id, name, user, owner, members, stages, defense, assessments, tasks, completed_tasks, progress, overdue):
+def render_workspace(project_id, name, user, owner, members, stages, defense, assessments, tasks, completed_tasks, progress, overdue, today=None):
     done, current = stage_summary(stages)
     has_teacher = any(member['role'] == 'teacher' for member in members)
     step = next_step(stages, user['role'], owner, has_teacher, defense, bool(assessments))
@@ -129,7 +122,7 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
             <details class="journey-members"><summary>Участники: {len(members)} · {escape(names) or 'Команда пока не сформирована'}</summary><ul>{member_list}</ul></details></div>
             <a class="action-link" href="#task-board">К доске задач ↓</a></div>
         <div class="journey-next"><div class="journey-context"><span>{current_name}</span><strong>{current_label}</strong>
-            <small data-task-deadline>{task_deadline(tasks)}</small><small>Срок относится к задаче, не к этапу</small></div>
+            <small data-task-deadline>{task_deadline(tasks, today)}</small><small>Срок относится к задаче, не к этапу</small></div>
             <div class="journey-action" data-next-step="{step['key']}"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>{step['title']}</h2><p>{step['text']}</p>{action}</div></div>
         {feedback}
         <div class="journey-progress"><div><div><strong>Прогресс задач</strong><b data-project-progress>{progress}%</b></div>

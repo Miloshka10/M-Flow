@@ -1,0 +1,30 @@
+/* Deadlines are calendar days in Moscow; colors supplement readable labels. */
+.upcoming-panel {margin:24px 0 32px;padding:24px;border-radius:24px;background:var(--mf-panel);border:1px solid var(--mf-line)}
+.upcoming-panel .section-title {margin:0 0 16px;gap:16px;flex-wrap:wrap}
+.upcoming-panel .section-title p {color:var(--mf-muted);margin:8px 0 0}
+.upcoming-list {list-style:none;padding:0;margin:0}
+.upcoming-list li+li {border-top:1px solid var(--mf-line)}
+.upcoming-list a {display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 0;color:var(--mf-text);text-decoration:none}
+.upcoming-list a:hover strong {text-decoration:underline}
+.upcoming-list a>span {min-width:0;overflow-wrap:anywhere}
+.upcoming-list strong,.upcoming-list small {display:block}
+.upcoming-list small {color:var(--mf-muted);margin-top:6px}
+.due-label {font-size:14px;flex-shrink:0}
+.task-deadline.deadline-overdue,.due-label.deadline-overdue {color:#855f14;background:#fff3d3;border-radius:8px;padding:4px 8px}
+.task-deadline.deadline-soon,.due-label.deadline-soon {color:var(--mf-text);background:var(--mf-accent-soft);border-radius:8px;padding:4px 8px}
+.hot-strip {background:var(--mf-panel);color:var(--mf-text);border:1px solid var(--mf-line);border-radius:16px;padding:18px;box-shadow:none}
+.hot-strip[hidden] {display:none}
+.hot-strip small {display:block;color:var(--mf-muted);margin-top:6px}
+.hot-strip ul {margin:10px 0 0;padding-left:20px}
+.hot-strip li {margin-top:6px;overflow-wrap:anywhere}
+.hot-strip a {color:var(--mf-text)}
+.teacher-filters select {flex:0 1 300px;max-width:100%}
+.teacher-health.overdue {background:#fff3d3;color:#855f14}
+[data-theme="dark"] .task-deadline.deadline-overdue,[data-theme="dark"] .due-label.deadline-overdue {color:#edd191;background:#3c3321}
+html[data-theme="dark"] .teacher-health.overdue {color:#edd191;background:#3c3321;border-color:var(--mf-line)}
+@media(max-width:600px) {
+  .upcoming-panel {padding:18px;border-radius:18px}
+  .upcoming-list a {align-items:flex-start;flex-direction:column;gap:10px}
+  .due-label {flex-shrink:1;max-width:100%}
+  .teacher-filters select {flex-basis:100%}
+}

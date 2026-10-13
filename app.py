@@ -12,7 +12,6 @@ from flask import (
 import os
 from contextlib import closing
 from database import DATABASE_ERRORS
-from datetime import date, timedelta
 from functools import wraps
 from werkzeug.security import (
     check_password_hash,
@@ -22,6 +21,7 @@ from html import escape
 import json
 import secrets
 from collections import defaultdict
+from deadlines import business_today, deadline_info, deadline_text, parse_deadline, urgent_tasks, TIMEZONE_LABEL
 from notifications import (initialize_notifications, notify, notify_project,
                            notification_feed, mark_read, render_bell, render_items)
 from project_rules import has_project_teacher
@@ -126,6 +126,7 @@ def render_page(html):
         '<script src="/static/motion.js?v=20261005-controls"></script>'
         '<link rel="stylesheet" href="/static/product-design.css?v=20261006">'
         '<link rel="stylesheet" href="/static/notifications.css?v=20261013">'
+        '<link rel="stylesheet" href="/static/deadlines.css?v=20261013">'
         '<script src="/static/dashboard.js?v=20261006" defer></script>'
             f'</head><body id="page-content"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
@@ -508,9 +509,8 @@ def get_projects(with_counts=False):
         columns = """, COUNT(t.id) AS total,
             COALESCE(SUM(CASE WHEN t.status='done' THEN 1 ELSE 0 END), 0) AS done,
             COALESCE(SUM(CASE WHEN t.status='progress' THEN 1 ELSE 0 END), 0) AS active,
-            COALESCE(SUM(CASE WHEN t.status!='done' AND t.deadline!='' AND t.deadline<? THEN 1 ELSE 0 END), 0) AS overdue"""
+            0 AS overdue"""
         join = "LEFT JOIN tasks t ON t.project_id=projects.id"
-        params.insert(0, date.today().isoformat())
     projects = conn.execute(f"""
         SELECT projects.id, projects.name {columns}
         FROM projects {join}
@@ -521,6 +521,25 @@ def get_projects(with_counts=False):
         GROUP BY projects.id ORDER BY projects.id DESC
         """, params).fetchall()
 
+    if with_counts:
+        # One batched read for valid calendar dates and the student's next tasks.
+        # Never compare arbitrary legacy TEXT values lexicographically as dates.
+        today = business_today()
+        projects = [dict(row, deadlines=[]) for row in projects]
+        by_id = {row['id']: row for row in projects}
+        dated_tasks = conn.execute("""SELECT t.id,t.project_id,t.title,t.status,t.deadline,t.assignee_id
+            FROM tasks t JOIN projects p ON p.id=t.project_id
+            WHERE t.status!='done' AND t.deadline IS NOT NULL AND t.deadline!=''
+            AND (p.owner_id=? OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?))""",
+            (user['id'], user['id']))
+        for row in dated_tasks:
+            info = deadline_info(row['deadline'], row['status'], today)
+            project = by_id.get(row['project_id'])
+            if project is None or not info['active']:
+                continue
+            project['overdue'] += info['state'] == 'overdue'
+            if row['assignee_id'] in (None, user['id']):
+                project['deadlines'].append(dict(row, deadline_info=info))
     conn.close()
 
     return projects
@@ -531,12 +550,7 @@ def is_valid_date(value):
     if not value:
         return True
 
-    try:
-        parsed = date.fromisoformat(value)
-    except ValueError:
-        return False
-
-    return value == parsed.isoformat()
+    return parse_deadline(value) is not None
 
 
 def add_project(name):
@@ -1012,7 +1026,7 @@ def get_student_progress(project_id):
 # STYLE + JAVASCRIPT
 # =========================================================
 
-PAGE_STYLE = '<script src="/static/kanban.js?v=20261009-polish" defer></script>'
+PAGE_STYLE = '<script src="/static/kanban.js?v=20261013-deadlines" defer></script>'
 
 
 # =========================================================
@@ -1441,44 +1455,13 @@ def project(project_id):
 
     filters_active = bool(search_query or priority_filter or only_mine)
 
-    hot_items = ""
-
-    for task in all_tasks:
-        if not task["deadline"] or task["status"] == "done":
-            continue
-
-        try:
-            days_left = (
-                date.fromisoformat(task["deadline"])
-                - date.today()
-            ).days
-        except ValueError:
-            continue
-
-        if days_left > 3:
-            continue
-
-        if days_left < 0:
-            label = f"просрочено на {-days_left} дн."
-            css = "overdue"
-        elif days_left == 0:
-            label = "сегодня"
-            css = ""
-        else:
-            label = f"через {days_left} дн."
-            css = ""
-
-        hot_items += (
-            f'<li class="{css}">{escape(task["title"])} — '
-            f'{escape(task["deadline"])} ({label})</li>'
-        )
-
-    hot_html = (
-        f'<div class="hot-strip"><strong>Горящие дедлайны</strong>'
-        f'<ul>{hot_items}</ul></div>'
-        if hot_items
-        else ""
-    )
+    deadline_today = business_today()
+    near_tasks = urgent_tasks(all_tasks, deadline_today)
+    hot_items = ''.join(f'<li><a href="#task-{item["id"]}">{escape(item["title"])} — {escape(item["text"])}</a></li>'
+                        for item in near_tasks)
+    hot_html = (f'<div class="hot-strip" data-deadline-strip {"hidden" if not near_tasks else ""}>'
+                f'<strong>Задачи с ближайшими сроками</strong><small>{TIMEZONE_LABEL} · не сроки проверки учителем</small>'
+                f'<ul data-deadline-list>{hot_items}</ul></div>')
 
     def selected(value):
         return "selected" if priority_filter == value else ""
@@ -1534,9 +1517,7 @@ def project(project_id):
     overdue_count = sum(
         1
         for task in all_tasks
-        if task["deadline"]
-        and task["deadline"] < date.today().isoformat()
-        and task["status"] != "done"
+        if deadline_info(task['deadline'], task['status'], deadline_today)['state'] == 'overdue'
     )
 
 
@@ -1557,11 +1538,7 @@ def project(project_id):
 
     def render_task_card(task):
 
-        deadline = (
-            task["deadline"]
-            if task["deadline"]
-            else "Без срока"
-        )
+        deadline = deadline_info(task['deadline'], task['status'], deadline_today)
 
         done_class = (
             "done-card"
@@ -1661,25 +1638,8 @@ def project(project_id):
             task["title"]
         )
 
-        safe_deadline = escape(
-            deadline
-        )
-
-        deadline_class = ""
-
-        if task["deadline"] and task["status"] != "done":
-            try:
-                days_left = (
-                    date.fromisoformat(task["deadline"])
-                    - date.today()
-                ).days
-
-                if days_left < 0:
-                    deadline_class = "deadline-overdue"
-                elif days_left <= 2:
-                    deadline_class = "deadline-soon"
-            except ValueError:
-                pass
+        safe_deadline = escape(deadline_text(deadline))
+        deadline_class = deadline['css']
 
         low_selected = (
             "selected"
@@ -2057,7 +2017,7 @@ def project(project_id):
 
     workspace_html = render_workspace(project_id, project_name, current_user, owner, members,
                                       stages, defense, published_assessments, all_tasks,
-                                      completed_tasks, progress, overdue_count)
+                                      completed_tasks, progress, overdue_count, today=deadline_today)
     return render_page(
         PAGE_STYLE
         + f"""
@@ -2523,13 +2483,16 @@ def change_task_status(project_id):
     tasks = get_tasks(project_id)
     counts = {state: sum(task['status'] == state for task in tasks) for state in ('todo', 'progress', 'done')}
     counts['total'] = len(tasks)
-    counts['overdue'] = sum(task['status'] != 'done' and bool(task['deadline']) and
-                            is_valid_date(task['deadline']) and task['deadline'] < date.today().isoformat()
+    today = business_today()
+    counts['overdue'] = sum(deadline_info(task['deadline'], task['status'], today)['state'] == 'overdue'
                             for task in tasks)
     counts['percent'] = percent(counts['done'], counts['total'])
     students = [dict(id=student['id'], done=student['completed_count'], total=student['task_count'])
                 for student in get_student_progress(project_id)]
-    return jsonify(success=True, metrics=counts, students=students, deadline_text=task_deadline(tasks))
+    updated_task = next((task for task in tasks if task['id'] == task_id), None)
+    info = deadline_info(updated_task['deadline'], updated_task['status'], today) if updated_task else deadline_info(None)
+    return jsonify(success=True, metrics=counts, students=students, deadline_text=task_deadline(tasks, today),
+                   task_deadline=dict(text=deadline_text(info), css=info['css']), deadline_tasks=urgent_tasks(tasks, today))
 
 
 @app.route(
@@ -3145,7 +3108,7 @@ def build_teacher_overview(teacher):
     finally:
         conn.close()
 
-    today = date.today()
+    today = business_today()
     overview = []
 
     for project_row in projects:
@@ -3178,21 +3141,9 @@ def build_teacher_overview(teacher):
             status = task["status"] if task["status"] in ("todo", "progress", "done") else "todo"
             counts[status] += 1
 
-            days_left = None
-
-            if task["deadline"]:
-                try:
-                    days_left = (
-                        date.fromisoformat(task["deadline"]) - today
-                    ).days
-                except ValueError:
-                    days_left = None
-
-            is_overdue = (
-                status != "done"
-                and days_left is not None
-                and days_left < 0
-            )
+            due = deadline_info(task['deadline'], status, today)
+            days_left = due['days']
+            is_overdue = due['state'] == 'overdue'
 
             if is_overdue:
                 counts["overdue"] += 1
@@ -3216,12 +3167,9 @@ def build_teacher_overview(teacher):
             reasons = []
 
             if is_overdue:
-                reasons.append(f"просрочено на {-days_left} дн.")
+                reasons.append(deadline_text(due))
             elif days_left is not None and days_left <= 3:
-                reasons.append(
-                    "срок сегодня" if days_left == 0
-                    else f"срок через {days_left} дн."
-                )
+                reasons.append(deadline_text(due))
 
             if task["assignee_id"] not in stats:
                 reasons.append("нет ответственного")
@@ -3278,7 +3226,7 @@ def render_attention_task(project_id, item):
 def render_teacher_project(project):
 
     counts = project["counts"]
-    health_labels = {"overdue": "Есть просрочки", "attention": "Требует внимания",
+    health_labels = {"overdue": "Просрочены задачи", "attention": "Требует внимания",
                      "done": "Задачи завершены", "normal": "Всё по плану", "empty": "Нет задач"}
     health = project["health"]
     stage = project["current_stage"]
@@ -3387,15 +3335,16 @@ def teacher_cabinet():
 
     query = request.args.get("q", "").strip()[:100]
     focus = request.args.get("focus", "all")
-    if focus not in ("all", "overdue", "attention", "done"):
+    if focus not in ("all", "overdue", "attention", "done", "review"):
         focus = "all"
     visible_projects = [
         project for project in overview
         if (not query or query.casefold() in project["name"].casefold()
             or any(query.casefold() in student["name"].casefold()
                    for student in project["students"]))
-        and (focus == "all" or (focus != 'done' and project["health"] == focus)
+        and (focus == "all" or (focus not in ('done', 'review') and project["health"] == focus)
              or focus == 'done' and project['total'] > 0 and project['counts']['done'] == project['total']
+             or focus == 'review' and project['needs_review']
              or focus == "attention" and bool(project["attention"]))
     ]
 
@@ -3429,7 +3378,7 @@ def teacher_cabinet():
 
     focus_options = "".join(
         f'<option value="{value}" {"selected" if focus == value else ""}>{label}</option>'
-        for value, label in (("all", "Все проекты"), ("overdue", "Есть просрочки"),
+        for value, label in (("all", "Все проекты"), ("overdue", "Просрочены задачи учеников"), ("review", "Ожидают моей проверки"),
                              ("attention", "Требуют внимания"), ("done", "Все задачи выполнены"))
     )
     reports = sorted(
@@ -3447,7 +3396,8 @@ def teacher_cabinet():
     ) or '<p class="t-muted">Здесь появятся отчёты учеников по назначенным задачам.</p>'
 
     attention_items = sorted(
-        [(project, item) for project in visible_projects for item in project["attention"]],
+        [(project, item) for project in visible_projects for item in project["attention"]
+         if focus != 'review' and (focus != 'overdue' or item['task']['status'] != 'done' and item['sort'] < 0)],
         key=lambda pair: pair[1]["sort"]
     )[:6]
     attention_html = "".join(
@@ -3461,8 +3411,9 @@ def teacher_cabinet():
         (f'<a class="teacher-attention-item" href="/project/{p["id"]}/stages"><strong>Этап ожидает проверки</strong><span>{escape(p["name"])}</span></a>' if p['current_stage'] and p['current_stage']['state'] == 'review' else '')
         + (f'<a class="teacher-attention-item" href="/project/{p["id"]}/defense"><strong>Видеозащита ожидает проверки</strong><span>{escape(p["name"])}</span></a>' if p['defense_state'] == DEFENSE_STATES['submitted'] else '')
         for p in visible_projects if p['needs_review'])
-    if review_links:
+    if review_links and focus != 'overdue':
         attention_html = review_links + (attention_html if attention_items else '')
+    queue_title = 'Просроченные задачи учеников' if focus == 'overdue' else 'Ожидают проверки' if focus == 'review' else 'Требуют внимания'
 
     overdue_class = "warn" if overdue_tasks else ""
     review_count = sum(bool(p['current_stage'] and p['current_stage']['state'] == 'review')
@@ -3496,6 +3447,7 @@ def teacher_cabinet():
                 <div class="teacher-signal-strip">
                     <span>В ближайшие 3 дня: <b>{soon_tasks}</b></span>
                     <span>Без ответственного: <b>{unassigned_tasks}</b></span>
+                    <span>Сроки задач: {TIMEZONE_LABEL}. Ожидание проверки — не просрочка сдачи.</span>
                 </div>
                 <form class="teacher-filters" method="get">
                     <input type="search" name="q" value="{escape(query)}"
@@ -3505,7 +3457,7 @@ def teacher_cabinet():
                     <a href="/teacher" class="back">Сбросить</a>
                 </form>
                 <div class="teacher-dashboard-grid">
-                    <section class="teacher-panel review-panel" id="review-queue"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>Требуют внимания</h2>{attention_html}</section>
+                    <section class="teacher-panel review-panel" id="review-queue"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>{queue_title}</h2>{attention_html}</section>
                     <section class="teacher-panel"><h2>Последние отчёты</h2>{reports_html}</section>
                 </div>
                 <div class="section-title"><h2>Проекты</h2>

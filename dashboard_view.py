@@ -1,5 +1,6 @@
 """Presentation only: no database, roles or request mutations."""
 from html import escape
+from deadlines import deadline_text, TIMEZONE_LABEL
 
 
 def student_dashboard(user, projects, token, header, messages):
@@ -20,6 +21,15 @@ def student_dashboard(user, projects, token, header, messages):
     project_cards = ''.join(cards) or '''<div class="empty workspace-empty"><img src="/static/project-kit.svg" alt="" width="480" height="360">
         <div><span class="eyebrow">ЗДЕСЬ НАЧИНАЕТСЯ ТВОЙ ПРОЕКТ</span><h3>Пока чистый лист.</h3>
         <p>Создай первый проект, добавь команду и учителя. Дальше — шаг за шагом.</p><a class="btn" href="#project-create" data-open-project>+ Новый проект</a></div></div>'''
+    upcoming = sorted([(p, task) for p in projects for task in p.get('deadlines', [])],
+                      key=lambda pair: (pair[1]['deadline_info']['date'], pair[1]['id']))
+    upcoming_rows = ''.join(
+        f'''<li><a href="/project/{p['id']}#task-{task['id']}"><span><strong>{escape(task['title'])}</strong>
+            <small>{escape(p['name'])}</small></span><span class="due-label {task['deadline_info']['css']}">
+            {escape(deadline_text(task['deadline_info']))}</span></a></li>'''
+        for p, task in upcoming[:6])
+    upcoming_html = (f'<ul class="upcoming-list">{upcoming_rows}</ul>' if upcoming else
+                     '<p class="t-muted">Нет незавершённых задач со сроками.</p>')
     return f'''<div class="container workspace student-workspace">{header}<main id="main-content">
         <div class="workspace-intro"><span>ТВОЁ РАБОЧЕЕ ПРОСТРАНСТВО</span><span>M-Flow / проекты</span></div>
         <section class="workspace-bento">
@@ -33,6 +43,9 @@ def student_dashboard(user, projects, token, header, messages):
             <a class="workspace-shortcut" href="/teams"><span class="shortcut-icon" aria-hidden="true">↗</span><div><h2>Сильнее вместе.</h2><p>Найди команду по навыкам, а не по классу.</p></div></a>
         </section>{messages}
         <section class="stats-line dashboard-stats" aria-label="Показатели проектов"><div><strong>{len(projects)}</strong><span>Проектов</span></div><div><strong>{total}</strong><span>Всего задач</span></div><div><strong>{active}</strong><span>В работе</span></div><div><strong>{overdue}</strong><span>Просрочено</span></div></section>
+        <section class="upcoming-panel" aria-labelledby="upcoming-title"><div class="section-title"><div>
+            <h2 id="upcoming-title">Ближайшие дела</h2><p>Твои задачи и задачи команды без ответственного · {TIMEZONE_LABEL}</p>
+            </div><span class="t-muted">Показано {min(6, len(upcoming))} из {len(upcoming)}</span></div>{upcoming_html}</section>
         <section class="workspace-projects"><div class="section-title"><div><span class="eyebrow">ПРОДОЛЖАЙ С ТОГО, ГДЕ ОСТАНОВИЛСЯ</span><h2>Мои проекты</h2><p>Проекты, к которым у тебя есть доступ</p></div></div>
             <details id="project-create" class="project-create"><summary>+ Новый проект</summary><form id="project-form" class="new-project show" action="/add_project" method="post">
                 <input type="hidden" name="csrf_token" value="{escape(token, quote=True)}"><label for="project-name">Название проекта</label><input id="project-name" name="name" placeholder="Название проекта" maxlength="80" required><button type="submit">Создать</button></form></details>

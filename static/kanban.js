@@ -65,15 +65,12 @@ async function moveTask(card, target) {
     if (select) select.value = target;
     card.classList.toggle('done-card', target === 'done');
     const deadline = card.querySelector('.task-deadline');
-    if (deadline) {
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const raw = card.dataset.deadline;
-      const due = /^\d{4}-\d{2}-\d{2}$/.test(raw || '') ? new Date(raw + 'T00:00:00') : null;
-      const days = due ? Math.round((due - today) / 86400000) : null;
-      deadline.classList.toggle('deadline-overdue', target !== 'done' && days !== null && days < 0);
-      deadline.classList.toggle('deadline-soon', target !== 'done' && days !== null && days >= 0 && days <= 2);
+    if (deadline && result.task_deadline) {
+      deadline.textContent = result.task_deadline.text;
+      deadline.classList.toggle('deadline-overdue', result.task_deadline.css === 'deadline-overdue');
+      deadline.classList.toggle('deadline-soon', result.task_deadline.css === 'deadline-soon');
     }
+    updateDeadlineStrip(result.deadline_tasks);
     updateKanbanCounts(); updateProjectMetrics(result.metrics, result.deadline_text);
     (result.students || []).forEach(student => {
       const progress = document.querySelector('[data-student-progress="' + student.id + '"]');
@@ -85,6 +82,20 @@ async function moveTask(card, target) {
     if (select) select.value = previous;
     alert(error.message || 'Проверьте соединение и повторите попытку.');
   }
+}
+function updateDeadlineStrip(rows) {
+  const list = document.querySelector('[data-deadline-list]');
+  const strip = document.querySelector('[data-deadline-strip]');
+  if (!list || !strip || !Array.isArray(rows)) return;
+  list.replaceChildren();
+  rows.forEach(row => {
+    const item = document.createElement('li');
+    const link = document.createElement('a');
+    link.href = window.location.pathname + '#task-' + row.id;
+    link.textContent = row.title + ' — ' + row.text;
+    item.appendChild(link); list.appendChild(item);
+  });
+  strip.hidden = !rows.length;
 }
 function changeTaskStatus(select) { return moveTask(select.closest('.task-card'), select.value); }
 function sortTaskCards(container) {

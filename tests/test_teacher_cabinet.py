@@ -35,6 +35,115 @@ class FormTokens(HTMLParser):
 
 
 class TeacherCabinetTests(unittest.TestCase):
+    def seed_deadline_cases(self):
+        conn = self.module.get_db()
+        conn.execute("UPDATE tasks SET deadline='2026-10-11' WHERE id=1")
+        conn.execute("INSERT INTO users(id,username,password,role) VALUES(4,'other-student',?,'student')", (self.password,))
+        conn.executemany("INSERT INTO tasks(id,project_id,title,deadline,status,assignee_id) VALUES(?,?,?,?,?,?)", [
+            (20, 2, '<b>Due today</b>', '2026-10-13', 'todo', 3),
+            (21, 2, 'Due tomorrow', '2026-10-14', 'progress', None),
+            (22, 2, 'Future task', '2026-10-19', 'todo', 3),
+            (23, 2, 'Done past', '2026-10-01', 'done', 3),
+            (24, 2, 'Someone else task', '2026-10-10', 'todo', 4),
+            (25, 3, 'Private dated task', '2026-10-09', 'todo', 3),
+            (26, 2, 'Malformed date', '2026-10-00', 'todo', 3),
+        ])
+        conn.commit()
+        conn.close()
+
+    def test_deadline_home_scope_order_no_synthetic_dates_and_no_get_writes(self):
+        self.seed_deadline_cases()
+        self.sign_in(3)
+        before = self.database_snapshot()
+        with patch.object(self.module, 'business_today', return_value=date(2026, 10, 13)):
+            page = self.client.get('/').text
+        section = page.split('aria-labelledby="upcoming-title"')[1].split('</section>')[0]
+        self.assertIn('Просрочено на 2 дня · 11.10.2026', section)
+        self.assertIn('Сегодня · 13.10.2026', section)
+        self.assertIn('Завтра · 14.10.2026', section)
+        self.assertIn('Осталось 6 дней · 19.10.2026', section)
+        self.assertIn('&lt;b&gt;Due today&lt;/b&gt;', section)
+        self.assertNotIn('<b>Due today</b>', section)
+        for title in ('Done past', 'Someone else task', 'Private dated task', 'Malformed date', 'Unassigned task'):
+            self.assertNotIn(title, section)
+        self.assertLess(section.index('Overdue task'), section.index('Due today'))
+        self.assertLess(section.index('Due tomorrow'), section.index('Future task'))
+        self.assertIn('/project/2#task-21', section)
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_deadline_empty_home_and_bounded_queries_for_many_projects(self):
+        self.sign_in(3)
+        conn = self.module.get_db()
+        conn.execute('UPDATE tasks SET deadline=NULL')
+        conn.commit()
+        before = self.count_page_queries('/')
+        self.assertIn('Нет незавершённых задач со сроками', self.client.get('/').text)
+        for pid in range(10, 30):
+            conn.execute('INSERT INTO projects(id,name,owner_id) VALUES(?,?,3)', (pid, f'Dated project {pid}'))
+            conn.executemany('INSERT INTO tasks(project_id,title,deadline,assignee_id) VALUES(?,?,?,3)',
+                             [(pid, f'Dated task {n}', '2026-12-31') for n in range(10)])
+        conn.commit()
+        conn.close()
+        self.assertEqual(self.count_page_queries('/'), before)
+        self.assertLessEqual(before, 5)
+        page = self.client.get('/').text.split('aria-labelledby="upcoming-title"')[1].split('</section>')[0]
+        self.assertEqual(page.count('#task-'), 6)
+        self.assertIn('Показано 6 из 200', page)
+
+    def test_deadline_filters_distinguish_review_from_overdue_student_tasks(self):
+        self.seed_deadline_cases()
+        self.sign_in(3)
+        self.post('/project/2/stages', data=dict(number='1', revision='0', action='submit', result='Тема'))
+        self.sign_in(1)
+        before = self.database_snapshot()
+        with patch.object(self.module, 'business_today', return_value=date(2026, 10, 13)):
+            overdue = self.client.get('/teacher?focus=overdue&q=Observed').text
+            review = self.client.get('/teacher?focus=review').text
+            invalid = self.client.get('/teacher?focus=wrong').text
+            plain = self.client.get('/teacher').text
+        self.assertEqual(invalid, plain)
+        queue = overdue.split('id="review-queue"')[1].split('</section>')[0]
+        self.assertIn('Someone else task', queue)
+        self.assertIn('Просрочено на 3 дня · 10.10.2026', queue)
+        for title in ('Этап ожидает проверки', 'Due tomorrow', 'Malformed date', 'Done past'):
+            self.assertNotIn(title, queue)
+        self.assertNotIn('<h2>Private project</h2>', overdue)
+        review_queue = review.split('id="review-queue"')[1].split('</section>')[0]
+        self.assertIn('Этап ожидает проверки', review_queue)
+        self.assertNotIn('Someone else task', review_queue)
+        self.assertNotIn('<h2>Owned project</h2>', review)
+        self.assertEqual(self.database_snapshot(), before)
+        # A project can await review but have no task deadline at all.
+        conn = self.module.get_db()
+        conn.execute('UPDATE tasks SET deadline=NULL WHERE project_id=2')
+        conn.commit()
+        conn.close()
+        self.assertIn('<h2>Observed project</h2>', self.client.get('/teacher?focus=review').text)
+        self.assertNotIn('<h2>Observed project</h2>', self.client.get('/teacher?focus=overdue').text)
+        accepted = self.post('/project/2/stages', data=dict(number='1', revision='1', action='accept', teacher_comment='Принято'))
+        self.assertEqual(accepted.status_code, 302)
+        self.assertNotIn('<h2>Observed project</h2>', self.client.get('/teacher?focus=review').text)
+        self.assertNotIn('<h2>Observed project</h2>', self.client.get('/teacher?focus=overdue').text)
+        self.sign_in(3)
+        self.assertNotIn('Просрочено', self.client.get('/project/2/stages').text)
+
+    def test_deadline_ajax_completion_and_reopening_use_server_calendar(self):
+        self.seed_deadline_cases()
+        self.sign_in(3)
+        with patch.object(self.module, 'business_today', return_value=date(2026, 10, 13)):
+            complete = self.post('/project/1/status', json={'task_id': 1, 'status': 'done'})
+            self.assertEqual(complete.status_code, 200)
+            self.assertEqual(complete.json['task_deadline'], dict(text='Завершено · 11.10.2026', css=''))
+            self.assertEqual(complete.json['deadline_tasks'], [])
+            self.assertEqual(complete.json['metrics']['overdue'], 0)
+            reopened = self.post('/project/1/status', json={'task_id': 1, 'status': 'progress'})
+            self.assertEqual(reopened.json['task_deadline'], dict(text='Просрочено на 2 дня · 11.10.2026', css='deadline-overdue'))
+            self.assertEqual([item['id'] for item in reopened.json['deadline_tasks']], [1])
+            board = self.client.get('/project/2').text
+            done_card = board.split('id="task-23"')[1].split('class="task-card')[0]
+            self.assertNotIn('deadline-overdue', done_card)
+            self.assertIn('Завершено · 01.10.2026', done_card)
+
     def notification_rows(self):
         from contextlib import closing
         with closing(self.module.get_db()) as conn:
@@ -261,7 +370,7 @@ class TeacherCabinetTests(unittest.TestCase):
         conn.executemany("INSERT INTO project_members(project_id, user_id) VALUES(?, ?)",
                          [(1, 1), (1, 3), (2, 1), (2, 3), (3, 2)])
         conn.executemany("INSERT INTO tasks(id, project_id, title, deadline, status, assignee_id) VALUES(?, ?, ?, ?, ?, ?)", [
-            (1, 1, "Overdue task", (date.today() - timedelta(days=2)).isoformat(), "todo", 3),
+            (1, 1, "Overdue task", (self.module.business_today() - timedelta(days=2)).isoformat(), "todo", 3),
             (2, 1, "Unassigned task", None, "progress", None),
             (3, 2, "Completed task", None, "done", 3)])
         conn.execute("INSERT INTO task_updates(task_id, user_id, body) VALUES(1, 3, ?)",

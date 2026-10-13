@@ -7,33 +7,37 @@ function setup(response) {
   const column = {dataset: {status: 'todo'}};
   const select = {value: 'done', disabled: false};
   const priority = {value: 'high', disabled: false, dataset: {savedValue: 'normal'}};
-  const classes = new Set(), alerts = [], badge = {};
+  const classes = new Set(), alerts = [], badge = {}, dueClasses = new Set(['deadline-overdue']);
+  const deadline = {classList: {toggle: (name, on) => on ? dueClasses.add(name) : dueClasses.delete(name)}};
   const card = {dataset: {taskId: '1', deadline: ''}, closest: () => column,
     querySelectorAll: () => [select, priority],
-    querySelector: selector => selector === '.task-status-select' ? select : selector === '.task-priority' ? badge : null,
+    querySelector: selector => selector === '.task-status-select' ? select : selector === '.task-priority' ? badge : selector === '.task-deadline' ? deadline : null,
     classList: {toggle: (name, on) => on ? classes.add(name) : classes.delete(name)}};
   priority.closest = () => card;
   const elements = {
     '[data-project-progress]': {}, '[data-project-progress-fill]': {style: {}},
     '[data-project-progress-text]': {}, '#board-status': {hidden: true},
     '[data-workspace-task-summary]': {}, '[data-task-deadline]': {},
-    '[data-student-progress="3"]': {}
+    '[data-student-progress="3"]': {}, '[data-deadline-strip]': {hidden: false},
+    '[data-deadline-list]': {children: [], replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); }}
   };
   elements['meta[name="csrf-token"]'] = {content: 'test-csrf-token'};
   const requests = [];
-  const context = {Date, URLSearchParams, alert: message => alerts.push(message),
+  const context = {Date: class { constructor() { throw new Error('Device timezone must not calculate deadlines'); } }, URLSearchParams, alert: message => alerts.push(message),
     window: {location: {pathname: '/project/1'}}, location: {reload() {}},
     fetch: async (url, options) => { requests.push({url, options}); if (response instanceof Error) throw response; return response; },
     document: {addEventListener() {}, querySelectorAll: () => [],
+      createElement: () => ({children: [], appendChild(child) { this.children.push(child); }}),
       querySelector: selector => selector.includes('.kanban-column[data-status=') ?
         {appendChild: () => column.dataset.status = 'done'} : elements[selector] || null}
   };
   vm.createContext(context); vm.runInContext(source, context);
-  return {context, card, select, priority, column, classes, alerts, elements, requests, badge};
+  return {context, card, select, priority, column, classes, alerts, elements, requests, badge, deadline, dueClasses};
 }
 (async () => {
   const success = setup({ok: true, status: 200, json: async () => ({success: true,
-    metrics: {percent: 50, done: 1, total: 2, overdue: 0}, deadline_text: 'Нет незавершённых задач со сроком', students: [{id: 3, done: 1, total: 1}]})});
+    metrics: {percent: 50, done: 1, total: 2, overdue: 0}, deadline_text: 'Нет незавершённых задач со сроком',
+    task_deadline: {text: 'Завершено · 11.10.2026', css: ''}, deadline_tasks: [], students: [{id: 3, done: 1, total: 1}]})});
   await success.context.moveTask(success.card, 'done');
   assert.equal(success.column.dataset.status, 'done');
   assert.equal(success.elements['[data-project-progress]'].textContent, '50%');
@@ -41,6 +45,20 @@ function setup(response) {
   assert.equal(success.elements['[data-task-deadline]'].textContent, 'Нет незавершённых задач со сроком');
   assert.equal(success.elements['[data-student-progress="3"]'].textContent, '1 из 1 задач · 100%');
   assert.equal(success.select.disabled, false);
+  assert.equal(success.deadline.textContent, 'Завершено · 11.10.2026');
+  assert.equal(success.dueClasses.has('deadline-overdue'), false);
+  assert.equal(success.elements['[data-deadline-strip]'].hidden, true);
+  success.context.updateDeadlineStrip([{id: 1, title: '<script>Task</script>', text: 'Сегодня · 13.10.2026'}]);
+  assert.equal(success.elements['[data-deadline-strip]'].hidden, false);
+  const link = success.elements['[data-deadline-list]'].children[0].children[0];
+  assert.equal(link.href, '/project/1#task-1');
+  assert.equal(link.textContent, '<script>Task</script> — Сегодня · 13.10.2026');
+  const reopened = setup({ok: true, status: 200, json: async () => ({success: true,
+    task_deadline: {text: 'Просрочено на 2 дня · 11.10.2026', css: 'deadline-overdue'}})});
+  reopened.column.dataset.status = 'done';
+  await reopened.context.moveTask(reopened.card, 'progress');
+  assert.equal(reopened.dueClasses.has('deadline-overdue'), true);
+  assert.equal(reopened.deadline.textContent, 'Просрочено на 2 дня · 11.10.2026');
   assert.equal(success.requests[0].options.headers['X-CSRF-Token'], 'test-csrf-token');
   for (const response of [new Error('offline'), {ok: false, status: 403, json: async () => ({success: false, error: 'Нет доступа'})},
                           {ok: false, status: 400, json: async () => ({success: false, error: 'Форма устарела'})},
