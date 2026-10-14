@@ -2085,7 +2085,7 @@ def project(project_id):
     return render_page(
         PAGE_STYLE
         + f"""
-        <link rel="stylesheet" href="/static/project-workspace.css?v=20261006-route">
+        <link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">
         <div class="container">
             {render_header(current_user)}
             <main class="project-workspace">
@@ -2807,6 +2807,27 @@ def collaboration_token():
     return csrf_token()
 
 
+def render_unsaved_result(form, user, target, defense=False):
+    """Only escaped, bounded work fields; never tokens or a stale editable form."""
+    fields = [('teacher_comment', 'Комментарий учителя', 2000)] if user['role'] == 'teacher' else (
+        [('video_url', 'Ссылка на запись', 2000), ('description', 'Описание выступления', 2000)] if defense else
+        [('result', 'Результат этапа', 5000), ('presentation_url', 'Ссылка на презентацию', 2000)])
+    content = ''
+    for key, label, limit in fields:
+        value = form.get(key, '')
+        if value:
+            content += f'<strong>{label}</strong><pre tabindex="0">{escape(value[:limit])}</pre>'
+            if len(value) > limit:
+                content += f'<p>Показаны первые {limit} символов: превышен допустимый размер поля.</p>'
+    if not content:
+        return ''
+    return f'''<aside class="journey-feedback unsaved-result" aria-label="Несохранённый ввод"><strong>Ваш ввод не сохранён</strong>
+        <p>Результат уже изменён или недоступен для редактирования. Скопируйте свой текст перед обновлением страницы,
+        сравните с актуальной версией и повторите действие только если оно доступно. Этот текст не подставлен в новую форму.</p>
+        <details><summary>Показать текст для копирования</summary>{content}</details>
+        <a href="{target}">Открыть актуальную версию →</a></aside>'''
+
+
 def render_collaboration_page(user, title, body, project_id=None, error="", status=200):
     messages = ''.join(f'<div class="success" role="status">{escape(message)}</div>' for message in get_flashed_messages())
     back = f'<a class="back" href="/project/{project_id}">← К задачам проекта</a>' if project_id else '<a class="back" href="/">← К моим проектам</a>'
@@ -2942,9 +2963,13 @@ def project_video_defense(project_id):
             except ValueError as exc:
                 error,status = str(exc),400
         record = defense_for(conn,project_id)
-        if error and request.form.get('revision') == str(record['revision']):
+        editable = record['state'] in ('draft', 'returned') if user['role'] == 'student' else record['state'] == 'submitted'
+        if error and editable and request.form.get('revision') == str(record['revision']):
             submitted = request.form
         body = render_defense(record,user,token,submitted,has_teacher=has_project_teacher(conn, project_id))
+        if error and submitted is None:
+            body = render_unsaved_result(request.form, user, f'/project/{project_id}/defense', defense=True) + body
+        body = '<link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">' + body
     finally:
         conn.close()
     return render_collaboration_page(user,f'Видеозащита · {name}',body,project_id,error,status)
@@ -2971,19 +2996,21 @@ def project_stage_page(project_id):
         stages = get_stages(conn, project_id)
         has_teacher = has_project_teacher(conn, project_id)
         _, current = stage_summary(stages)
+        editable = current is not None and (current['state'] in ('todo', 'progress') if user['role'] == 'student' else current['state'] == 'review')
         if submitted is not None and (current is None or submitted.get("number") != str(current["number"])
-                                      or submitted.get("revision") != str(current["revision"])):
+                                      or submitted.get("revision") != str(current["revision"]) or not editable):
             submitted = None
     finally:
         conn.close()
     messages = "".join(f'<p role="status">{escape(message)}</p>' for message in get_flashed_messages())
+    unsaved = render_unsaved_result(request.form, user, f'/project/{project_id}/stages') if error and submitted is None else ''
     return render_page(PAGE_STYLE + f'''
-        <link rel="stylesheet" href="/static/project-stages.css"><link rel="stylesheet" href="/static/project-workspace.css?v=20261006-route"><div class="container">{render_header(user)}
+        <link rel="stylesheet" href="/static/project-stages.css"><link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback"><div class="container">{render_header(user)}
         <main class="stages-page"><a class="back" href="/project/{project_id}">← К задачам проекта</a>
         <h1>Пять этапов · {escape(project_name)}</h1>
         <p>Ученики сохраняют результат и отправляют его учителю. После принятия открывается следующий этап.
         Этапы общие для участников проекта; их прохождение не меняет статусы задач и итоговые баллы.</p>
-        {messages}<p role="alert">{escape(error)}</p>{render_stages(stages, user, token, submitted, has_teacher=has_teacher)}</main></div>'''), status
+        {messages}<p role="alert">{escape(error)}</p>{unsaved}{render_stages(stages, user, token, submitted, has_teacher=has_teacher)}</main></div>'''), status
 
 
 @app.route("/project/<int:project_id>/assessment", methods=["GET", "POST"])
@@ -3103,9 +3130,9 @@ def project_assessment(project_id):
             content += f'''<section class="card"><h2>{escape(row['student_name'])}</h2>
                 <p>Учитель: {escape(row['teacher_name'])} · {escape(row['updated_at'])}</p>
                 <div class="assessment-table"><table><thead><tr><th>Критерий</th><th>Баллы</th></tr></thead><tbody>{fields}</tbody></table></div>
-                <h3>Итого: {total} / {MAX_SCORE} · Оценка: {grade}</h3><p class="assessment-note">{escape(row['note'])}</p></section>'''
+                <h3>Итого: {total} / {MAX_SCORE} · Оценка: {grade}</h3><p class="assessment-note">{escape(row['note'] or 'Учитель опубликовал оценку без примечания.')}</p></section>'''
         if not rows:
-            content = '<section class="card"><h2>Оценка ещё не опубликована</h2><p>Здесь появятся ваши баллы и примечание учителя.</p></section>'
+            content = f'<section class="card"><h2>Оценка ещё не опубликована</h2><p>Здесь появятся ваши баллы и примечание учителя. Приём этапов и видеозащиты не выставляет баллы автоматически. Дождитесь публикации учителем; оценки других участников здесь не показываются.</p><a href="/project/{project_id}">Посмотреть следующий шаг →</a></section>'
     conn.close()
     messages = "".join(f'<p role="status">{escape(message)}</p>' for message in get_flashed_messages())
     return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/assessment.css">

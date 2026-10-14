@@ -53,6 +53,9 @@
 .journey-feedback small { font-size: 11px; color: var(--mf-muted); margin-top: 4px; }
 .journey-feedback p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; max-height: 8em; overflow: auto; margin: 10px 0; }
 .journey-feedback a { display: inline-block; min-height: 44px; padding: 10px 0; font-size: 13px; }
+.unsaved-result pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 12em; overflow: auto; font: inherit; }
+.unsaved-result > p { max-height: none; overflow: visible; }
+.unsaved-result summary { cursor: pointer; min-height: 44px; padding: 10px 0; }
 .stages-page .stage-comment { background: var(--mf-accent-soft); color: var(--mf-text); }
 .stage-card { scroll-margin-top: 20px; }
 #task-board, #project-members { scroll-margin-top: 20px; }

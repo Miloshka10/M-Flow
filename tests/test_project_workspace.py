@@ -104,7 +104,8 @@ class ProjectWorkspaceTests(unittest.TestCase):
         self.assertIn('Этап 2 /', accepted)
         self.assertIn('Принято 1 из 5', accepted)
         self.assertIn('href="/project/2/stages#stage-2"', accepted)
-        self.assertNotIn('class="journey-feedback"', accepted)
+        self.assertIn('Этап 1 принят учителем', accepted)
+        self.assertIn('Тема согласована', accepted)
         self.assertIn('id="stage-2"', self.client.get('/project/2/stages').text)
 
     def test_all_stages_accepted_do_not_mark_defense_or_assessment_complete(self):

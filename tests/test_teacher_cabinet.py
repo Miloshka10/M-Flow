@@ -37,6 +37,164 @@ class FormTokens(HTMLParser):
 
 
 class TeacherCabinetTests(AuthSecurityCases, unittest.TestCase):
+    def test_feedback_stage_repeat_submission_does_not_apply_old_comment(self):
+        self.assertEqual(self.stage_post(3).status_code, 302)
+        self.assertEqual(self.stage_post(1, revision=1, action='return', teacher_comment='Старое замечание <b>').status_code, 302)
+        self.sign_in(3)
+        page = self.client.get('/project/1').text
+        self.assertIn('Что исправить · этап 1', page)
+        self.assertIn('Старое замечание &lt;b&gt;', page)
+        self.assertEqual(self.stage_post(3, revision=2).status_code, 302)
+        self.sign_in(1)
+        page = self.client.get('/project/1/stages').text
+        self.assertIn('Замечание к предыдущей сдаче. Новая версия ещё не проверена.', page)
+        self.assertIn('name="teacher_comment" rows="3" maxlength="2000"></textarea>', page)
+        before = self.database_snapshot()
+        self.assertEqual(self.stage_post(1, revision=1, action='accept').status_code, 400)
+        self.assertEqual(self.database_snapshot(), before)
+        self.assertEqual(self.stage_post(1, revision=3, action='accept', teacher_comment='Новая версия принята').status_code, 302)
+        self.sign_in(3)
+        page = self.client.get('/project/1').text.split('<section class="project-overview"')[1].split('</section>')[0]
+        self.assertIn('Этап 1 принят учителем', page)
+        self.assertIn('Новая версия принята', page)
+        self.assertNotIn('Старое замечание', page)
+        self.assertIn('stages#stage-2', page)
+        before = self.database_snapshot()
+        self.assertEqual(self.stage_post(1, revision=3, action='accept').status_code, 400)
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_feedback_defense_return_resubmit_accept_and_current_comment(self):
+        self.assertEqual(self.defense_post().status_code, 302)
+        self.assertEqual(self.defense_post(user_id=1, revision=1, action='return', comment='Исправьте звук').status_code, 302)
+        self.sign_in(3)
+        self.assertIn('Что исправить · видеозащита', self.client.get('/project/1').text)
+        self.assertIn('/defense#defense-edit', self.client.get('/project/1').text)
+        self.assertEqual(self.defense_post(revision=2, description='Новая запись').status_code, 302)
+        self.sign_in(1)
+        page = self.client.get('/project/1/defense').text
+        self.assertIn('Новая запись', page)
+        self.assertIn('Замечание к предыдущей сдаче', page)
+        self.assertIn('name="teacher_comment" rows="4" maxlength="2000"></textarea>', page)
+        self.assertEqual(self.defense_post(user_id=1, revision=3, action='accept', comment='Звук исправлен').status_code, 302)
+        self.sign_in(3)
+        page = self.client.get('/project/1').text.split('<section class="project-overview"')[1].split('</section>')[0]
+        self.assertIn('Видеозащита принята учителем', page)
+        self.assertIn('Звук исправлен', page)
+        self.assertNotIn('Исправьте звук', page)
+        before = self.database_snapshot()
+        self.assertEqual(self.defense_post(revision=4, action='save', description='Перезапись').status_code, 400)
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_feedback_stale_input_is_separate_escaped_and_not_saved(self):
+        self.stage_post(3)
+        before = self.database_snapshot()
+        self.sign_in(3)
+        response = self.post('/project/1/stages', data=dict(number='1', revision='0', action='submit',
+            result='<script>Несохранённый текст</script>', password='DO-NOT-RENDER'))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Ваш ввод не сохранён', response.text)
+        self.assertIn('&lt;script&gt;Несохранённый текст&lt;/script&gt;', response.text)
+        self.assertNotIn('<script>Несохранённый текст', response.text)
+        self.assertNotIn('DO-NOT-RENDER', response.text)
+        self.assertNotIn('<textarea name="result"', response.text)
+        self.assertEqual(self.database_snapshot(), before)
+        self.defense_post()
+        before = self.database_snapshot()
+        response = self.defense_post(revision=0, description='<b>Свой текст</b>')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Ваш ввод не сохранён', response.text)
+        self.assertIn('&lt;b&gt;Свой текст&lt;/b&gt;', response.text)
+        self.assertNotIn('<textarea name="description"', response.text)
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_feedback_validation_keeps_editable_input_and_current_teacher_comment(self):
+        response = self.defense_post(url='not-a-url', description='Сохранить введённое описание')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('rows="4" maxlength="2000">Сохранить введённое описание</textarea>', response.text)
+        self.assertNotIn('Ваш ввод не сохранён', response.text)
+        self.stage_post(3)
+        response = self.stage_post(1, revision=1, action='return', teacher_comment=' ')
+        self.assertEqual(response.status_code, 400)
+        response = self.stage_post(1, revision=1, action='return', teacher_comment='x' * 2001)
+        self.assertIn('x' * 2001 + '</textarea>', response.text)
+        self.assertEqual(self.stage_rows()[0]['state'], 'review')
+
+    def test_feedback_stale_editable_form_keeps_current_values_not_old_input(self):
+        self.stage_post(3, action='save')
+        before = self.database_snapshot()
+        response = self.post('/project/1/stages', data=dict(number='1', revision='0', action='save', result='Из устаревшей вкладки'))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('<pre tabindex="0">Из устаревшей вкладки</pre>', response.text)
+        self.assertIn('rows="5" maxlength="5000">Результат этапа</textarea>', response.text)
+        self.assertIn('name="revision" value="1"', response.text)
+        self.assertEqual(self.database_snapshot(), before)
+        self.defense_post(action='save', description='Актуальное описание')
+        before = self.database_snapshot()
+        response = self.defense_post(revision=0, action='save', description='Старое описание')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('<pre tabindex="0">Старое описание</pre>', response.text)
+        self.assertIn('rows="4" maxlength="2000">Актуальное описание</textarea>', response.text)
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_feedback_team_access_personal_grades_and_revoked_membership(self):
+        self.add_candidate()
+        conn = self.module.get_db()
+        conn.execute('INSERT INTO project_members(project_id,user_id) VALUES(1,4)')
+        conn.commit()
+        conn.close()
+        self.stage_post(3)
+        self.stage_post(1, revision=1, action='return', teacher_comment='Общее замечание команды')
+        self.sign_in(1)
+        data = self.assessment_data()
+        data.update(note='Личное замечание Иванову')
+        self.assertEqual(self.post('/project/1/assessment', data=data).status_code, 302)
+        self.sign_in(4)
+        for path in ('/project/1', '/project/1/stages'):
+            self.assertIn('Общее замечание команды', self.client.get(path).text)
+        for path in ('/project/1', '/project/1/assessment?student_id=3'):
+            self.assertNotIn('Личное замечание Иванову', self.client.get(path).text)
+            self.assertNotIn('Иванов Иван', self.client.get(path).text)
+        self.assertEqual(self.stage_post(4, revision=2).status_code, 302)
+        self.sign_in(1)
+        self.assertIn('candidate-engineer', self.client.get('/project/1/stages').text)
+        conn = self.module.get_db()
+        conn.execute('DELETE FROM project_members WHERE project_id=1 AND user_id=4')
+        conn.commit()
+        conn.close()
+        self.sign_in(4)
+        for path in ('/project/1', '/project/1/stages', '/project/1/defense', '/project/1/assessment'):
+            self.assertEqual(self.client.get(path).status_code, 403)
+
+    def test_feedback_missing_comment_and_unpublished_grade_are_explicit(self):
+        self.stage_post(3)
+        self.stage_post(1, revision=1, action='accept')
+        self.defense_post()
+        self.defense_post(user_id=1, revision=1, action='accept')
+        self.sign_in(3)
+        for path in ('/project/1/stages', '/project/1/defense'):
+            self.assertIn('Комментарий не указан', self.client.get(path).text)
+        self.assertIn('Оценка ещё не опубликована', self.client.get('/project/1/assessment').text)
+        self.sign_in(1)
+        data = self.assessment_data()
+        data['note'] = ''
+        self.post('/project/1/assessment', data=data)
+        self.sign_in(3)
+        self.assertIn('Учитель опубликовал оценку без примечания', self.client.get('/project/1/assessment').text)
+
+    def test_feedback_legacy_return_without_comment_is_not_an_unreviewed_draft(self):
+        self.stage_post(3)
+        conn = self.module.get_db()
+        conn.execute("UPDATE project_stages SET state='progress', reviewed_by=1, teacher_comment='' WHERE project_id=1 AND number=1")
+        conn.commit()
+        conn.close()
+        self.sign_in(3)
+        before = self.database_snapshot()
+        for path in ('/project/1', '/project/1/stages'):
+            page = self.client.get(path).text
+            self.assertIn('Нужна доработка', page)
+            self.assertIn('Комментарий не указан', page)
+        self.assertEqual(self.database_snapshot(), before)
+
     def seed_review_queue(self):
         conn = self.module.get_db()
         # Fixtures run in a reused temporary DB: sequence values aren't reset by DELETE.

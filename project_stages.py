@@ -25,7 +25,7 @@ STAGE_DESCRIPTIONS = {
 
 def stage_needs_revision(stage):
     # Return is stored as progress; no schema migration or synthetic history.
-    return bool(stage['state'] == 'progress' and stage.get('reviewed_by') and stage['teacher_comment'])
+    return bool(stage['state'] == 'progress' and stage.get('reviewed_by'))
 
 
 def stage_label(stage, current_number=None):
@@ -167,20 +167,27 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True):
         if stage.get("author_name"):
             html += f'<small>Автор результата: {escape(stage["author_name"])} · Обновлено: {escape(stage["updated_at"])}</small>'
         if stage.get("reviewer_name"):
-            html += f'<p>Учитель: {escape(stage["reviewer_name"])}</p>'
+            html += f'<p>{"Учитель предыдущей сдачи" if stage["state"] == "review" else "Учитель"}: {escape(stage["reviewer_name"])}</p>'
         if stage["teacher_comment"]:
-            html += f'<p class="stage-text stage-comment">Комментарий учителя: {escape(stage["teacher_comment"])}</p>'
+            heading = 'Замечание к предыдущей сдаче. Новая версия ещё не проверена.' if stage['state'] == 'review' else 'Комментарий учителя:'
+            html += f'<p class="stage-text stage-comment">{heading} {escape(stage["teacher_comment"])}</p>'
+        elif stage['state'] == 'done' or stage_needs_revision(stage):
+            html += '<p>Комментарий не указан. При необходимости уточните решение у учителя проекта.</p>'
+        if stage['state'] == 'done':
+            html += f'<p>Этап {number} принят учителем. {"Все пять этапов приняты." if number == 5 else "Можно продолжить маршрут проекта."} <a href="/project/{stage["project_id"]}">Посмотреть следующий шаг →</a></p>'
         if number == current_number:
             values = submitted or stage
             prefix = f'<form method="post"><input type="hidden" name="csrf_token" value="{token}"><input type="hidden" name="number" value="{number}"><input type="hidden" name="revision" value="{stage["revision"]}">'
             if user["role"] == "student" and stage["state"] in ("todo", "progress"):
+                html += '<p>Исправьте результат по замечанию и отправьте его снова. Сохранение черновика не отправляет работу учителю.</p>' if stage_needs_revision(stage) else '<p>Ещё не отправлено. Сохраните черновик или отправьте готовый результат учителю.</p>'
                 result_label = "Выбранная тема" if number == 1 else "Описание проекта" if number == 5 else "Что сделано на этом этапе"
                 html += prefix + f'<label>{result_label}<textarea name="result" rows="5" maxlength="5000">{escape(values.get("result", ""))}</textarea></label>'
                 if number == 5:
                     html += f'<label>Ссылка на презентацию<input type="url" name="presentation_url" maxlength="2000" placeholder="https://…" value="{escape(values.get("presentation_url", ""), quote=True)}"></label><p>Проверьте, что учитель сможет открыть презентацию по ссылке.</p>'
                 html += f'<div class="stage-actions"><button name="action" value="save">Сохранить черновик</button><button name="action" value="submit" {"disabled" if not has_teacher else ""}>Отправить учителю</button></div></form>'
             elif user["role"] == "teacher" and stage["state"] == "review":
-                html += prefix + f'<label>Комментарий учителя<textarea name="teacher_comment" rows="3" maxlength="2000">{escape(values.get("teacher_comment", ""))}</textarea></label><div class="stage-actions"><button name="action" value="accept">{"Согласовать тему" if number == 1 else "Принять этап"}</button><button name="action" value="return">Вернуть на доработку</button></div></form>'
+                comment = submitted.get('teacher_comment', '') if submitted is not None else ''
+                html += prefix + f'<label>Комментарий учителя<textarea name="teacher_comment" rows="3" maxlength="2000">{escape(comment)}</textarea></label><div class="stage-actions"><button name="action" value="accept">{"Согласовать тему" if number == 1 else "Принять этап"}</button><button name="action" value="return">Вернуть на доработку</button></div></form>'
             else:
                 html += f'<p>{"Ожидается проверка учителя. Пока результат менять нельзя." if stage["state"] == "review" else "Ожидается результат от учеников проекта."}</p>'
         html += '</section>'

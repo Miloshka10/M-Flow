@@ -88,8 +88,19 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
         reviewer = escape(current.get('reviewer_name') or 'Учитель проекта')
         updated = f' · Последнее обновление этапа: {escape(current["updated_at"])} UTC' if current['updated_at'] else ''
         feedback = f'''<aside class="journey-feedback" aria-label="Замечание учителя"><strong>Что исправить · этап {current['number']}</strong>
-            <small>{reviewer}{updated}</small><p tabindex="0" aria-label="Замечание учителя; длинный текст можно прокрутить">{escape(current['teacher_comment'])}</p>
+            <small>{reviewer}{updated}</small><p tabindex="0" aria-label="Замечание учителя; длинный текст можно прокрутить">{escape(current['teacher_comment'] or 'Комментарий не указан. Уточните, что нужно исправить, у учителя проекта.')}</p>
             <a href="{base}/stages#stage-{current['number']}">{'Перейти к доработке' if user['role'] == 'student' else 'Открыть результат и замечание'} →</a></aside>'''
+    else:
+        accepted = next((stage for stage in reversed(stages) if stage['state'] == 'done'), None)
+        if accepted:
+            comment = accepted['teacher_comment'] or 'Принято без комментария. Следующий доступный шаг указан выше.'
+            feedback += f'''<aside class="journey-feedback" aria-label="Принятый этап"><strong>Этап {accepted['number']} принят учителем</strong>
+                <p tabindex="0">{escape(comment)}</p><a href="{base}/stages#stage-{accepted['number']}">Посмотреть принятое решение →</a></aside>'''
+    if defense['state'] in ('returned', 'accepted'):
+        comment = defense['teacher_comment'] or 'Комментарий не указан. При необходимости уточните решение у учителя проекта.'
+        returned = defense['state'] == 'returned'
+        feedback += f'''<aside class="journey-feedback" aria-label="Решение по видеозащите"><strong>{'Что исправить · видеозащита' if returned else 'Видеозащита принята учителем'}</strong>
+            <p tabindex="0">{escape(comment)}</p><a href="{base}/defense{'#defense-edit' if returned and user['role'] == 'student' else ''}">{'Перейти к доработке записи' if returned and user['role'] == 'student' else 'Посмотреть решение по защите'} →</a></aside>'''
     route = ''
     for stage in stages:
         locked = bool(current and stage['number'] > current['number'])

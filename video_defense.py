@@ -99,20 +99,27 @@ def render_defense(record, user, token, form=None, has_teacher=True):
     if record['author_name']:
         body += f'<p class="t-muted">Автор: {escape(record["author_name"])} · Обновлено: {escape(record["updated_at"])}</p>'
     if record['reviewer_name']:
-        body += f'<p>Проверил: {escape(record["reviewer_name"])}</p>'
+        body += f'<p>{"Проверял предыдущую сдачу" if record["state"] == "submitted" else "Проверил"}: {escape(record["reviewer_name"])}</p>'
     if record['teacher_comment']:
-        body += f'<p class="stage-comment team-text">Комментарий учителя: {escape(record["teacher_comment"])}</p>'
-    prefix = f'<form method="post" class="team-profile-form">{hidden_token(token)}<input type="hidden" name="revision" value="{record["revision"]}">'
+        heading = 'Замечание к предыдущей сдаче. Новая версия ещё не проверена.' if record['state'] == 'submitted' else 'Комментарий учителя:'
+        body += f'<aside class="journey-feedback"><strong>{heading}</strong><p tabindex="0" class="team-text">{escape(record["teacher_comment"])}</p></aside>'
+    elif record['state'] in ('accepted', 'returned'):
+        body += '<p>Комментарий не указан. При необходимости уточните решение у учителя проекта.</p>'
+    if record['state'] == 'accepted':
+        body += f'<p>Видеозащита принята учителем. Баллы публикуются отдельно. <a href="/project/{record["project_id"]}">Посмотреть следующий шаг →</a></p>'
+    prefix = f'<form id="defense-edit" method="post" class="team-profile-form">{hidden_token(token)}<input type="hidden" name="revision" value="{record["revision"]}">'
     if user['role'] == 'student' and record['state'] in ('draft','returned'):
+        body += '<p>Нужна доработка. Исправьте запись по замечанию учителя и отправьте её снова.</p>' if record['state'] == 'returned' else '<p>Ещё не отправлено. Добавьте запись; сохранение черновика не отправляет её на проверку.</p>'
         body += prefix + f'''<label>Ссылка на запись видео<input name="video_url" type="url" maxlength="2000" placeholder="https://…" value="{escape(values.get('video_url',''),quote=True)}"></label>
             <label>Описание выступления<textarea name="description" rows="4" maxlength="2000">{escape(values.get('description',''))}</textarea></label>
             <p>Подойдёт ссылка на видео или облачный диск. Проверьте права просмотра: учитель должен иметь доступ. M-Flow не загружает видео и не проверяет его доступность автоматически.</p>
             <div class="team-actions"><button class="secondary" name="action" value="save">Сохранить черновик</button><button name="action" value="submit" {"disabled" if not has_teacher else ""}>Отправить защиту учителю</button></div></form>'''
     elif user['role'] == 'teacher' and record['state'] == 'submitted':
-        body += prefix + f'''<label>Комментарий учителя<textarea name="teacher_comment" rows="4" maxlength="2000">{escape(values.get('teacher_comment',''))}</textarea></label>
+        comment = form.get('teacher_comment', '') if form is not None else ''
+        body += prefix + f'''<label>Комментарий учителя<textarea name="teacher_comment" rows="4" maxlength="2000">{escape(comment)}</textarea></label>
             <div class="team-actions"><button name="action" value="accept">Принять защиту</button><button class="secondary" name="action" value="return">Вернуть на доработку</button></div></form>'''
     elif record['state'] == 'submitted':
-        body += '<p>Запись ожидает проверки учителя.</p>'
+        body += '<p>Запись ожидает проверки учителя. Пока решение не принято, менять отправленную запись нельзя.</p>'
     elif user['role'] == 'teacher' and record['state'] in ('draft','returned'):
         body += '<p>Ожидается отправка записи учениками.</p>'
     if user['role'] == 'student' and not has_teacher:
