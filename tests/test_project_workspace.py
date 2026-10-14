@@ -42,7 +42,7 @@ class ProjectWorkspaceTests(unittest.TestCase):
         conn.commit(); conn.close()
         before = self.fixture.database_snapshot()
         page = self.page()
-        for text in ('data-next-step="teacher-missing"', 'Добавить учителя', 'href="#project-members"',
+        for text in ('data-next-step="teacher-missing"', 'Принять приглашение', 'href="/supervision"',
                      'Нет незавершённых задач со сроком', '0 из 0 задач', 'Принято 0 из 5', 'Участники: 1',
                      'Запись ещё не добавлена', 'Ваша оценка ещё не опубликована'):
             self.assertIn(text, page)

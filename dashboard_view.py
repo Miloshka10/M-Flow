@@ -20,7 +20,7 @@ def student_dashboard(user, projects, token, header, messages):
             <div class="mini-progress"><div style="width:{percent}%"></div></div></a>''')
     project_cards = ''.join(cards) or '''<div class="empty workspace-empty"><img src="/static/project-kit.svg" alt="" width="480" height="360">
         <div><span class="eyebrow">ЗДЕСЬ НАЧИНАЕТСЯ ТВОЙ ПРОЕКТ</span><h3>Пока чистый лист.</h3>
-        <p>Создай первый проект, добавь команду и учителя. Дальше — шаг за шагом.</p><a class="btn" href="#project-create" data-open-project>+ Новый проект</a></div></div>'''
+        <p>Создай первый проект, собери команду и прими приглашение руководителя. Дальше — шаг за шагом.</p><a class="btn" href="#project-create" data-open-project>+ Новый проект</a></div></div>'''
     upcoming = sorted([(p, task) for p in projects for task in p.get('deadlines', [])],
                       key=lambda pair: (pair[1]['deadline_info']['date'], pair[1]['id']))
     upcoming_rows = ''.join(

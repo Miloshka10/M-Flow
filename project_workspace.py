@@ -27,12 +27,12 @@ def next_step(stages, role, owner, has_teacher, defense, has_published=False):
     if role == 'student' and not has_teacher:
         editable = bool(current and current['state'] in ('todo', 'progress'))
         return step('teacher-missing', 'В проекте пока нет учителя',
-                    'Добавь учителя по логину в разделе участников. Черновики доступны, отправка на проверку — после подключения учителя.' if owner else
-                    ('Попроси владельца добавить учителя по логину. Можно готовить черновик этапа, но отправка на проверку пока недоступна.' if editable else
-                     'Попроси владельца добавить учителя по логину. Отправленный результат нельзя менять до решения учителя.' if current else
-                     'Попроси владельца добавить учителя по логину, чтобы продолжить проверку защиты и оценивание.'),
-                    '#project-members' if owner else (f'stages#stage-{current["number"]}' if editable else None),
-                    'Добавить учителя' if owner else ('Подготовить черновик' if editable else None))
+                    'Прими одноразовое приглашение учителя для этого проекта в разделе руководства. После подтверждения учителем станет доступна отправка на проверку; черновики доступны уже сейчас.' if owner else
+                    ('Попроси владельца принять приглашение руководителя для проекта. Можно готовить черновик, но отправка на проверку пока недоступна.' if editable else
+                     'Попроси владельца согласовать подключение руководителя. Отправленный результат нельзя менять до решения учителя.' if current else
+                     'Попроси владельца согласовать подключение руководителя для продолжения проверки защиты и оценивания.'),
+                    '/supervision' if owner else (f'stages#stage-{current["number"]}' if editable else None),
+                    'Принять приглашение' if owner else ('Подготовить черновик' if editable else None))
     if role == 'teacher':
         if current and current['state'] == 'review':
             return step('review', 'Результат ждёт проверки', 'Прочитайте результат текущего этапа. Примите его или верните ученикам с пояснением.',
@@ -77,7 +77,7 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
     step = next_step(stages, user['role'], owner, has_teacher, defense, bool(assessments))
     base = f'/project/{project_id}'
     target = step['target']
-    action_url = target if target and target.startswith('#') else f'{base}/{target}' if target else None
+    action_url = target if target and target.startswith(('#', '/')) else f'{base}/{target}' if target else None
     action = f'<a class="btn" href="{action_url}">{step["action"]} <span aria-hidden="true">↗</span></a>' if action_url else ''
     member_list = ''.join(f'<li>{escape(m["username"])} <span>{"Учитель" if m["role"] == "teacher" else "Ученик"}</span></li>' for m in members)
     names = ', '.join(m['username'] for m in members[:3]) + (' и другие' if len(members) > 3 else '')

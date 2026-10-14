@@ -147,6 +147,33 @@ def reserve_attempt(get_db, secret, action, username, source, browser):
 
 
 @private_database_error
+def reserve_supervision_attempt(get_db, secret, user_id, source):
+    """Authenticated code attempts: shared storage and no whole-school IP lock."""
+    now = int(time.time())
+    buckets = [(fingerprint(secret, 'supervision', 'account', user_id), 20, 300),
+               (fingerprint(secret, 'supervision', 'pair', user_id, source), 10, 60)]
+    with closing(get_db()) as conn:
+        begin_auth_write(conn)
+        _cleanup(conn, 'auth_limits', now)
+        rows = []
+        for key, limit, window in buckets:
+            row = conn.execute('SELECT hits,expires FROM auth_limits WHERE bucket=?', (key,)).fetchone()
+            rows.append((key, limit, window, row if row and row['expires'] > now else None))
+        retry = max((row['expires'] - now for _, limit, _, row in rows if row and row['hits'] >= limit), default=0)
+        if retry:
+            conn.commit()
+            return retry
+        if conn.execute('SELECT COUNT(*) FROM auth_limits').fetchone()[0] + len(rows) > MAX_COUNTERS:
+            raise DatabaseUnavailable('Защита приглашений временно занята. Повторите позже.')
+        for key, _, window, row in rows:
+            conn.execute('''INSERT INTO auth_limits(bucket,hits,expires) VALUES(?,?,?)
+                ON CONFLICT(bucket) DO UPDATE SET hits=excluded.hits,expires=excluded.expires''',
+                (key, row['hits'] + 1 if row else 1, row['expires'] if row else now + window))
+        conn.commit()
+        return 0
+
+
+@private_database_error
 def new_session(get_db, secret, user_id, previous=None, connection=None):
     token = secrets.token_urlsafe(32)
     now = int(time.time())

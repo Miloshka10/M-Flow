@@ -10,6 +10,7 @@ import secrets
 import subprocess
 import sys
 import queue
+import re
 import threading
 import time
 
@@ -192,7 +193,15 @@ def phase(mode):
     pid = project[0]
     base = f'/project/{pid}'
     if mode == 'create':
-        require(post(student, base + '/add_member', dict(username=prefix + '_teacher')).status_code == 302)
+        invitation = post(teacher, '/supervision', dict(action='create'))
+        require(invitation.status_code == 200)
+        match = re.search(r'readonly autocomplete="off" value="([A-Za-z0-9_-]{32})"', invitation.text)
+        require(match is not None)
+        require(post(student, '/supervision', dict(action='request', code=match.group(1), project_id=str(pid))).status_code == 302)
+        with closing(module.get_db()) as conn:
+            supervision = conn.execute("SELECT id,revision FROM supervision_requests WHERE project_id=? AND state='pending'", (pid,)).fetchone()
+        require(supervision is not None)
+        require(post(teacher, '/supervision', dict(action='approve',request_id=str(supervision['id']),revision=str(supervision['revision']))).status_code == 302)
         progress('tasks')
         require(post(student, base + '/add', dict(title=prefix + '_task', assignee_id=str(sid))).status_code == 302)
         with closing(module.get_db()) as conn:

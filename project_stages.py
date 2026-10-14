@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 from project_rules import has_project_teacher, TEACHER_REQUIRED
 from database import execute_schema, begin_project_write
 from notifications import notify_project
+from teacher_supervision import participant
 
 STAGES = (
     (1, "Выбор темы и согласование с учителем"),
@@ -80,6 +81,8 @@ def change_stage(conn, project_id, user, form):
     """Caller checks project membership and CSRF. Transaction prevents lost updates."""
     begin_project_write(conn, project_id)
     try:
+        if not participant(conn, project_id, user['id']):
+            raise ValueError('Доступ к проекту изменился. Откройте главную страницу; сохранение недоступно.')
         stages = get_stages(conn, project_id)
         _, current = stage_summary(stages)
         if current is None:

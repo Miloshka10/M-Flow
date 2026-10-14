@@ -12,6 +12,7 @@ from werkzeug.security import generate_password_hash
 from unittest.mock import patch
 from html.parser import HTMLParser
 from auth_cases import AuthSecurityCases
+from supervision_cases import SupervisionCases
 
 
 class FormTokens(HTMLParser):
@@ -36,7 +37,7 @@ class FormTokens(HTMLParser):
             self.current = None
 
 
-class TeacherCabinetTests(AuthSecurityCases, unittest.TestCase):
+class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, unittest.TestCase):
     def test_feedback_stage_repeat_submission_does_not_apply_old_comment(self):
         self.assertEqual(self.stage_post(3).status_code, 302)
         self.assertEqual(self.stage_post(1, revision=1, action='return', teacher_comment='Старое замечание <b>').status_code, 302)
@@ -823,7 +824,7 @@ class TeacherCabinetTests(AuthSecurityCases, unittest.TestCase):
 
     def setUp(self):
         conn = self.module.get_db()
-        for table in ("auth_sessions", "auth_limits", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
+        for table in ("supervision_requests", "teacher_invitations", "auth_sessions", "auth_limits", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
             conn.execute(f"DELETE FROM {table}")
         conn.executemany("INSERT INTO users(id, username, password, role) VALUES(?, ?, ?, ?)", [
             (1, "teacher-one", self.password, "teacher"),
@@ -1102,14 +1103,18 @@ class TeacherCabinetTests(AuthSecurityCases, unittest.TestCase):
         conn.close()
         self.sign_in(3)
         for path in ('/project/2/stages', '/project/2/defense'):
-            self.assertIn('В проекте нет учителя', self.client.get(path).text)
+            self.assertIn('В проекте нет руководителя', self.client.get(path).text)
         stage = dict(number='1', revision='0', action='submit', result='Тема')
         defense = dict(revision='0', action='submit', video_url='https://example.com/video')
         self.assertEqual(self.post('/project/2/stages', data=dict(stage)).status_code, 400)
         self.assertEqual(self.post('/project/2/defense', data=dict(defense)).status_code, 400)
         self.assertEqual(self.post('/project/2/stages', data=dict(stage, action='save')).status_code, 302)
         self.assertEqual(self.post('/project/2/defense', data=dict(defense, action='save')).status_code, 302)
-        self.assertEqual(self.post('/project/2/add_member', data={'username': 'teacher-one'}).status_code, 302)
+        self.assertEqual(self.post('/project/2/add_member', data={'username': 'teacher-one'}).status_code, 403)
+        code = self.supervision_code(1)
+        self.assertEqual(self.supervision_request(code).status_code, 302)
+        self.assertEqual(self.supervision_reply(1).status_code, 302)
+        self.sign_in(3)
         self.assertEqual(self.post('/project/2/stages', data=dict(stage, revision='1')).status_code, 302)
         self.assertEqual(self.post('/project/2/defense', data=dict(defense, revision='1')).status_code, 302)
         self.sign_in(1)
@@ -1170,7 +1175,10 @@ class TeacherCabinetTests(AuthSecurityCases, unittest.TestCase):
         pid = conn.execute("SELECT id FROM projects WHERE name='Protected project'").fetchone()[0]
         conn.close()
         base = f'/project/{pid}'
-        self.assertEqual(self.post(base + '/add_member', data={'username': 'teacher-two'}).status_code, 302)
+        code = self.supervision_code(2)
+        self.assertEqual(self.supervision_request(code, pid).status_code, 302)
+        self.assertEqual(self.supervision_reply(2).status_code, 302)
+        self.sign_in(3)
         self.assertEqual(self.post(base + '/add', data={'title': 'Protected task', 'assignee_id': '3'}).status_code, 302)
         conn = self.module.get_db()
         task_id = conn.execute("SELECT id FROM tasks WHERE title='Protected task'").fetchone()[0]
@@ -1186,11 +1194,11 @@ class TeacherCabinetTests(AuthSecurityCases, unittest.TestCase):
         self.assertEqual(conn.execute('SELECT body FROM task_updates WHERE task_id=?', (task_id,)).fetchone()[0], 'Protected report')
         conn.close()
         self.sign_in(3)
-        self.assertEqual(self.post(base + '/remove_member/2').status_code, 302)
+        self.assertEqual(self.post(base + '/remove_member/2').status_code, 403)
         self.assertEqual(self.post(base + f'/delete/{task_id}').status_code, 302)
         conn = self.module.get_db()
-        self.assertIsNone(conn.execute('SELECT id FROM tasks WHERE id=?', (task_id,)).fetchone())
-        self.assertEqual(conn.execute('SELECT COUNT(*) FROM task_updates WHERE task_id=?', (task_id,)).fetchone()[0], 0)
+        self.assertIsNotNone(conn.execute('SELECT id FROM tasks WHERE id=?', (task_id,)).fetchone())
+        self.assertEqual(conn.execute('SELECT COUNT(*) FROM task_updates WHERE task_id=?', (task_id,)).fetchone()[0], 1)
         conn.close()
 
     def test_page_query_counts_do_not_grow_with_projects_or_cards(self):

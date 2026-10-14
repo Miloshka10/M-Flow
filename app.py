@@ -30,6 +30,9 @@ from deadlines import DEADLINE_FILTERS, TASK_SORTS, matches_deadline, task_sort_
 from notifications import (initialize_notifications, notify, notify_project,
                            notification_feed, mark_read, render_bell, render_items)
 from project_rules import has_project_teacher
+from teacher_supervision import (initialize_supervision, create_invite, preview_invite, request_connection,
+                                invitation_action, request_end, respond_request, render_hub, participant)
+from auth_security import reserve_supervision_attempt
 from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue
 from dashboard_view import student_dashboard
 from project_workspace import render_workspace, task_deadline
@@ -41,7 +44,7 @@ from teamwork import (initialize_teamwork, profile_for, save_profile, directory,
 from video_defense import initialize_defenses, defense_for, change_defense, render_defense, DEFENSE_STATES
 from database import (DatabaseSettings, DatabaseUnavailable, INTEGRITY_ERRORS,
                       PostgresConnection, connect_database, execute_schema_script,
-                      table_columns, insert_id, begin_project_write, initialization_settings)
+                      table_columns, insert_id, begin_project_write, initialization_settings, form_database_id)
 
 
 app = Flask(__name__)
@@ -274,6 +277,7 @@ def _prepare_database(conn):
     initialize_defenses(conn)
     initialize_notifications(conn)
     initialize_auth(conn)
+    initialize_supervision(conn)
 
     project_columns = table_columns(conn, "projects")
 
@@ -755,23 +759,19 @@ def add_task(
 
 
 def delete_task(project_id, task_id):
-
     conn = get_db()
-
-    conn.execute(
-        """
-        DELETE FROM tasks
-        WHERE id = ?
-        AND project_id = ?
-        """,
-        (
-            task_id,
-            project_id
-        )
-    )
-
-    conn.commit()
-    conn.close()
+    try:
+        # Reports use the same project lock: deletion cannot race a new report.
+        begin_project_write(conn, project_id)
+        removed = conn.execute('''DELETE FROM tasks WHERE id=? AND project_id=?
+            AND NOT EXISTS (SELECT 1 FROM task_updates WHERE task_id=tasks.id)''', (task_id, project_id))
+        conn.commit()
+        return bool(removed.rowcount)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def add_task_update(project_id, task_id, user_id, body):
@@ -1085,8 +1085,8 @@ def render_auth_page(mode, error=None, role="student"):
         submit_label = "Зарегистрироваться"
         hero_title = "Ваш кабинет учителя" if is_teacher else "Начни работу с M-Flow"
         hero_text = (
-            "Создайте аккаунт учителя и сообщите ученикам свой логин. Они добавят вас в проекты для проверки результатов."
-            if is_teacher else "Создай аккаунт ученика, начни проект и добавь учителя по его логину для проверки результатов."
+            "Создайте аккаунт учителя и пригласите ученика одноразовым кодом в разделе руководства."
+            if is_teacher else "Создай аккаунт ученика, начни проект и прими приглашение учителя для его сопровождения."
         )
 
     login_active = "active" if is_login else ""
@@ -1116,7 +1116,7 @@ def render_auth_page(mode, error=None, role="student"):
                         {form_fields}
                         <button type="submit">{submit_label}</button>
                     </form>
-                    <p class="auth-footer">{"Проверяйте этапы, видеозащиты и отчёты учеников в одном кабинете." if is_teacher else "Создайте проект и добавьте учителя по его логину."}<br><a href="/settings">Настройки оформления</a></p>
+                    <p class="auth-footer">{"Приглашайте учеников и проверяйте результаты в одном кабинете." if is_teacher else "Создайте проект и примите приглашение учителя."}<br><a href="/settings">Настройки оформления</a></p>
                     </div>
                 </div>
                 <aside class="auth-hero" aria-label="О проекте M-Flow">
@@ -1914,6 +1914,7 @@ def project(project_id):
 
         if (
             owner
+            and member["role"] == 'student'
             and member["id"]
             != current_user["id"]
         ):
@@ -2021,7 +2022,7 @@ def project(project_id):
 
 
     if owner:
-
+        end_request_form = f'<form method="post" action="/supervision">{csrf_input()}<input type="hidden" name="project_id" value="{project_id}"><button class="secondary" name="action" value="end">Запросить завершение сопровождения</button></form>' if any(m['role'] == 'teacher' for m in members) else ''
         owner_section = f"""
         <div class="card" id="project-members">
 
@@ -2038,7 +2039,7 @@ def project(project_id):
 
                 <input
                     name="username"
-                    placeholder="Логин пользователя"
+                    placeholder="Логин ученика"
                     aria-label="Логин участника"
                     required
                 >
@@ -2051,8 +2052,10 @@ def project(project_id):
 
             <p>
                 Только владелец проекта
-                может добавлять участников.
+                может добавлять учеников. Руководитель подключается через приглашение.
             </p>
+            <a class="action-link" href="/supervision">Подключение и смена руководителя →</a>
+            {end_request_form}
 
         </div>
         """
@@ -2217,11 +2220,14 @@ def add_member(project_id):
 
 
     conn = get_db()
-
+    begin_project_write(conn, project_id)
+    if conn.execute('SELECT 1 FROM projects WHERE id=? AND owner_id=?', (project_id, get_current_user()['id'])).fetchone() is None:
+        conn.close()
+        return render_error_page('Нет доступа', 'Владелец проекта изменился. Обновите страницу.', 403)
 
     user = conn.execute(
         """
-        SELECT id
+        SELECT id, role
         FROM users
         WHERE username = ?
         """,
@@ -2242,6 +2248,10 @@ def add_member(project_id):
             f"/project/{project_id}"
         )
 
+
+    if user['role'] != 'student':
+        conn.close()
+        return render_error_page('Нужно приглашение', 'Учителя нельзя добавить по логину. Примите его приглашение в разделе «Руководство».', 403)
 
     current_user = get_current_user()
 
@@ -2357,7 +2367,15 @@ def remove_member(
 
 
     conn = get_db()
+    begin_project_write(conn, project_id)
+    if conn.execute('SELECT 1 FROM projects WHERE id=? AND owner_id=?', (project_id, current_user['id'])).fetchone() is None:
+        conn.close()
+        return render_error_page('Нет доступа', 'Владелец проекта изменился. Обновите страницу.', 403)
 
+    target = conn.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
+    if target and target['role'] == 'teacher':
+        conn.close()
+        return render_error_page('Руководитель защищён', 'Удаление учителя учеником запрещено. Запросите согласованную смену или завершение в разделе «Руководство».', 403)
 
     removed = conn.execute(
         """
@@ -2695,10 +2713,12 @@ def delete_project_task(
         )
 
 
-    delete_task(
+    deleted = delete_task(
         project_id,
         task_id
     )
+    if not deleted:
+        flash('Задача не удалена: задачи с отчётами сохраняют историю работы. Исправьте название или статус; если задачи уже нет, обновите страницу.', 'error')
 
 
     return redirect(
@@ -2737,6 +2757,7 @@ def render_header(user, notification_data=None):
             {bell}
             {nav}
             <a href="/profile" class="logout">Профиль</a>
+            <a href="/supervision" class="logout">Руководство</a>
             {logout_form()}
         </div>
     </header>
@@ -2805,6 +2826,55 @@ def site_settings():
 
 def collaboration_token():
     return csrf_token()
+
+
+@app.route('/supervision', methods=['GET', 'POST'])
+@login_required
+def supervision_page():
+    user = get_current_user()
+    before = request.args.get('before', type=int)
+    if 'before' in request.args and not valid_database_id(before):
+        return render_error_page('Некорректная страница', 'Откройте раздел руководства заново.', 400)
+    action = request.form.get('action', '')
+    if request.method == 'POST' and action in ('create', 'preview', 'request', 'decline'):
+        source = client_source(request.remote_addr, request.headers.get('X-Forwarded-For', ''), TRUSTED_AUTH_PROXIES)
+        retry = reserve_supervision_attempt(get_db, SECRET_KEY, user['id'], source)
+        if retry:
+            return render_collaboration_page(user, 'Руководство проектами', '<p><a href="/supervision">Вернуться к приглашениям</a></p>',
+                error=f'Слишком много попыток. Повторите через {retry} сек.', status=429)[0], 429, {'Retry-After': str(retry)}
+    error, status, code, preview = '', 200, None, None
+    with closing(get_db()) as conn:
+        try:
+            if request.method == 'POST':
+                if action == 'create':
+                    code = create_invite(conn, user)
+                elif action == 'preview':
+                    if user['role'] != 'student':
+                        raise PermissionError('Приглашение принимает ученик-владелец.')
+                    raw_code = request.form.get('code', '').strip()
+                    preview = (preview_invite(conn, raw_code), raw_code)
+                elif action == 'request':
+                    request_connection(conn, user, request.form.get('code', '').strip(), form_database_id(request.form.get('project_id')))
+                    flash('Проект подтверждён. Учитель должен принять сопровождение; при смене также нужны согласия текущих учителей.')
+                    return redirect('/supervision')
+                elif action in ('revoke', 'decline'):
+                    invitation_action(conn, user, request.form)
+                    flash('Приглашение отозвано или отклонено. Доступ к проектам не изменён.')
+                    return redirect('/supervision')
+                elif action == 'end':
+                    request_end(conn, user, form_database_id(request.form.get('project_id')))
+                    flash('Запрос завершения создан. До всех согласований руководитель и доступ сохраняются.')
+                    return redirect('/supervision')
+                elif action in ('approve', 'reject', 'cancel'):
+                    flash(respond_request(conn, user, request.form))
+                    return redirect('/supervision')
+                else:
+                    raise ValueError('Выберите действие в актуальной форме.')
+        except (PermissionError, ValueError) as exc:
+            conn.rollback()
+            error, status = str(exc), 403 if isinstance(exc, PermissionError) else 400
+        body = render_hub(conn, user, csrf_token(), before=before, preview=preview, code=code)
+    return render_collaboration_page(user, 'Руководство проектами', body, error=error, status=status)
 
 
 def render_unsaved_result(form, user, target, defense=False):
@@ -3057,6 +3127,12 @@ def project_assessment(project_id):
                     raise ValueError("Примечание должно содержать не больше 1000 символов.")
                 scores = parse_scores(request.form, publish=action == "published")
                 begin_project_write(conn, project_id)
+                if not participant(conn, project_id, user['id']):
+                    conn.rollback()
+                    conn.close()
+                    return render_error_page('Нет доступа', 'Сопровождение завершено. Новые оценки в этом проекте недоступны.', 403)
+                if not participant(conn, project_id, selected['id']):
+                    raise ValueError('Состав проекта изменился. Обновите страницу и выберите действующего участника.')
                 # Re-read under the same project lock as other review mutations.
                 previous = conn.execute('SELECT * FROM project_assessments WHERE project_id=? AND student_id=? AND teacher_id=?',
                                         (project_id, selected['id'], user['id'])).fetchone()
@@ -3501,7 +3577,7 @@ def teacher_cabinet():
     """ if overview else """
         <div class="empty">
             <h3>Ваше рабочее пространство готово</h3>
-            <p>Попросите ученика создать проект и добавить ваш логин в участники. Здесь появятся его результаты для проверки.</p>
+            <p>Создайте приглашение в разделе «Руководство». Владелец подтвердит конкретный проект, затем вы сможете принять его на сопровождение. Здесь появятся доступные вам результаты.</p>
         </div>
     """)
 
@@ -3576,7 +3652,7 @@ def teacher_cabinet():
                 <div class="section-title"><h2>Проекты</h2>
                     <span class="t-muted">Показано {len(visible_projects)} из {len(overview)}</span></div>
                 {projects_html}
-                <section class="teacher-panel"><h2>Как подключиться к проекту</h2><p>Проект создаёт ученик. Сообщите ему свой логин: <strong>{escape(user['username'])}</strong>. Ученик-владелец добавит вас на доске проекта. Вы сможете проверять этапы, видеозащиту и выставлять оценки.</p></section>
+                <section class="teacher-panel"><h2>Как подключиться к проекту</h2><p>Создайте одноразовый код, передайте его ученику. Владелец подтверждает конкретный проект, затем вы берёте его на сопровождение. Другие проекты не открываются автоматически.</p><a class="teacher-primary-link" href="/supervision">Приглашения и руководство →</a></section>
                 <footer class="workspace-footer"><span>M-Flow <small>by Minich</small></span><a href="/settings">Настройки оформления ↗</a></footer>
             </main>
         </div>
@@ -3587,7 +3663,7 @@ def teacher_cabinet():
 @app.route("/teacher/projects", methods=["POST"])
 @login_required
 def create_teacher_project():
-    return render_error_page('Нет доступа', 'Проекты создают ученики. Попросите ученика добавить вас в свой проект.', 403)
+    return render_error_page('Нет доступа', 'Проекты создают ученики. Пригласите владельца кодом в разделе «Руководство».', 403)
 
 
 @app.route('/project/<int:project_id>/transfer', methods=['POST'])

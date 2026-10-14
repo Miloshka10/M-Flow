@@ -6,6 +6,7 @@ from teamwork import hidden_token
 from project_rules import has_project_teacher, TEACHER_REQUIRED
 from database import execute_schema, begin_project_write
 from notifications import notify_project
+from teacher_supervision import participant
 
 DEFENSE_STATES = {"draft": "Черновик", "submitted": "На проверке", "accepted": "Защита принята", "returned": "Нужна доработка"}
 
@@ -35,6 +36,8 @@ def defense_for(conn, project_id):
 def change_defense(conn, project_id, user, form):
     begin_project_write(conn, project_id)
     try:
+        if not participant(conn, project_id, user['id']):
+            raise ValueError('Доступ к проекту изменился. Откройте главную страницу; сохранение недоступно.')
         current = defense_for(conn, project_id)
         if form.get("revision") != str(current["revision"]):
             raise ValueError("Запись защиты уже изменена другим участником. Обновите страницу.")

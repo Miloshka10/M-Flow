@@ -18,7 +18,7 @@ import database
 
 
 TEST_URL = os.environ.get("M_FLOW_TEST_POSTGRES_URL", "")
-TABLES = ("notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles",
+TABLES = ("supervision_requests", "teacher_invitations", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles",
           "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users")
 
 
@@ -82,6 +82,37 @@ class PostgresCabinetTests(fixtures.TeacherCabinetTests):
         self.module.prepare_database()
         self.module.prepare_database()
         self.assertEqual(self.database_snapshot(), before)
+
+    def test_concurrent_teacher_change_and_submission_use_same_project_lock(self):
+        from project_stages import change_stage
+        from teacher_supervision import respond_request
+        from threading import Barrier
+        code = self.supervision_code()
+        self.assertEqual(self.supervision_request(code).status_code, 302)
+        self.assertEqual(self.supervision_reply(2).status_code, 302)
+        row = self.supervision_row()
+        barrier = Barrier(2)
+
+        def action(which):
+            with closing(self.module.get_db()) as conn:
+                barrier.wait(timeout=10)
+                try:
+                    if which == 'submit':
+                        change_stage(conn, 2, {'id':3,'role':'student'}, dict(number='1',revision='0',action='submit',result='Concurrent submission'))
+                    else:
+                        respond_request(conn, {'id':1,'role':'teacher'}, dict(request_id=str(row['id']),revision=str(row['revision']),action='approve'))
+                    return 'ok'
+                except ValueError:
+                    return 'blocked'
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            outcomes = list(pool.map(action, ('submit','change')))
+        self.assertEqual(outcomes[0], 'ok')
+        with closing(self.module.get_db()) as conn:
+            completed = conn.execute('SELECT state FROM supervision_requests WHERE id=?', (row['id'],)).fetchone()[0] == 'completed'
+            expected_teacher = 2 if completed else 1
+            recipients = [r[0] for r in conn.execute("SELECT recipient_id FROM notifications WHERE event_key='stage:2:1:1'")]
+            self.assertEqual(recipients, [expected_teacher])
+            self.assertEqual(outcomes[1], 'ok' if completed else 'blocked')
 
     def test_failed_connection_returns_503_and_does_not_expose_secret(self):
         self.sign_in(3)

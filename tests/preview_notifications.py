@@ -14,6 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--deadlines', action='store_true', help='Add isolated deadline cases for visual QA')
     parser.add_argument('--queue', action='store_true', help='Add isolated teacher queue cases for visual QA')
+    parser.add_argument('--supervision', action='store_true', help='Isolated onboarding and replacement without an existing teacher')
     options = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root))
@@ -31,11 +32,16 @@ def main():
             conn.executemany('INSERT INTO users(id,username,password,role) VALUES(?,?,?,?)',
                 [(1, 'preview-teacher', password, 'teacher'), (2, 'preview-student', password, 'student')])
             conn.execute("INSERT INTO projects(id,name,owner_id) VALUES(1,'Школьная метеостанция',2)")
-            conn.executemany('INSERT INTO project_members(project_id,user_id) VALUES(1,?)', [(1,), (2,)])
+            conn.executemany('INSERT INTO project_members(project_id,user_id) VALUES(1,?)', [(2,)] if options.supervision else [(1,), (2,)])
+            if options.supervision:
+                conn.execute("INSERT INTO users(id,username,password,role) VALUES(3,'preview-next-teacher',?,'teacher')", (password,))
+                conn.execute("INSERT INTO projects(id,name,owner_id) VALUES(2,'Другой проект ученика',2)")
+                conn.execute('INSERT INTO project_members(project_id,user_id) VALUES(2,2)')
             from notifications import notify
-            notify(conn, 1, 'preview:submit', 'Этап 1 отправлен на проверку', '', '/project/1/stages', [1])
-            notify(conn, 1, 'preview:review', 'Этап 1: нужна доработка',
-                   'Уточните, какие измерения будет выполнять метеостанция.', '/project/1/stages', [2])
+            if not options.supervision:
+                notify(conn, 1, 'preview:submit', 'Этап 1 отправлен на проверку', '', '/project/1/stages', [1])
+                notify(conn, 1, 'preview:review', 'Этап 1: нужна доработка',
+                       'Уточните, какие измерения будет выполнять метеостанция.', '/project/1/stages', [2])
             if options.deadlines or options.queue:
                 today = module.business_today()
                 conn.executemany('INSERT INTO tasks(project_id,title,deadline,status,assignee_id) VALUES(1,?,?,?,2)',
