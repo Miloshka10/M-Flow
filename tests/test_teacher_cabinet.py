@@ -37,6 +37,160 @@ class FormTokens(HTMLParser):
 
 
 class TeacherCabinetTests(AuthSecurityCases, unittest.TestCase):
+    def seed_review_queue(self):
+        conn = self.module.get_db()
+        # Fixtures run in a reused temporary DB: sequence values aren't reset by DELETE.
+        conn.execute('DELETE FROM task_updates')
+        conn.execute("INSERT INTO task_updates(id,task_id,user_id,body,created_at) VALUES(1,1,3,'Old overridden report','2026-01-01 10:00:00')")
+        conn.execute("UPDATE tasks SET title='Командный датчик' WHERE id=2")
+        conn.execute("INSERT INTO tasks(id,project_id,title,assignee_id) VALUES(99,3,'Private result',3)")
+        conn.executemany('''INSERT INTO task_updates(id,task_id,user_id,body,created_at) VALUES(?,?,?,?,?)''', [
+            (10,1,3,'Последний отчёт','2026-01-01 12:00:00'),
+            (11,2,3,'<script>Отчёт команды</script>','2026-02-01 12:00:00'),
+            (12,99,3,'Private report','2026-01-01 12:00:00')])
+        conn.executemany('''INSERT INTO project_stages(project_id,number,state,result,submitted_by,revision,updated_at)
+            VALUES(?,1,?,?,?,?,?)''', [(2,'review','Тема',3,1,'2026-04-01 12:00:00'),
+                (1,'done','Принятая тема',3,2,'2026-01-01 12:00:00'),
+                (3,'review','Private stage',3,1,'2026-01-01 12:00:00')])
+        conn.executemany('''INSERT INTO project_defenses(project_id,state,author_id,revision,updated_at)
+            VALUES(?,?,3,?,?)''', [(1,'submitted',1,'2026-03-01 12:00:00'),
+                                    (2,'accepted',2,'2026-01-01 12:00:00')])
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def queue_html(page):
+        return page.split('id="review-queue"')[1].split('</section>')[0]
+
+    def test_review_queue_composition_access_dates_and_read_only_information(self):
+        self.seed_review_queue()
+        self.sign_in(1)
+        before = self.database_snapshot()
+        queue = self.queue_html(self.client.get('/teacher').text)
+        self.assertEqual(re.findall(r'data-work-kind="(\w+)"', queue), ['defense','stage','report','report'])
+        for text in ('Автор: student-one', 'Команда: student-one', '01.03.2026 15:00 МСК',
+                     '/project/2/stages#stage-1', '/project/1/defense', '/project/1#task-1',
+                     'Информационный отчёт · решение не требуется', '&lt;script&gt;Отчёт команды&lt;/script&gt;'):
+            self.assertIn(text, queue)
+        self.assertNotIn('Private', queue)
+        self.assertNotIn('<script>Отчёт', queue)
+        self.assertNotIn('<form', queue)
+        self.assertNotIn('Просрочено', queue)
+        self.assertEqual(self.database_snapshot(), before)
+        self.sign_in(2)
+        other = self.queue_html(self.client.get('/teacher').text)
+        self.assertIn('Private project', other)
+        self.assertNotIn('Observed project', other)
+        self.assertNotIn('Owned project', other)
+        self.sign_in(3)
+        self.assertEqual(self.client.get('/teacher').status_code, 403)
+
+    def test_review_queue_filters_search_and_global_totals(self):
+        self.seed_review_queue()
+        self.sign_in(1)
+        for kind, count in (('stage',1),('defense',1),('report',2)):
+            queue = self.queue_html(self.client.get('/teacher?kind=' + kind).text)
+            self.assertEqual(queue.count('data-work-kind='), count)
+            self.assertEqual(set(re.findall(r'data-work-kind="(\w+)"', queue)), {kind})
+        page = self.client.get('/teacher?kind=stage&project=2&focus=review&q=STUDENT&sort=newest').text
+        self.assertIn('data-work-key="stage-2-1"', self.queue_html(page))
+        self.assertNotIn('Owned project', self.queue_html(page))
+        for value in ('stage','2','review','newest'):
+            self.assertIn(f'value="{value}" selected', page)
+        self.assertIn('class="review-counter"><strong>2</strong>', page)
+        queue = self.queue_html(self.client.get('/teacher?kind=report&q=КОМАНДНЫЙ').text)
+        self.assertIn('report-1-11', queue)
+        self.assertNotIn('report-1-10', queue)
+        self.assertIn('Нет работ по выбранным условиям', self.queue_html(self.client.get('/teacher?kind=stage&q=missing').text))
+
+    def test_review_queue_team_author_and_missing_dates_are_explicit(self):
+        self.seed_review_queue()
+        self.add_candidate()
+        conn = self.module.get_db()
+        conn.execute('INSERT INTO project_members(project_id,user_id) VALUES(1,4)')
+        conn.execute('UPDATE task_updates SET user_id=4 WHERE id=11')
+        conn.execute("UPDATE project_stages SET updated_at='' WHERE project_id=2")
+        conn.execute("UPDATE project_defenses SET updated_at='not-a-date' WHERE project_id=1")
+        conn.commit()
+        conn.close()
+        self.sign_in(1)
+        queue = self.queue_html(self.client.get('/teacher').text)
+        self.assertEqual(queue.count('Дата отправки не указана'), 2)
+        self.assertIn('candidate-engineer', queue)
+        self.assertIn('Команда:', queue)
+        self.assertIn('student-one', queue)
+        filtered = self.queue_html(self.client.get('/teacher?kind=report&q=candidate-engineer').text)
+        self.assertIn('report-1-11', filtered)
+        self.assertIn('Автор: candidate-engineer', filtered)
+
+    def test_review_queue_return_resubmit_accept_and_notification_read_are_independent(self):
+        self.seed_review_queue()
+        self.sign_in(1)
+        self.assertEqual(self.post('/project/2/stages', data=dict(number='1', revision='1', action='return', teacher_comment='Исправить')).status_code, 302)
+        self.assertNotIn('stage-2-1', self.queue_html(self.client.get('/teacher').text))
+        self.sign_in(3)
+        self.assertEqual(self.post('/project/2/stages', data=dict(number='1', revision='2', action='submit', result='Новая версия')).status_code, 302)
+        self.sign_in(1)
+        self.assertEqual(self.post('/notifications/read-all').status_code, 302)
+        queue = self.queue_html(self.client.get('/teacher').text)
+        self.assertEqual(queue.count('data-work-key="stage-2-1"'), 1)
+        self.assertEqual(self.post('/project/2/stages', data=dict(number='1', revision='3', action='accept', teacher_comment='Принято')).status_code, 302)
+        self.assertNotIn('stage-2-1', self.queue_html(self.client.get('/teacher').text))
+        self.assertEqual(self.post('/project/1/defense', data=dict(revision='1', action='return', teacher_comment='Звук')).status_code, 302)
+        self.assertNotIn('defense-1', self.queue_html(self.client.get('/teacher').text))
+        self.sign_in(3)
+        self.assertEqual(self.post('/project/1/defense', data=dict(revision='2', action='submit', video_url='https://example.com/video', description='Новая версия')).status_code, 302)
+        self.sign_in(1)
+        self.assertEqual(self.queue_html(self.client.get('/teacher').text).count('data-work-key="defense-1"'), 1)
+        self.assertEqual(self.post('/project/1/defense', data=dict(revision='3', action='accept')).status_code, 302)
+        self.assertNotIn('defense-1', self.queue_html(self.client.get('/teacher').text))
+
+    def test_review_queue_pagination_preserves_filters_latest_reports_and_fixed_query_count(self):
+        self.seed_review_queue()
+        self.sign_in(1)
+        baseline = self.count_page_queries('/teacher')
+        conn = self.module.get_db()
+        conn.executemany('INSERT INTO tasks(id,project_id,title,assignee_id) VALUES(?,2,?,3)', [(100+n,f'Queue task {n}') for n in range(45)])
+        conn.executemany('INSERT INTO task_updates(id,task_id,user_id,body,created_at) VALUES(?,?,3,?,?)',
+            [(100+n,100+n,f'Report {n}', '2026-01-01 12:00:00') for n in range(45)])
+        conn.execute("INSERT INTO task_updates(id,task_id,user_id,body,created_at) VALUES(1000,100,3,'Fresh replacement','2026-02-01 12:00:00')")
+        conn.commit()
+        conn.close()
+        self.assertEqual(self.count_page_queries('/teacher'), baseline)
+        self.assertLessEqual(baseline, 9)
+        query = '/teacher?q=student&focus=all&kind=report&project=2&sort=newest'
+        all_keys = []
+        for page in range(1,4):
+            response = self.client.get(query + '&page=' + str(page))
+            queue = self.queue_html(response.text)
+            keys = re.findall(r'data-work-key="([^"]+)"', queue)
+            self.assertLessEqual(len(keys), 20)
+            all_keys.extend(keys)
+            if page < 3:
+                link = re.search(r'href="([^"]+)">Следующая', queue).group(1)
+                for fragment in ('q=student','focus=all','kind=report','project=2','sort=newest','page='+str(page+1),'#review-queue'):
+                    self.assertIn(fragment, link)
+        self.assertEqual(len(all_keys), 45)
+        self.assertEqual(len(set(all_keys)), 45)
+        self.assertNotIn('report-2-100', all_keys)
+        self.assertIn('report-2-1000', all_keys)
+
+    def test_review_queue_bad_parameters_are_safe_and_foreign_project_does_not_leak(self):
+        self.seed_review_queue()
+        self.sign_in(1)
+        before = self.database_snapshot()
+        plain = self.client.get('/teacher').text
+        self.assertEqual(self.client.get('/teacher?kind=bad&sort=bad&page=bad').text, plain)
+        self.assertEqual(self.client.get('/teacher?page=-1').text, plain)
+        for value in ('0','-1','bad','9223372036854775808'):
+            self.assertEqual(self.client.get('/teacher?project=' + value).status_code, 400)
+        for value in ('3','999999'):
+            response = self.client.get('/teacher?project=' + value)
+            self.assertEqual(response.status_code, 403)
+            self.assertNotIn('Private project', response.text)
+        self.assertNotIn('<script>alert', self.client.get('/teacher?q=%3Cscript%3Ealert').text)
+        self.assertEqual(self.database_snapshot(), before)
+
     def seed_board_filters(self):
         self.seed_deadline_cases()
         conn = self.module.get_db()
@@ -215,7 +369,7 @@ class TeacherCabinetTests(AuthSecurityCases, unittest.TestCase):
             invalid = self.client.get('/teacher?focus=wrong').text
             plain = self.client.get('/teacher').text
         self.assertEqual(invalid, plain)
-        queue = overdue.split('id="review-queue"')[1].split('</section>')[0]
+        queue = overdue.split('id="task-attention"')[1].split('</section>')[0]
         self.assertIn('Someone else task', queue)
         self.assertIn('Просрочено на 3 дня · 10.10.2026', queue)
         for title in ('Этап ожидает проверки', 'Due tomorrow', 'Malformed date', 'Done past'):
@@ -1693,8 +1847,8 @@ class TeacherCabinetTests(AuthSecurityCases, unittest.TestCase):
         self.sign_in(1)
         response = self.client.get("/teacher?focus=overdue&q=student-one")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Owned project", response.text)
-        self.assertNotIn("Observed project", response.text)
+        self.assertIn("<h2>Owned project</h2>", response.text)
+        self.assertNotIn("<h2>Observed project</h2>", response.text)
         self.assertIn("Показано 1 из 2", response.text)
         self.assertIn("Ничего не найдено", self.client.get("/teacher?q=missing").text)
 

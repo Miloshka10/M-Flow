@@ -1,0 +1,9 @@
+/* Existing palette and panels; only the queue's content/controls need layout rules. */
+.teacher-queue-item h4 { margin: 8px 0; font-size: 16px; }
+.teacher-queue-item p { margin: 8px 0; overflow-wrap: anywhere; }
+.teacher-queue-body { white-space: pre-wrap; font-size: 13px; }
+.teacher-queue-pages { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 18px; }
+body .teacher-filters select { min-width: 0; max-width: 100%; }
+@media (max-width: 800px) {
+  body .teacher-filters select { flex: 1 1 100%; width: 100%; }
+}

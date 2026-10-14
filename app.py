@@ -30,6 +30,7 @@ from deadlines import DEADLINE_FILTERS, TASK_SORTS, matches_deadline, task_sort_
 from notifications import (initialize_notifications, notify, notify_project,
                            notification_feed, mark_read, render_bell, render_items)
 from project_rules import has_project_teacher
+from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue
 from dashboard_view import student_dashboard
 from project_workspace import render_workspace, task_deadline
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
@@ -3166,10 +3167,11 @@ def build_teacher_overview(teacher):
             LEFT JOIN users author ON author.id=s.submitted_by
             LEFT JOIN users reviewer ON reviewer.id=s.reviewed_by""")
         defenses_by_project = grouped("""
-            SELECT d.project_id, d.state, d.revision FROM project_defenses d
-            JOIN visible_projects v ON v.id=d.project_id""")
+            SELECT d.project_id, d.state, d.revision, d.updated_at, a.username AS author_name
+            FROM project_defenses d JOIN visible_projects v ON v.id=d.project_id
+            LEFT JOIN users a ON a.id=d.author_id""")
         reports_by_project = grouped("""
-            SELECT t.project_id, r.task_id, r.body, r.created_at, u.username
+            SELECT t.project_id, r.id, r.task_id, r.body, r.created_at, u.username
             FROM tasks t JOIN visible_projects v ON v.id=t.project_id
             JOIN task_updates r ON r.id=(
                 SELECT MAX(latest.id) FROM task_updates latest WHERE latest.task_id=t.id
@@ -3258,6 +3260,7 @@ def build_teacher_overview(teacher):
             "id": pid,
             "completed_stages": completed_stages,
             "defense_state": DEFENSE_STATES[video_defense['state']] if video_defense['revision'] else 'Запись ещё не добавлена',
+            "defense": dict(video_defense),
             "current_stage": current_stage,
             "name": project_row["name"],
             "total": len(tasks),
@@ -3407,16 +3410,45 @@ def teacher_cabinet():
     focus = request.args.get("focus", "all")
     if focus not in ("all", "overdue", "attention", "done", "review"):
         focus = "all"
+    kind = request.args.get('kind', 'all')
+    kind = kind if kind in WORK_KINDS else 'all'
+    sort = request.args.get('sort', 'oldest')
+    sort = sort if sort in WORK_SORTS else 'oldest'
+    project_filter = request.args.get('project', '')
+    project_id = None
+    if project_filter:
+        try:
+            project_id = int(project_filter)
+        except ValueError:
+            return render_error_page('Некорректный фильтр', 'Выберите проект из списка.', 400)
+        if not valid_database_id(project_id):
+            return render_error_page('Некорректный фильтр', 'Выберите проект из списка.', 400)
+        if project_id not in {p['id'] for p in overview}:
+            return render_error_page('Нет доступа', 'Проект недоступен вашему аккаунту.', 403)
+    try:
+        page = max(1, int(request.args.get('page', '1')))
+    except ValueError:
+        page = 1
+    query_folded = query.casefold()
     visible_projects = [
         project for project in overview
-        if (not query or query.casefold() in project["name"].casefold()
-            or any(query.casefold() in student["name"].casefold()
-                   for student in project["students"]))
+        if project_matches(project, query_folded)
+        and (project_id is None or project['id'] == project_id)
         and (focus == "all" or (focus not in ('done', 'review') and project["health"] == focus)
              or focus == 'done' and project['total'] > 0 and project['counts']['done'] == project['total']
              or focus == 'review' and project['needs_review']
              or focus == "attention" and bool(project["attention"]))
     ]
+    queue = queue_page(visible_projects, kind, sort, page, query_folded)
+    queue_html = render_queue(queue, dict(q=query, focus=focus, kind=kind,
+                                         project=project_id, sort=sort))
+    kind_options = ''.join(f'<option value="{v}" {"selected" if kind == v else ""}>{label}</option>'
+                           for v, label in WORK_KINDS.items())
+    sort_options = ''.join(f'<option value="{v}" {"selected" if sort == v else ""}>{label}</option>'
+                           for v, label in WORK_SORTS.items())
+    project_options = '<option value="">Все проекты</option>' + ''.join(
+        f'<option value="{p["id"]}" {"selected" if project_id == p["id"] else ""}>{escape(p["name"])}</option>'
+        for p in overview)
 
     total_tasks = sum(p["total"] for p in overview)
     done_tasks = sum(p["counts"]["done"] for p in overview)
@@ -3451,20 +3483,6 @@ def teacher_cabinet():
         for value, label in (("all", "Все проекты"), ("overdue", "Просрочены задачи учеников"), ("review", "Ожидают моей проверки"),
                              ("attention", "Требуют внимания"), ("done", "Все задачи выполнены"))
     )
-    reports = sorted(
-        [(project, entry) for project in visible_projects for entry in project["reports"]],
-        key=lambda pair: pair[1]["report"]["created_at"], reverse=True
-    )[:6]
-    reports_html = "".join(
-        f'''<article class="teacher-report-item">
-            <div class="teacher-report-meta"><strong>{escape(entry["report"]["username"])}</strong>
-                <time>{escape(entry["report"]["created_at"])} UTC</time></div>
-            <a href="/project/{project["id"]}#task-{entry["task_id"]}">{escape(project["name"])} · {escape(entry["task_title"])}</a>
-            <p>{escape(entry["report"]["body"])}</p>
-        </article>'''
-        for project, entry in reports
-    ) or '<p class="t-muted">Здесь появятся отчёты учеников по назначенным задачам.</p>'
-
     attention_items = sorted(
         [(project, item) for project in visible_projects for item in project["attention"]
          if focus != 'review' and (focus != 'overdue' or item['task']['status'] != 'done' and item['sort'] < 0)],
@@ -3477,13 +3495,7 @@ def teacher_cabinet():
         </a>'''
         for project, item in attention_items
     ) or '<p class="t-muted">В выбранных проектах нет задач, требующих внимания.</p>'
-    review_links = ''.join(
-        (f'<a class="teacher-attention-item" href="/project/{p["id"]}/stages"><strong>Этап ожидает проверки</strong><span>{escape(p["name"])}</span></a>' if p['current_stage'] and p['current_stage']['state'] == 'review' else '')
-        + (f'<a class="teacher-attention-item" href="/project/{p["id"]}/defense"><strong>Видеозащита ожидает проверки</strong><span>{escape(p["name"])}</span></a>' if p['defense_state'] == DEFENSE_STATES['submitted'] else '')
-        for p in visible_projects if p['needs_review'])
-    if review_links and focus != 'overdue':
-        attention_html = review_links + (attention_html if attention_items else '')
-    queue_title = 'Просроченные задачи учеников' if focus == 'overdue' else 'Ожидают проверки' if focus == 'review' else 'Требуют внимания'
+    attention_title = 'Просроченные задачи учеников' if focus == 'overdue' else 'Сроки и назначение задач'
 
     overdue_class = "warn" if overdue_tasks else ""
     review_count = sum(bool(p['current_stage'] and p['current_stage']['state'] == 'review')
@@ -3492,6 +3504,7 @@ def teacher_cabinet():
     return render_page(
         PAGE_STYLE
         + TEACHER_STYLE
+        + '<link rel="stylesheet" href="/static/teacher-queue.css?v=20261014">'
         + f"""
         <div class="container workspace teacher-workspace">
             {render_header(user)}
@@ -3521,14 +3534,17 @@ def teacher_cabinet():
                 </div>
                 <form class="teacher-filters" method="get">
                     <input type="search" name="q" value="{escape(query)}"
-                        aria-label="Поиск проекта или ученика" placeholder="Найти проект или ученика">
+                        aria-label="Поиск проекта, автора или работы" placeholder="Найти проект, автора или работу">
                     <select name="focus" aria-label="Состояние проектов">{focus_options}</select>
+                    <select name="project" aria-label="Проект очереди">{project_options}</select>
+                    <select name="kind" aria-label="Тип работы">{kind_options}</select>
+                    <select name="sort" aria-label="Порядок отправки работ">{sort_options}</select>
                     <button type="submit">Показать</button>
                     <a href="/teacher" class="back">Сбросить</a>
                 </form>
                 <div class="teacher-dashboard-grid">
-                    <section class="teacher-panel review-panel" id="review-queue"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>{queue_title}</h2>{attention_html}</section>
-                    <section class="teacher-panel"><h2>Последние отчёты</h2>{reports_html}</section>
+                    <section class="teacher-panel review-panel" id="review-queue"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>Очередь работ</h2>{queue_html}</section>
+                    <section class="teacher-panel" id="task-attention"><h2>{attention_title}</h2><p class="t-muted">Дедлайны учеников отдельно от ожидания проверки учителем.</p>{attention_html}</section>
                 </div>
                 <div class="section-title"><h2>Проекты</h2>
                     <span class="t-muted">Показано {len(visible_projects)} из {len(overview)}</span></div>
