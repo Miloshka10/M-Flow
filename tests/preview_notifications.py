@@ -1,6 +1,7 @@
 """Manual browser QA on a throwaway SQLite database, never production."""
 import importlib.util
 import argparse
+import json
 from datetime import timedelta
 import os
 from pathlib import Path
@@ -15,6 +16,7 @@ def main():
     parser.add_argument('--deadlines', action='store_true', help='Add isolated deadline cases for visual QA')
     parser.add_argument('--queue', action='store_true', help='Add isolated teacher queue cases for visual QA')
     parser.add_argument('--supervision', action='store_true', help='Isolated onboarding and replacement without an existing teacher')
+    parser.add_argument('--results', action='store_true', help='Isolated student feedback, private grades and a review cycle')
     options = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root))
@@ -37,6 +39,23 @@ def main():
                 conn.execute("INSERT INTO users(id,username,password,role) VALUES(3,'preview-next-teacher',?,'teacher')", (password,))
                 conn.execute("INSERT INTO projects(id,name,owner_id) VALUES(2,'Другой проект ученика',2)")
                 conn.execute('INSERT INTO project_members(project_id,user_id) VALUES(2,2)')
+            if options.results:
+                conn.execute("INSERT INTO users(id,username,password,role) VALUES(3,'preview-engineer',?,'student')", (password,))
+                conn.execute("INSERT INTO projects(id,name,owner_id) VALUES(2,'Робот для школьной теплицы',2)")
+                conn.executemany('INSERT INTO project_members(project_id,user_id) VALUES(?,?)', [(1,3),(2,1),(2,2)])
+                conn.executemany('''INSERT INTO project_stages(project_id,number,state,result,teacher_comment,submitted_by,reviewed_by,revision,updated_at)
+                    VALUES(?,?,?,?,?,2,1,?,?)''', [
+                    (1,1,'done','Согласована тема метеостанции','Тема согласована. Переходите к измерениям.',2,'2026-10-13 10:00:00'),
+                    (1,2,'review','Проведены первые измерения','Добавьте условия измерений.',3,'2026-10-15 07:00:00'),
+                    (2,1,'progress','Автоматизация полива растений','Уточните цель: какие показатели будет измерять робот и как вы проверите результат.',2,'2026-10-15 08:30:00')])
+                conn.execute("INSERT INTO project_defenses(project_id,state,author_id,reviewer_id,teacher_comment,updated_at) VALUES(1,'accepted',2,1,'Запись понятная, ответы аргументированы.','2026-10-14 12:00:00')")
+                from grading import CRITERIA
+                scores = json.dumps({key:maximum for key,_,maximum in CRITERIA})
+                conn.executemany('''INSERT INTO project_assessments
+                    (project_id,student_id,teacher_id,student_name,rubric_version,scores_json,note,state)
+                    VALUES(1,?,1,?,'school-project-45-v1',?,?,'published')''', [
+                    (2,'Тестовый ученик',scores,'Хорошо обоснованы методы исследования.'),
+                    (3,'Другой участник',scores,'Приватное замечание другого участника — не показывать ученику 2')])
             from notifications import notify
             if not options.supervision:
                 notify(conn, 1, 'preview:submit', 'Этап 1 отправлен на проверку', '', '/project/1/stages', [1])

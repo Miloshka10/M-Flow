@@ -3,7 +3,7 @@ from html import escape
 from deadlines import deadline_text, TIMEZONE_LABEL
 
 
-def student_dashboard(user, projects, token, header, messages):
+def student_dashboard(user, projects, token, header, messages, results=''):
     total = sum(p['total'] for p in projects)
     done = sum(p['done'] for p in projects)
     active = sum(p['active'] for p in projects)
@@ -35,7 +35,8 @@ def student_dashboard(user, projects, token, header, messages):
         <section class="workspace-bento">
             <div class="workspace-hero"><div class="hero-copy"><span class="hero-kicker">Привет, {escape(user['username'])}</span>
                 <h1>От идеи —<br>к результату.</h1><p>Твои проекты, команда и обратная связь учителя. Всё, что нужно для следующего шага.</p>
-                <a class="btn" href="#project-create" data-open-project>+ Новый проект <span aria-hidden="true">↗</span></a></div>
+                <a class="btn" href="#project-create" data-open-project>+ Новый проект <span aria-hidden="true">↗</span></a>
+                <a class="action-link results-shortcut" href="#student-results">Результаты и следующий шаг ↓</a></div>
                 <img class="hero-art" src="/static/project-kit.svg" alt="" width="480" height="360"></div>
             <div class="workspace-progress"><span class="eyebrow">ПРОГРЕСС ЗАДАЧ</span>
                 <div class="progress-orbit"><svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52" class="orbit-track"/><circle cx="60" cy="60" r="52" class="orbit-fill" stroke-dasharray="{progress * 3.267} 326.7"/></svg><strong>{progress}%</strong></div>
@@ -43,6 +44,7 @@ def student_dashboard(user, projects, token, header, messages):
             <a class="workspace-shortcut" href="/teams"><span class="shortcut-icon" aria-hidden="true">↗</span><div><h2>Сильнее вместе.</h2><p>Найди команду по навыкам, а не по классу.</p></div></a>
         </section>{messages}
         <section class="stats-line dashboard-stats" aria-label="Показатели проектов"><div><strong>{len(projects)}</strong><span>Проектов</span></div><div><strong>{total}</strong><span>Всего задач</span></div><div><strong>{active}</strong><span>В работе</span></div><div><strong>{overdue}</strong><span>Просрочено</span></div></section>
+        {results}
         <section class="upcoming-panel" aria-labelledby="upcoming-title"><div class="section-title"><div>
             <h2 id="upcoming-title">Ближайшие дела</h2><p>Твои задачи и задачи команды без ответственного · {TIMEZONE_LABEL}</p>
             </div><span class="t-muted">Показано {min(6, len(upcoming))} из {len(upcoming)}</span></div>{upcoming_html}</section>

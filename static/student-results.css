@@ -1,0 +1,38 @@
+/* Reuse the existing product palette and native, keyboard-accessible controls. */
+.student-results { margin: 32px 0; min-width: 0; scroll-margin-top: 20px; }
+.student-results h2 { margin: 0; }
+.hero-copy .results-shortcut { margin-top: 12px; }
+.results-help { margin: 14px 0; }
+.results-help summary { cursor: pointer; color: var(--mf-muted); font-size: 14px; }
+.results-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 20px 0 14px; }
+.results-filters label { display: grid; gap: 6px; min-width: 0; flex: 1 1 200px; }
+.results-filters select { width: 100%; min-width: 0; margin: 0; }
+.results-filters button { margin: 0; }
+.results-filters .action-link { align-self: center; }
+.results-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.results-list > .result-item:only-child { grid-column: 1 / -1; }
+.result-item, .results-empty { background: var(--mf-card); border: 1px solid var(--mf-line); border-radius: 22px; padding: 24px; min-width: 0; overflow-wrap: anywhere; }
+.result-item h3 { margin: 18px 0 10px; font-size: 20px; line-height: 1.35; }
+.result-heading { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; }
+.result-heading a { font-size: 14px; color: inherit; }
+.result-state { padding: 6px 10px; border-radius: 8px; background: var(--mf-panel); font-size: 13px; font-weight: 700; }
+.result-revision { border-color: var(--mf-action); border-inline-start-width: 4px; }
+.result-next { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--mf-line); }
+.result-next strong, .result-next .eyebrow { display: block; }
+.result-next strong { margin: 8px 0; }
+.result-next p { font-size: 14px; }
+.result-comment { white-space: pre-wrap; overflow-wrap: anywhere; }
+.result-item details { margin: 14px 0; }
+.result-item summary { cursor: pointer; font-size: 14px; }
+.results-pages { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; align-items: center; margin-top: 22px; }
+.results-empty .action-link { display: inline-block; margin: 8px 16px 0 0; }
+.results-confirmation { padding: 14px 18px; border-radius: 12px; background: var(--mf-panel); }
+@media (max-width: 720px) {
+  .results-list { grid-template-columns: minmax(0, 1fr); }
+  .result-item, .results-empty { padding: 18px; border-radius: 18px; }
+  .results-filters label { flex-basis: 100%; }
+  .results-filters button { flex: 1; }
+}
+@media (forced-colors: active) {
+  .result-state, .result-revision { border: 1px solid CanvasText; }
+}

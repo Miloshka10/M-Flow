@@ -36,6 +36,7 @@ from auth_security import reserve_supervision_attempt
 from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue
 from dashboard_view import student_dashboard
 from project_workspace import render_workspace, task_deadline
+from student_results import parameters as result_parameters, load_results, render_results
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
 from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, change_stage, render_stages, STATE_LABELS
 from teamwork import (initialize_teamwork, profile_for, save_profile, directory, invite_student,
@@ -1372,9 +1373,18 @@ def index():
     if user['role'] == 'teacher':
         return teacher_cabinet()
     projects = get_projects(with_counts=True)
+    try:
+        result_params = result_parameters(request.args, projects)
+    except ValueError as error:
+        return render_error_page('Некорректный фильтр', str(error), 400)
+    except PermissionError as error:
+        return render_error_page('Нет доступа', str(error), 403)
+    with closing(get_db()) as conn:
+        results = render_results(load_results(conn, user, result_params), result_params, projects)
     messages = ''.join(f'<div class="{escape(category, quote=True)}" role="status">{escape(message)}</div>'
                        for category, message in get_flashed_messages(with_categories=True))
-    return render_page(PAGE_STYLE + student_dashboard(user, projects, csrf_token(), render_header(user), messages))
+    return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/student-results.css?v=20261015">'
+                       + student_dashboard(user, projects, csrf_token(), render_header(user), messages, results))
 
 
 # =========================================================

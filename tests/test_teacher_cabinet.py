@@ -13,6 +13,7 @@ from unittest.mock import patch
 from html.parser import HTMLParser
 from auth_cases import AuthSecurityCases
 from supervision_cases import SupervisionCases
+from results_cases import StudentResultsCases
 
 
 class FormTokens(HTMLParser):
@@ -37,7 +38,7 @@ class FormTokens(HTMLParser):
             self.current = None
 
 
-class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, unittest.TestCase):
+class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, unittest.TestCase):
     def test_feedback_stage_repeat_submission_does_not_apply_old_comment(self):
         self.assertEqual(self.stage_post(3).status_code, 302)
         self.assertEqual(self.stage_post(1, revision=1, action='return', teacher_comment='Старое замечание <b>').status_code, 302)
@@ -511,7 +512,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, unittest.TestCase
         conn.commit()
         conn.close()
         self.assertEqual(self.count_page_queries('/'), before)
-        self.assertLessEqual(before, 5)
+        self.assertLessEqual(before, 7)  # Two bounded reads for the student results center.
         page = self.client.get('/').text.split('aria-labelledby="upcoming-title"')[1].split('</section>')[0]
         self.assertEqual(page.count('#task-'), 6)
         self.assertIn('Показано 6 из 200', page)
@@ -1316,7 +1317,9 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, unittest.TestCase
         self.assertIn('class="project-row project-tile"', page)
         self.assertIn('<details id="project-create"', page)
         self.assertIn('for="project-name"', page)
-        self.assertEqual(len(FormTokens(page).forms), 3)  # Logout, project create, read notifications.
+        forms = FormTokens(page).forms
+        self.assertEqual(len(forms), 4)  # Three existing POSTs plus read-only result filters.
+        self.assertEqual(sum(form['method'] == 'post' for form in forms), 3)
         for path in ('/project/1', '/project/1/stages', '/project/1/defense', '/profile', '/settings'):
             self.assertIn('/static/product-design.css', self.client.get(path).text)
 

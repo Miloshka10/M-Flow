@@ -1,5 +1,6 @@
 """Transactional project notifications; no polling, external delivery or backfill."""
 from html import escape
+import re
 from database import execute_schema
 
 
@@ -71,6 +72,16 @@ def mark_read(conn, user_id, notification_id=None):
     return True
 
 
+def notification_target(row):
+    """Old stage links gain an anchor at render time, without changing records."""
+    target = row['target']
+    if target == f'/project/{row["project_id"]}/stages':
+        match = re.fullmatch(r'stage:' + str(row['project_id']) + r':([1-5]):[0-9]+', row['event_key'])
+        if match:
+            return target + '#stage-' + match[1]
+    return target
+
+
 def render_items(rows, token):
     if not rows:
         return '<p class="notification-empty">Пока нет уведомлений. Здесь появятся новые сдачи и результаты проверок.</p>'
@@ -80,7 +91,7 @@ def render_items(rows, token):
         button = (f'<form method="post" action="/notifications/{row["id"]}/read">{token}'
                   '<button class="secondary" type="submit">Отметить прочитанным</button></form>') if unread else '<small>Прочитано</small>'
         items.append(f'''<li class="notification-item {'is-unread' if unread else ''}">
-            <a href="{escape(row['target'], quote=True)}"><strong>{escape(row['title'])}</strong>
+            <a href="{escape(notification_target(row), quote=True)}"><strong>{escape(row['title'])}</strong>
             <span>{escape(row['project_name'])}</span><span>{escape(row['message'])}</span></a>
             <div class="notification-meta"><time>{escape(row['created_at'])} UTC</time>{button}</div></li>''')
     return '<ul class="notification-list">' + ''.join(items) + '</ul>'

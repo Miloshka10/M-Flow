@@ -137,12 +137,12 @@ def change_stage(conn, project_id, user, form):
         if action == 'submit':
             notify_project(conn, project_id, 'teacher',
                 f'stage:{project_id}:{current["number"]}:{current["revision"] + 1}',
-                f'Этап {current["number"]} отправлен на проверку', '', f'/project/{project_id}/stages')
+                f'Этап {current["number"]} отправлен на проверку', '', f'/project/{project_id}/stages#stage-{current["number"]}')
         elif action in ('accept', 'return'):
             notify_project(conn, project_id, 'student',
                 f'stage:{project_id}:{current["number"]}:{current["revision"] + 1}',
                 f'Этап {current["number"]}: ' + ('принят' if action == 'accept' else 'нужна доработка'),
-                comment, f'/project/{project_id}/stages')
+                comment, f'/project/{project_id}/stages#stage-{current["number"]}')
         conn.commit()
         return {"save": "Результат этапа сохранён.", "submit": "Этап отправлен учителю на проверку.",
                 "accept": "Этап принят. Следующий этап открыт.", "return": "Этап возвращён на доработку."}[action] if not (action == "accept" and current["number"] == 5) else "Все пять этапов проекта приняты!"
