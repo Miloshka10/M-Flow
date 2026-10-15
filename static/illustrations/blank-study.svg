@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 360" fill="none">
+  <!-- A fresh research sheet, not a fake progress report. -->
+  <path d="M126 68h177l45 45v183H126V68Z" fill="#f6f3e9" stroke="#77777e" stroke-width="2"/>
+  <path d="M303 68v45h45" fill="#e5e0cf" stroke="#77777e" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M149 90h25v24h-25z" fill="#ffdd2d"/>
+  <path d="M184 143h115M184 156h72" stroke="#aaa79d" stroke-width="2" stroke-linecap="round"/>
+  <path d="m261 242 59-82 12 9-59 82-20 12 8-21Z" fill="#ffdd2d" stroke="#48484e" stroke-width="2" stroke-linejoin="round"/>
+  <path d="m253 263 8-21 12 9-20 12Z" fill="#ded7c3"/>
+  <path d="m253 263 4-10 5 4-9 6Z" fill="#48484e"/>
+  <path d="M164 263h65" stroke="#aaa79d" stroke-width="2" stroke-linecap="round"/>
+</svg>

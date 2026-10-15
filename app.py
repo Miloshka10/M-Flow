@@ -10,6 +10,7 @@ from flask import (
     has_request_context
 )
 import os
+import mimetypes
 from contextlib import closing
 from database import DATABASE_ERRORS
 from functools import wraps
@@ -35,6 +36,7 @@ from teacher_supervision import (initialize_supervision, create_invite, preview_
 from auth_security import reserve_supervision_attempt
 from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue
 from dashboard_view import student_dashboard
+from graphics import illustration
 from project_workspace import render_workspace, task_deadline
 from student_results import parameters as result_parameters, load_results, render_results
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
@@ -48,6 +50,8 @@ from database import (DatabaseSettings, DatabaseUnavailable, INTEGRITY_ERRORS,
                       table_columns, insert_id, begin_project_write, initialization_settings, form_database_id)
 
 
+# Windows may not have a system MIME registration for WebP.
+mimetypes.add_type('image/webp', '.webp')
 app = Flask(__name__)
 DEBUG_MODE = os.environ.get("M_FLOW_DEBUG") == "1"
 
@@ -139,6 +143,7 @@ def render_page(html):
         '<script src="/static/preferences.js?v=20261005"></script>'
         '<script src="/static/motion.js?v=20261005-controls"></script>'
         '<link rel="stylesheet" href="/static/product-design.css?v=20261006">'
+        '<link rel="stylesheet" href="/static/graphics.css?v=20261015">'
         '<link rel="stylesheet" href="/static/notifications.css?v=20261013">'
         '<link rel="stylesheet" href="/static/deadlines.css?v=20261013-filters">'
         '<script src="/static/dashboard.js?v=20261006" defer></script>'
@@ -1126,7 +1131,7 @@ def render_auth_page(mode, error=None, role="student"):
                         <span class="auth-product-tag">ДЛЯ БОЛЬШИХ ИДЕЙ</span>
                         <h2 class="auth-logo auth-shimmer">M-Flow</h2>
                         <div class="auth-byline auth-shimmer">by Minich</div>
-                        <img class="auth-art" src="/static/project-kit.svg" alt="" width="480" height="360">
+                        {illustration('auth')}
                         <h3>{hero_title}</h3>
                         <p>{hero_text}</p>
                     </div>
@@ -3629,7 +3634,7 @@ def teacher_cabinet():
                         <p>{escape(user["username"])}, всё важное — перед вами.<br>Помогайте ученикам двигаться от идеи к результату.</p>
                         <a class="btn" href="#review-queue">Перейти к проверке <span aria-hidden="true">↗</span></a>
                     </div>
-                    <img class="hero-art" src="/static/project-kit.svg" alt="" width="480" height="360">
+                    {illustration('teacher')}
                     <div class="review-counter"><strong>{review_count}</strong><span>на проверке<br>этапы и видеозащиты</span></div>
                 </section>
                 {messages}

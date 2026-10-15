@@ -1356,11 +1356,56 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             self.assertIn('forced-colors', response.text)
             self.assertIn(':focus-visible', response.text)
             self.assertNotIn('@import', response.text)
-        with self.client.get('/static/project-kit.svg') as response:
-            from xml.etree import ElementTree
-            self.assertLess(len(response.data), 5000)
-            self.assertEqual(ElementTree.fromstring(response.data).attrib['viewBox'], '0 0 480 360')
-            self.assertNotIn('<script', response.text)
+        for name in ('research-bridge', 'research-notebook', 'review-study'):
+            for width in (480, 960):
+                with self.client.get(f'/static/illustrations/{name}-{width}.webp') as response:
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.mimetype, 'image/webp')
+                    self.assertGreater(len(response.data), 10000)
+                    self.assertLess(len(response.data), 150000)
+        with self.client.get('/static/graphics.css') as response:
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn('animation:', response.text)
+            self.assertNotIn('@import', response.text)
+
+    def test_contextual_graphics_do_not_change_content_or_write_user_data(self):
+        before = self.database_snapshot()
+        for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
+            page = self.client.get(path).text
+            self.assertEqual(page.count('/static/graphics.css'), 1)
+            self.assertIn('/static/illustrations/research-notebook-480.webp', page)
+            self.assertIn('by Minich', page)
+            self.assertNotIn('project-kit.svg', page)
+        self.sign_in(3)
+        page = self.client.get('/').text
+        self.assertIn('class="hero-art student-art"', page)
+        self.assertIn('/static/illustrations/research-bridge-480.webp', page)
+        self.assertIn('/static/illustrations/team-study.svg', page)
+        self.assertNotIn('blank-study.svg', page)  # Existing projects, not an empty state.
+        self.assertIn('От идеи —', page)
+        self.assertIn('33%', page)
+        self.sign_in(1)
+        page = self.client.get('/teacher').text
+        self.assertIn('class="hero-art teacher-art"', page)
+        self.assertIn('/static/illustrations/review-study-480.webp', page)
+        self.assertIn('class="review-counter"', page)
+        self.assertNotIn('project-kit.svg', page)
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_empty_graphic_is_lazy_and_all_art_assets_have_static_only_routes(self):
+        self.add_candidate()
+        self.sign_in(4)
+        page = self.client.get('/').text
+        self.assertIn('Пока чистый лист.', page)
+        self.assertIn('blank-study.svg" alt="" width="480" height="360" loading="lazy"', page)
+        self.assertIn('data-open-project', page)
+        for name in ('blank-study.svg', 'team-study.svg'):
+            with self.client.get('/static/illustrations/' + name) as response:
+                self.assertEqual(response.status_code, 200)
+                self.assertIn('svg', response.mimetype)
+        self.assertEqual(self.client.get('/static/project-kit.svg').status_code, 404)
+        self.assertEqual(self.client.get('/static/illustrations/research-bridge-source.png').status_code, 404)
+        self.assertEqual(self.client.get('/design/graphics-v1/research-bridge-source.png').status_code, 404)
 
     def test_touch_status_control_respects_task_permissions_and_saves(self):
         self.sign_in(3)

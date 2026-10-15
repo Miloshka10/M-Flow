@@ -1,6 +1,7 @@
 """Presentation only: no database, roles or request mutations."""
 from html import escape
 from deadlines import deadline_text, TIMEZONE_LABEL
+from graphics import illustration
 
 
 def student_dashboard(user, projects, token, header, messages, results=''):
@@ -18,7 +19,7 @@ def student_dashboard(user, projects, token, header, messages, results=''):
             <div class="tile-top"><span class="tile-folder" aria-hidden="true">↗</span><span>{caption}</span>{deadline}</div>
             <h3>{escape(p['name'])}</h3><div class="tile-bottom"><span>{p['done']} из {p['total']} задач выполнено</span><strong>{percent}%</strong></div>
             <div class="mini-progress"><div style="width:{percent}%"></div></div></a>''')
-    project_cards = ''.join(cards) or '''<div class="empty workspace-empty"><img src="/static/project-kit.svg" alt="" width="480" height="360">
+    project_cards = ''.join(cards) or '''<div class="empty workspace-empty"><img src="/static/illustrations/blank-study.svg" alt="" width="480" height="360" loading="lazy" decoding="async">
         <div><span class="eyebrow">ЗДЕСЬ НАЧИНАЕТСЯ ТВОЙ ПРОЕКТ</span><h3>Пока чистый лист.</h3>
         <p>Создай первый проект, собери команду и прими приглашение руководителя. Дальше — шаг за шагом.</p><a class="btn" href="#project-create" data-open-project>+ Новый проект</a></div></div>'''
     upcoming = sorted([(p, task) for p in projects for task in p.get('deadlines', [])],
@@ -37,11 +38,11 @@ def student_dashboard(user, projects, token, header, messages, results=''):
                 <h1>От идеи —<br>к результату.</h1><p>Твои проекты, команда и обратная связь учителя. Всё, что нужно для следующего шага.</p>
                 <a class="btn" href="#project-create" data-open-project>+ Новый проект <span aria-hidden="true">↗</span></a>
                 <a class="action-link results-shortcut" href="#student-results">Результаты и следующий шаг ↓</a></div>
-                <img class="hero-art" src="/static/project-kit.svg" alt="" width="480" height="360"></div>
+                {illustration('student')}</div>
             <div class="workspace-progress"><span class="eyebrow">ПРОГРЕСС ЗАДАЧ</span>
                 <div class="progress-orbit"><svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52" class="orbit-track"/><circle cx="60" cy="60" r="52" class="orbit-fill" stroke-dasharray="{progress * 3.267} 326.7"/></svg><strong>{progress}%</strong></div>
                 <p>{done} из {total} задач выполнено</p><small>Этапы проекта проверяются отдельно</small></div>
-            <a class="workspace-shortcut" href="/teams"><span class="shortcut-icon" aria-hidden="true">↗</span><div><h2>Сильнее вместе.</h2><p>Найди команду по навыкам, а не по классу.</p></div></a>
+            <a class="workspace-shortcut" href="/teams"><span class="shortcut-icon" aria-hidden="true"><img src="/static/illustrations/team-study.svg" alt="" width="48" height="48" decoding="async"></span><div><h2>Сильнее вместе.</h2><p>Найди команду по навыкам, а не по классу.</p></div></a>
         </section>{messages}
         <section class="stats-line dashboard-stats" aria-label="Показатели проектов"><div><strong>{len(projects)}</strong><span>Проектов</span></div><div><strong>{total}</strong><span>Всего задач</span></div><div><strong>{active}</strong><span>В работе</span></div><div><strong>{overdue}</strong><span>Просрочено</span></div></section>
         {results}

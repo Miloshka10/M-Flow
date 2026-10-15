@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--queue', action='store_true', help='Add isolated teacher queue cases for visual QA')
     parser.add_argument('--supervision', action='store_true', help='Isolated onboarding and replacement without an existing teacher')
     parser.add_argument('--results', action='store_true', help='Isolated student feedback, private grades and a review cycle')
+    parser.add_argument('--graphics', action='store_true', help='Add an empty student account for graphics QA')
     options = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root))
@@ -33,6 +34,8 @@ def main():
             password = generate_password_hash('preview-only-123')
             conn.executemany('INSERT INTO users(id,username,password,role) VALUES(?,?,?,?)',
                 [(1, 'preview-teacher', password, 'teacher'), (2, 'preview-student', password, 'student')])
+            if options.graphics:
+                conn.execute("INSERT INTO users(id,username,password,role) VALUES(100,'preview-empty',?,'student')", (password,))
             conn.execute("INSERT INTO projects(id,name,owner_id) VALUES(1,'Школьная метеостанция',2)")
             conn.executemany('INSERT INTO project_members(project_id,user_id) VALUES(1,?)', [(2,)] if options.supervision else [(1,), (2,)])
             if options.supervision:
