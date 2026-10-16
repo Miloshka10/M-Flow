@@ -139,6 +139,22 @@ def request_connection(conn, user, code, project_id):
         raise
 
 
+def consented_connection(conn, user, project_id, teacher_id):
+    """Caller holds the project write lock and a verified classroom membership.
+
+    Reuse the same request/approval rules; this does not grant project membership.
+    The caller commits the group selection and request together.
+    """
+    if user['role'] != 'student':
+        raise PermissionError('Проект предлагает ученик-владелец.')
+    project = _project(conn, project_id)
+    if project['owner_id'] != user['id']:
+        raise PermissionError('Подтвердить проект может только его владелец.')
+    if conn.execute("SELECT 1 FROM users WHERE id=? AND role='teacher'", (teacher_id,)).fetchone() is None:
+        raise PermissionError('Учитель недоступен.')
+    return _new_request(conn, project, teacher_id)
+
+
 def invitation_action(conn, user, form):
     try:
         if form.get('action') == 'decline':

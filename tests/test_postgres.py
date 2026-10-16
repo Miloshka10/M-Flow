@@ -18,7 +18,7 @@ import database
 
 
 TEST_URL = os.environ.get("M_FLOW_TEST_POSTGRES_URL", "")
-TABLES = ("supervision_requests", "teacher_invitations", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles",
+TABLES = ("learning_group_invitations", "learning_group_members", "learning_groups", "supervision_requests", "teacher_invitations", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles",
           "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users")
 
 
@@ -136,6 +136,30 @@ class PostgresCabinetTests(fixtures.TeacherCabinetTests):
         with ThreadPoolExecutor(max_workers=2) as pool:
             self.assertEqual(sorted(pool.map(lambda _: submit(), range(2))), ["saved", "stale"])
         self.assertEqual([row['recipient_id'] for row in self.notification_rows()], [1])
+
+    def test_concurrent_group_join_is_idempotent_and_capacity_is_enforced(self):
+        import learning_groups
+        gid = self.group_create(teacher=2)
+        code = self.group_code(gid, teacher=2)
+        def join(uid, invite):
+            with closing(self.module.get_db()) as conn:
+                try:
+                    return learning_groups.join_group(conn, dict(id=uid, role='student'), invite)
+                except ValueError:
+                    return 'full'
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            self.assertEqual(list(pool.map(lambda _: join(3, code), range(2))), [gid, gid])
+        with closing(self.module.get_db()) as conn:
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM learning_group_members WHERE group_id=?', (gid,)).fetchone()[0], 1)
+        self.add_candidate()
+        other = self.group_create(teacher=2)
+        other_code = self.group_code(other, teacher=2)
+        with patch('learning_groups.MAX_MEMBERS', 1), ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda uid: join(uid, other_code), (3, 4)))
+        self.assertEqual(results.count('full'), 1)
+        self.assertEqual(results.count(other), 1)
+        self.sign_in(2)
+        self.assertEqual(self.client.get('/project/2').status_code, 403)
 
     def test_concurrent_defense_submission_has_one_winner(self):
         from video_defense import change_defense

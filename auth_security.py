@@ -147,11 +147,11 @@ def reserve_attempt(get_db, secret, action, username, source, browser):
 
 
 @private_database_error
-def reserve_supervision_attempt(get_db, secret, user_id, source):
+def reserve_supervision_attempt(get_db, secret, user_id, source, purpose='supervision'):
     """Authenticated code attempts: shared storage and no whole-school IP lock."""
     now = int(time.time())
-    buckets = [(fingerprint(secret, 'supervision', 'account', user_id), 20, 300),
-               (fingerprint(secret, 'supervision', 'pair', user_id, source), 10, 60)]
+    buckets = [(fingerprint(secret, purpose, 'account', user_id), 20, 300),
+               (fingerprint(secret, purpose, 'pair', user_id, source), 10, 60)]
     with closing(get_db()) as conn:
         begin_auth_write(conn)
         _cleanup(conn, 'auth_limits', now)

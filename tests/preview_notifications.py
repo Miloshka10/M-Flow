@@ -18,7 +18,10 @@ def main():
     parser.add_argument('--supervision', action='store_true', help='Isolated onboarding and replacement without an existing teacher')
     parser.add_argument('--results', action='store_true', help='Isolated student feedback, private grades and a review cycle')
     parser.add_argument('--graphics', action='store_true', help='Add an empty student account for graphics QA')
+    parser.add_argument('--groups', action='store_true', help='Classroom roster, private projects and join flow on synthetic data')
     options = parser.parse_args()
+    if options.groups and (options.supervision or options.results or options.queue or options.deadlines):
+        parser.error('--groups uses an independent classroom fixture; only --graphics can be combined with it')
     root = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(root))
     with tempfile.TemporaryDirectory(prefix='mflow-notification-preview-') as folder:
@@ -38,6 +41,19 @@ def main():
                 conn.execute("INSERT INTO users(id,username,password,role) VALUES(100,'preview-empty',?,'student')", (password,))
             conn.execute("INSERT INTO projects(id,name,owner_id) VALUES(1,'Школьная метеостанция',2)")
             conn.executemany('INSERT INTO project_members(project_id,user_id) VALUES(1,?)', [(2,)] if options.supervision else [(1,), (2,)])
+            if options.groups:
+                conn.executemany('INSERT INTO users(id,username,password,role) VALUES(?,?,?,?)', [
+                    (3,'preview-engineer',password,'student'), (4,'preview-new-student',password,'student')])
+                conn.executemany('INSERT INTO projects(id,name,owner_id) VALUES(?,?,?)', [
+                    (2,'Робот для школьной теплицы',3), (3,'Измерение качества воды',4)])
+                conn.executemany('INSERT INTO project_members(project_id,user_id) VALUES(?,?)', [(2,3),(3,4)])
+                conn.execute("INSERT INTO learning_groups(id,teacher_id,name,description) VALUES(1,1,'10А — индивидуальные проекты','От темы до защиты. Все примеры в этой локальной группе — тестовые данные.')")
+                conn.executemany('INSERT INTO learning_group_members(group_id,student_id,project_id) VALUES(1,?,?)', [(2,1),(3,2)])
+                conn.execute("INSERT INTO project_stages(project_id,number,state,result,submitted_by,revision) VALUES(1,1,'review','Исследование микроклимата в школьных кабинетах',2,1)")
+                for n in range(6):
+                    uid = 10+n
+                    conn.execute("INSERT INTO users(id,username,password,role) VALUES(?,?,?,'student')", (uid,f'preview-classmate-{n+1:02d}',password))
+                    conn.execute('INSERT INTO learning_group_members(group_id,student_id) VALUES(1,?)', (uid,))
             if options.supervision:
                 conn.execute("INSERT INTO users(id,username,password,role) VALUES(3,'preview-next-teacher',?,'teacher')", (password,))
                 conn.execute("INSERT INTO projects(id,name,owner_id) VALUES(2,'Другой проект ученика',2)")

@@ -19,7 +19,8 @@ REQUIRED_TABLES = frozenset((
     "student_profiles", "team_invitations", "team_member_roles",
 ))
 # Older private archives remain restorable. New tables are checked when present.
-OPTIONAL_TABLES = frozenset(('notifications', 'auth_limits', 'auth_sessions', 'teacher_invitations', 'supervision_requests'))
+OPTIONAL_TABLES = frozenset(('notifications', 'auth_limits', 'auth_sessions', 'teacher_invitations', 'supervision_requests',
+                             'learning_groups', 'learning_group_members', 'learning_group_invitations'))
 PUBLIC_DIRECTORIES = frozenset(("static", "public", "www", "wwwroot", "htdocs"))
 
 

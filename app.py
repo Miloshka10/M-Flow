@@ -34,6 +34,9 @@ from project_rules import has_project_teacher
 from teacher_supervision import (initialize_supervision, create_invite, preview_invite, request_connection,
                                 invitation_action, request_end, respond_request, render_hub, participant)
 from auth_security import reserve_supervision_attempt
+from learning_groups import (initialize_groups, create_group, preview_code as preview_group_code,
+                             join_group, change_group, own_groups, group_for, roster,
+                             render_groups, render_group)
 from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue
 from dashboard_view import student_dashboard
 from graphics import illustration
@@ -284,6 +287,7 @@ def _prepare_database(conn):
     initialize_notifications(conn)
     initialize_auth(conn)
     initialize_supervision(conn)
+    initialize_groups(conn)
 
     project_columns = table_columns(conn, "projects")
 
@@ -2773,6 +2777,7 @@ def render_header(user, notification_data=None):
             {nav}
             <a href="/profile" class="logout">Профиль</a>
             <a href="/supervision" class="logout">Руководство</a>
+            <a href="/groups" class="logout">Учебные группы</a>
             {logout_form()}
         </div>
     </header>
@@ -2841,6 +2846,90 @@ def site_settings():
 
 def collaboration_token():
     return csrf_token()
+
+
+def group_attempt(user):
+    source = client_source(request.remote_addr, request.headers.get('X-Forwarded-For', ''), TRUSTED_AUTH_PROXIES)
+    retry = reserve_supervision_attempt(get_db, SECRET_KEY, user['id'], source, purpose='learning-groups')
+    if retry:
+        return render_collaboration_page(user, 'Учебные группы', '<a href="/groups">К моим группам</a>',
+            error=f'Слишком много попыток. Повторите через {retry} сек.', status=429)[0], 429, {'Retry-After': str(retry)}
+
+
+@app.route('/groups', methods=['GET', 'POST'])
+@login_required
+def learning_groups_page():
+    user = get_current_user()
+    if request.method == 'POST':
+        limited = group_attempt(user)
+        if limited:
+            return limited
+    error, status, preview = '', 200, None
+    with closing(get_db()) as conn:
+        try:
+            if request.method == 'POST':
+                action = request.form.get('action')
+                if action == 'create':
+                    gid = create_group(conn, user, request.form)
+                    flash('Учебная группа создана. Теперь можно пригласить класс по коду.')
+                    return redirect(f'/groups/{gid}')
+                if action == 'preview':
+                    raw = request.form.get('code', '').strip()
+                    preview = (preview_group_code(conn, user, raw), raw)
+                elif action == 'join':
+                    gid = join_group(conn, user, request.form.get('code', '').strip())
+                    flash('Вы в учебной группе. Выберите свой проект; руководство согласуется отдельно.')
+                    return redirect(f'/groups/{gid}')
+                else:
+                    raise ValueError('Выберите действие в актуальной форме.')
+        except (ValueError, PermissionError) as exc:
+            conn.rollback()
+            error, status = str(exc), 403 if isinstance(exc, PermissionError) else 400
+        body = render_groups(own_groups(conn, user), user, csrf_token(), preview)
+    return render_collaboration_page(user, 'Учебные группы', body, error=error, status=status)
+
+
+@app.route('/groups/<int:group_id>', methods=['GET', 'POST'])
+@login_required
+def learning_group_page(group_id):
+    user = get_current_user()
+    if not valid_database_id(group_id):
+        return render_error_page('Некорректный адрес', 'Откройте учебные группы заново.', 400)
+    if request.method == 'POST' and request.form.get('action') == 'invite':
+        limited = group_attempt(user)
+        if limited:
+            return limited
+    error, status, code = '', 200, None
+    with closing(get_db()) as conn:
+        try:
+            group = group_for(conn, user, group_id)
+        except PermissionError as exc:
+            return render_error_page('Нет доступа', str(exc), 403)
+        try:
+            if request.method == 'POST':
+                action = request.form.get('action')
+                code = change_group(conn, user, group_id, request.form)
+                if action == 'leave':
+                    flash('Вы вышли из группы. Проект и действующее руководство сохранены.')
+                    return redirect('/groups')
+                if action != 'invite':
+                    flash('Запрос сопровождения создан. Откройте «Руководство» для согласования.' if action == 'propose'
+                          else 'Выбор проекта для группы обновлён. Доступ к работам не изменён.' if action == 'select'
+                          else 'Группа обновлена. Проекты и действующее руководство сохранены.')
+                    return redirect(f'/groups/{group_id}')
+                group = group_for(conn, user, group_id)
+            data = roster(conn, user, group, request.args)
+        except (ValueError, PermissionError) as exc:
+            conn.rollback()
+            error, status = str(exc), 403 if isinstance(exc, PermissionError) else 400
+            try:
+                group = group_for(conn, user, group_id)
+            except PermissionError:
+                return render_error_page('Нет доступа', 'Вы больше не состоите в учебной группе.', 403)
+            data = roster(conn, user, group, {})
+        body = render_group(conn, user, group, data, csrf_token(), code)
+    return render_collaboration_page(user, group['name'], body, error=error, status=status,
+                                     back_url='/groups', back_label='← Учебные группы')
 
 
 @app.route('/supervision', methods=['GET', 'POST'])
@@ -2913,9 +3002,11 @@ def render_unsaved_result(form, user, target, defense=False):
         <a href="{target}">Открыть актуальную версию →</a></aside>'''
 
 
-def render_collaboration_page(user, title, body, project_id=None, error="", status=200):
+def render_collaboration_page(user, title, body, project_id=None, error="", status=200, back_url=None, back_label=None):
     messages = ''.join(f'<div class="success" role="status">{escape(message)}</div>' for message in get_flashed_messages())
     back = f'<a class="back" href="/project/{project_id}">← К задачам проекта</a>' if project_id else '<a class="back" href="/">← К моим проектам</a>'
+    if back_url:
+        back = f'<a class="back" href="{escape(back_url, quote=True)}">{escape(back_label or "Назад")}</a>'
     error_html = f'<div class="error" role="alert">{escape(error)}</div>' if error else ''
     return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/teamwork.css"><div class="container">{render_header(user)}
         <main class="team-page">{back}<h1>{escape(title)}</h1>{messages}{error_html}{body}</main></div>'''), status

@@ -73,6 +73,9 @@ class DatabaseBackupTests(unittest.TestCase):
                 role_text,message,state,updated_at) VALUES(1,2,?,'Инженер','Приглашение — тест',?,'2026-10-09 12:00:00')""",
                 [(2, "accepted"), (3, "pending")])
             conn.execute("PRAGMA user_version=7")
+            conn.execute("INSERT INTO learning_groups(id,teacher_id,name) VALUES(1,1,'Учебная группа — тест')")
+            conn.execute('INSERT INTO learning_group_members(group_id,student_id,project_id) VALUES(1,2,1)')
+            conn.execute("INSERT INTO learning_group_invitations(group_id,code_hash,expires) VALUES(1,?,2000000000)", ('1' * 64,))
             conn.execute("""INSERT INTO notifications(recipient_id,project_id,event_key,title,message,target)
                 VALUES(2,1,'test:review','Этап принят','Закрытый комментарий — тест','/project/1/stages')""")
             conn.execute("INSERT INTO auth_limits(bucket,hits,expires) VALUES('test-hmac-bucket',2,1900000000)")

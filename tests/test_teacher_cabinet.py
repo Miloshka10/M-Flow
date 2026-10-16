@@ -14,6 +14,7 @@ from html.parser import HTMLParser
 from auth_cases import AuthSecurityCases
 from supervision_cases import SupervisionCases
 from results_cases import StudentResultsCases
+from group_cases import LearningGroupCases
 
 
 class FormTokens(HTMLParser):
@@ -38,7 +39,7 @@ class FormTokens(HTMLParser):
             self.current = None
 
 
-class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, unittest.TestCase):
+class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, unittest.TestCase):
     def test_result_pages_show_moscow_update_time_for_both_roles(self):
         self.stage_post(3)
         self.defense_post()
@@ -848,7 +849,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
 
     def setUp(self):
         conn = self.module.get_db()
-        for table in ("supervision_requests", "teacher_invitations", "auth_sessions", "auth_limits", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
+        for table in ("learning_group_invitations", "learning_group_members", "learning_groups", "supervision_requests", "teacher_invitations", "auth_sessions", "auth_limits", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
             conn.execute(f"DELETE FROM {table}")
         conn.executemany("INSERT INTO users(id, username, password, role) VALUES(?, ?, ?, ?)", [
             (1, "teacher-one", self.password, "teacher"),
@@ -995,7 +996,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
                 self.assertEqual(session['user_id'], user_id)
 
     def test_all_rendered_post_forms_have_one_shared_token(self):
-        paths = ('/', '/teacher', '/project/1', '/profile', '/settings', '/skills', '/teams',
+        paths = ('/', '/teacher', '/project/1', '/profile', '/settings', '/skills', '/teams', '/groups',
                  '/project/1/team', '/project/1/defense', '/project/1/stages', '/project/1/assessment')
         for user_id in (1, 3):
             self.sign_in(user_id)
