@@ -7,6 +7,7 @@ from project_rules import has_project_teacher, TEACHER_REQUIRED
 from database import execute_schema, begin_project_write
 from notifications import notify_project
 from teacher_supervision import participant
+from deadlines import format_timestamp
 
 DEFENSE_STATES = {"draft": "Черновик", "submitted": "На проверке", "accepted": "Защита принята", "returned": "Нужна доработка"}
 
@@ -100,7 +101,7 @@ def render_defense(record, user, token, form=None, has_teacher=True):
     if record['description']:
         body += f'<p class="team-text">{escape(record["description"])}</p>'
     if record['author_name']:
-        body += f'<p class="t-muted">Автор: {escape(record["author_name"])} · Обновлено: {escape(record["updated_at"])}</p>'
+        body += f'<p class="t-muted">Автор: {escape(record["author_name"])} · Обновлено: {format_timestamp(record["updated_at"])}</p>'
     if record['reviewer_name']:
         body += f'<p>{"Проверял предыдущую сдачу" if record["state"] == "submitted" else "Проверил"}: {escape(record["reviewer_name"])}</p>'
     if record['teacher_comment']:

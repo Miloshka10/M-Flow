@@ -39,6 +39,29 @@ class FormTokens(HTMLParser):
 
 
 class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, unittest.TestCase):
+    def test_result_pages_show_moscow_update_time_for_both_roles(self):
+        self.stage_post(3)
+        self.defense_post()
+        for stored, displayed in (
+            ('2026-10-16 22:30:00', '17.10.2026 01:30 МСК'),
+            ('2026-10-17T03:30:00+02:00', '17.10.2026 04:30 МСК'),
+            ('not-a-date<script>', 'Дата не указана'),
+            ('9999-12-31 23:59:59', 'Дата не указана'),
+        ):
+            conn = self.module.get_db()
+            conn.execute('UPDATE project_stages SET updated_at=? WHERE project_id=1', (stored,))
+            conn.execute('UPDATE project_defenses SET updated_at=? WHERE project_id=1', (stored,))
+            conn.commit()
+            conn.close()
+            for user in (1, 3):
+                self.sign_in(user)
+                for path in ('/project/1/stages', '/project/1/defense'):
+                    with self.subTest(stored=stored, user=user, path=path):
+                        response = self.client.get(path)
+                        self.assertEqual(response.status_code, 200)
+                        self.assertIn('Обновлено: ' + displayed, response.text)
+                        self.assertNotIn(stored, response.text)
+
     def test_feedback_stage_repeat_submission_does_not_apply_old_comment(self):
         self.assertEqual(self.stage_post(3).status_code, 302)
         self.assertEqual(self.stage_post(1, revision=1, action='return', teacher_comment='Старое замечание <b>').status_code, 302)

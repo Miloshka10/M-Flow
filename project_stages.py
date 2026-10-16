@@ -6,6 +6,7 @@ from project_rules import has_project_teacher, TEACHER_REQUIRED
 from database import execute_schema, begin_project_write
 from notifications import notify_project
 from teacher_supervision import participant
+from deadlines import format_timestamp
 
 STAGES = (
     (1, "Выбор темы и согласование с учителем"),
@@ -168,7 +169,7 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True):
         if stage["presentation_url"]:
             html += f'<p><a class="action-link" href="{escape(stage["presentation_url"], quote=True)}" target="_blank" rel="noopener noreferrer">Открыть презентацию ↗</a></p>'
         if stage.get("author_name"):
-            html += f'<small>Автор результата: {escape(stage["author_name"])} · Обновлено: {escape(stage["updated_at"])}</small>'
+            html += f'<small>Автор результата: {escape(stage["author_name"])} · Обновлено: {format_timestamp(stage["updated_at"])}</small>'
         if stage.get("reviewer_name"):
             html += f'<p>{"Учитель предыдущей сдачи" if stage["state"] == "review" else "Учитель"}: {escape(stage["reviewer_name"])}</p>'
         if stage["teacher_comment"]:

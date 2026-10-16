@@ -8,6 +8,19 @@ DEADLINE_FILTERS = {'': 'Все задачи', 'overdue': 'Просроченн�
 TASK_SORTS = {'priority': 'По приоритету', 'deadline': 'По ближайшему сроку'}
 
 
+def format_timestamp(value):
+    """Display stored SQLite UTC or offset-aware PostgreSQL time in Moscow."""
+    if not isinstance(value, str) or not value:
+        return 'Дата не указана'
+    try:
+        stamp = datetime.fromisoformat(value)
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        return f'{stamp.astimezone(MOSCOW):%d.%m.%Y %H:%M} МСК'
+    except (ValueError, OverflowError):
+        return 'Дата не указана'
+
+
 def matches_deadline(info, mode):
     if not mode:
         return True
