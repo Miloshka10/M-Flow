@@ -1,5 +1,5 @@
 """Read-only project overview. Presentation never grants mutation permissions."""
-from deadlines import business_today, deadline_info, deadline_text
+from deadlines import business_today, deadline_info, deadline_text, format_timestamp
 from html import escape
 
 from grading import MAX_SCORE, load_scores, summarize
@@ -27,7 +27,7 @@ def next_step(stages, role, owner, has_teacher, defense, has_published=False):
     if role == 'student' and not has_teacher:
         editable = bool(current and current['state'] in ('todo', 'progress'))
         return step('teacher-missing', 'В проекте пока нет учителя',
-                    'Прими одноразовое приглашение учителя для этого проекта в разделе руководства. После подтверждения учителем станет доступна отправка на проверку; черновики доступны уже сейчас.' if owner else
+                    'Прими одноразовое приглашение учителя для этого проекта в разделе «Руководитель проекта». После подтверждения учителем станет доступна отправка на проверку; черновики доступны уже сейчас.' if owner else
                     ('Попроси владельца принять приглашение руководителя для проекта. Можно готовить черновик, но отправка на проверку пока недоступна.' if editable else
                      'Попроси владельца согласовать подключение руководителя. Отправленный результат нельзя менять до решения учителя.' if current else
                      'Попроси владельца согласовать подключение руководителя для продолжения проверки защиты и оценивания.'),
@@ -86,7 +86,7 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
     feedback = ''
     if current and stage_needs_revision(current):
         reviewer = escape(current.get('reviewer_name') or 'Учитель проекта')
-        updated = f' · Последнее обновление этапа: {escape(current["updated_at"])} UTC' if current['updated_at'] else ''
+        updated = f' · Последнее обновление этапа: {format_timestamp(current["updated_at"])}' if current['updated_at'] else ''
         feedback = f'''<aside class="journey-feedback" aria-label="Замечание учителя"><strong>Что исправить · этап {current['number']}</strong>
             <small>{reviewer}{updated}</small><p tabindex="0" aria-label="Замечание учителя; длинный текст можно прокрутить">{escape(current['teacher_comment'] or 'Комментарий не указан. Уточните, что нужно исправить, у учителя проекта.')}</p>
             <a href="{base}/stages#stage-{current['number']}">{'Перейти к доработке' if user['role'] == 'student' else 'Открыть результат и замечание'} →</a></aside>'''
@@ -141,9 +141,11 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
             <div><div><strong>Этапы, принятые учителем</strong><b>{done * 20}%</b></div><p>Принято {done} из 5 этапов</p><div class="project-progress"><div style="width:{done * 20}%"></div></div></div></div>
         <details class="journey-route"><summary>Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
             <p class="journey-explanation">Задачи помогают выполнять работу. Этап принимается только после решения учителя; защита и оценки проверяются отдельно.</p><ol>{route}</ol></details>
-        <nav class="journey-links" aria-label="Разделы проекта"><a href="#task-board"><strong>Задачи и отчёты ↗</strong><span data-workspace-task-summary>{completed_tasks} из {len(tasks)} · просрочено {overdue}</span></a>
-            <a href="{base}/stages"><strong>Этапы ↗</strong><span>Принято {done} из 5</span></a>
-            <a href="{base}/team"><strong>Команда ↗</strong><span>Участников: {len(members)}</span></a>
-            <a href="{base}/defense"><strong>Видеозащита ↗</strong><span>{defense_label}</span></a>
-            <a href="{base}/assessment"><strong>Оценивание ↗</strong><span>{grading}</span></a></nav>
+        <section class="project-supervisor" aria-labelledby="supervisor-title"><h2 id="supervisor-title">Руководитель проекта</h2>
+            <p>{escape(', '.join(m['username'] for m in members if m['role'] == 'teacher')) if has_teacher else 'Учитель пока не подключён. Черновики можно готовить уже сейчас.'}</p>
+            <a class="action-link" href="/supervision">Приглашения и согласование →</a></section>
+        <section class="project-finish" aria-labelledby="finish-title"><h2 id="finish-title">Завершение проекта</h2>
+            <p>После пяти этапов — видеозащита и итоговая оценка. Открыть эти разделы можно в любое время.</p>
+            <div class="project-finish-links"><a href="{base}/defense"><strong>Видеозащита ↗</strong><span>{defense_label}</span></a>
+            <a href="{base}/assessment"><strong>Оценивание ↗</strong><span>{grading}</span></a></div></section>
     </section>'''

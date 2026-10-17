@@ -4,24 +4,16 @@ from deadlines import deadline_text, TIMEZONE_LABEL
 from graphics import illustration
 
 
-def student_dashboard(user, projects, token, header, messages, results=''):
-    total = sum(p['total'] for p in projects)
-    done = sum(p['done'] for p in projects)
-    active = sum(p['active'] for p in projects)
-    overdue = sum(p['overdue'] for p in projects)
-    progress = round(done / total * 100) if total else 0
+def student_dashboard(user, projects, token, header, messages, results='', focus=None, results_open=False):
     cards = []
     for p in projects:
         percent = round(p['done'] / p['total'] * 100) if p['total'] else 0
         caption = 'Пока нет задач' if not p['total'] else 'Все задачи выполнены' if p['done'] == p['total'] else 'Работа продолжается'
         deadline = f'<span class="tile-alert">Просрочено: {p["overdue"]}</span>' if p['overdue'] else ''
-        cards.append(f'''<a class="project-row project-tile" href="/project/{p['id']}">
+        cards.append(f'''<a class="project-row project-tile" href="/?project={p['id']}">
             <div class="tile-top"><span class="tile-folder" aria-hidden="true">↗</span><span>{caption}</span>{deadline}</div>
             <h3>{escape(p['name'])}</h3><div class="tile-bottom"><span>{p['done']} из {p['total']} задач выполнено</span><strong>{percent}%</strong></div>
             <div class="mini-progress"><div style="width:{percent}%"></div></div></a>''')
-    project_cards = ''.join(cards) or '''<div class="empty workspace-empty"><img src="/static/illustrations/blank-study.svg" alt="" width="480" height="360" loading="lazy" decoding="async">
-        <div><span class="eyebrow">ЗДЕСЬ НАЧИНАЕТСЯ ТВОЙ ПРОЕКТ</span><h3>Пока чистый лист.</h3>
-        <p>Создай первый проект, собери команду и прими приглашение руководителя. Дальше — шаг за шагом.</p><a class="btn" href="#project-create" data-open-project>+ Новый проект</a></div></div>'''
     upcoming = sorted([(p, task) for p in projects for task in p.get('deadlines', [])],
                       key=lambda pair: (pair[1]['deadline_info']['date'], pair[1]['id']))
     upcoming_rows = ''.join(
@@ -31,29 +23,37 @@ def student_dashboard(user, projects, token, header, messages, results=''):
         for p, task in upcoming[:6])
     upcoming_html = (f'<ul class="upcoming-list">{upcoming_rows}</ul>' if upcoming else
                      '<p class="t-muted">Нет незавершённых задач со сроками.</p>')
-    return f'''<div class="container workspace student-workspace">{header}<main id="main-content">
-        <div class="workspace-intro"><span>ТВОЁ РАБОЧЕЕ ПРОСТРАНСТВО</span><span>M-Flow / проекты</span></div>
-        <section class="workspace-bento">
-            <div class="workspace-hero"><div class="hero-copy"><span class="hero-kicker">Привет, {escape(user['username'])}</span>
-                <h1>От идеи —<br>к результату.</h1><p>Твои проекты, команда и обратная связь учителя. Всё, что нужно для следующего шага.</p>
-                <a class="btn" href="#project-create" data-open-project>+ Новый проект <span aria-hidden="true">↗</span></a>
-                <a class="action-link results-shortcut" href="#student-results">Результаты и следующий шаг ↓</a></div>
-                {illustration('student')}</div>
-            <div class="workspace-progress"><span class="eyebrow">ПРОГРЕСС ЗАДАЧ</span>
-                <div class="progress-orbit"><svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52" class="orbit-track"/><circle cx="60" cy="60" r="52" class="orbit-fill" stroke-dasharray="{progress * 3.267} 326.7"/></svg><strong>{progress}%</strong></div>
-                <p>{done} из {total} задач выполнено</p><small>Этапы проекта проверяются отдельно</small></div>
-            <a class="workspace-shortcut" href="/teams"><span class="shortcut-icon" aria-hidden="true"><img src="/static/illustrations/team-study.svg" alt="" width="48" height="48" decoding="async"></span><div><h2>Сильнее вместе.</h2><p>Найди команду по навыкам, а не по классу.</p></div></a>
-        </section>{messages}
-        <section class="stats-line dashboard-stats" aria-label="Показатели проектов"><div><strong>{len(projects)}</strong><span>Проектов</span></div><div><strong>{total}</strong><span>Всего задач</span></div><div><strong>{active}</strong><span>В работе</span></div><div><strong>{overdue}</strong><span>Просрочено</span></div></section>
-        {results}
-        <section class="upcoming-panel" aria-labelledby="upcoming-title"><div class="section-title"><div>
-            <h2 id="upcoming-title">Ближайшие дела</h2><p>Твои задачи и задачи команды без ответственного · {TIMEZONE_LABEL}</p>
-            </div><span class="t-muted">Показано {min(6, len(upcoming))} из {len(upcoming)}</span></div>{upcoming_html}</section>
-        <section class="workspace-projects"><div class="section-title"><div><span class="eyebrow">ПРОДОЛЖАЙ С ТОГО, ГДЕ ОСТАНОВИЛСЯ</span><h2>Мои проекты</h2><p>Проекты, к которым у тебя есть доступ</p></div></div>
-            <details id="project-create" class="project-create"><summary>+ Новый проект</summary><form id="project-form" class="new-project show" action="/add_project" method="post">
-                <input type="hidden" name="csrf_token" value="{escape(token, quote=True)}"><label for="project-name">Название проекта</label><input id="project-name" name="name" placeholder="Название проекта" maxlength="80" required><button type="submit">Создать</button></form></details>
-            <div class="projects-list project-grid">{project_cards}</div></section>
-        <section class="workspace-guide"><div><span class="eyebrow">ПОНЯТНЫЙ МАРШРУТ</span><h2>Большая работа.<br>Пять небольших шагов.</h2><p>Выбери тему, пройди три этапа работы и подготовь документацию. Учитель поможет на каждом этапе.</p></div>
-            <ol class="route-strip"><li><b>01</b><span>Тема</span></li><li><b>02</b><span>Работа</span></li><li><b>03</b><span>Работа</span></li><li><b>04</b><span>Работа</span></li><li><b>05</b><span>Документы</span></li></ol></section>
-        <footer class="workspace-footer"><span>M-Flow <small>by Minich</small></span><a href="/settings">Настройки оформления ↗</a></footer>
-    </main></div>'''
+    create = f'''<details id="project-create" class="project-create"><summary>+ Новый проект</summary>
+        <form id="project-form" class="new-project show" action="/add_project" method="post">
+        <input type="hidden" name="csrf_token" value="{escape(token, quote=True)}"><label for="project-name">Название проекта</label>
+        <input id="project-name" name="name" placeholder="Название проекта" maxlength="80" required><button type="submit">Создать</button></form></details>'''
+    if focus:
+        p, step = focus['project'], focus['step']
+        base = f'/project/{p["id"]}'
+        target = step['target']
+        url = base + target if target and target.startswith('#') else target if target and target.startswith('/') else f'{base}/{target}' if target else base
+        options = ''.join(f'<option value="{item["id"]}" {"selected" if item["id"] == p["id"] else ""}>{escape(item["name"])}</option>' for item in projects)
+        switch = f'''<form class="focus-switch" method="get" action="/"><label for="current-project">Текущий проект</label>
+            <select id="current-project" name="project">{options}</select><button class="secondary">Выбрать</button></form>''' if len(projects) > 1 else '<span class="eyebrow">ТВОЙ ПРОЕКТ</span>'
+        comment = f'<aside class="focus-feedback"><strong>Замечание учителя</strong><p tabindex="0">{escape(focus["comment"])}</p></aside>' if focus['comment'] else ''
+        hero = f'''<section class="home-focus" aria-labelledby="focus-name">{switch}
+            <div class="home-focus-layout"><div><h1 id="focus-name"><a href="{base}">{escape(p['name'])}</a></h1>
+            <div class="home-next" data-home-step="{step['key']}"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span>
+            <h2>{step['title']}</h2><p>{step['text']}</p>{comment}<a class="btn" href="{url}">{step['action'] or 'Открыть проект'} →</a></div>
+            <a class="focus-overview" href="{base}">Обзор проекта →</a></div>{illustration('student')}</div></section>'''
+    else:
+        hero = f'''<section class="home-focus home-welcome"><div class="home-focus-layout"><div>
+            <span class="eyebrow">ПРИВЕТ, {escape(user['username'])}</span><h1>Начни свой проект.</h1>
+            <p>Есть код от учителя? Вступи в учебную группу. Готов начать работу? Создай свой проект.</p>
+            <div class="welcome-actions"><a class="btn" href="/groups#group-code">Ввести код группы</a>
+            <a class="action-link" href="#project-create" data-open-project>Создать проект</a></div>
+            <a class="focus-overview" href="/teams">Найти команду →</a></div>{illustration('student')}</div></section>'''
+    secondary = f'''<details class="home-details" {"open" if results_open else ""}><summary>Результаты и обратная связь</summary>{results}</details>
+        <details class="home-details"><summary>Ближайшие дела · {len(upcoming)}</summary><section class="upcoming-panel" aria-labelledby="upcoming-title">
+        <h2 id="upcoming-title">Ближайшие дела</h2><p class="t-muted">Показано {min(6, len(upcoming))} из {len(upcoming)}</p><p>Твои задачи и задачи команды без ответственного · {TIMEZONE_LABEL}</p>{upcoming_html}</section></details>''' if projects else ''
+    projects_html = f'''<section class="workspace-projects" id="my-projects"><div class="section-title"><div><h2>Мои проекты</h2>
+        <p>Выбери проект, чтобы увидеть следующий шаг.</p></div><a class="action-link" href="/teams">Найти команду →</a></div>
+        <div class="projects-list project-grid">{''.join(cards)}</div>{create}</section>''' if projects else f'<section class="workspace-projects">{create}</section>'
+    return f'''<div class="container workspace student-workspace">{header}<main id="main-content" class="simple-home">
+        {messages}{hero}{projects_html}{secondary}
+        <footer class="workspace-footer"><span>M-Flow <small>by Minich</small></span></footer></main></div>'''

@@ -301,7 +301,7 @@ def render_groups(groups, user, token, preview=None):
             <input type="hidden" name="action" value="create"><label>Название группы<input name="name" maxlength="120" required placeholder="Например, 10А — индивидуальные проекты"></label>
             <label>Описание для учеников<textarea name="description" maxlength="600" rows="2"></textarea></label><button>Создать группу</button></form></section>'''
     else:
-        body += f'''<section class="group-panel"><h2>Вступить в группу</h2><form method="post" class="group-form">{hidden_token(token)}
+        body += f'''<section class="group-panel" id="group-code"><h2>Вступить в группу</h2><form method="post" class="group-form">{hidden_token(token)}
             <input type="hidden" name="action" value="preview"><label>Код группы от учителя<input name="code" autocomplete="off" maxlength="32" required></label><button>Проверить код группы</button></form></section>'''
     if preview:
         group, code = preview

@@ -5,13 +5,35 @@ from urllib.parse import urlencode
 
 from deadlines import MOSCOW
 from grading import MAX_SCORE, load_scores, summarize
-from project_stages import STAGES, stages_from_rows
+from project_stages import STAGES, stages_from_rows, get_stages, stage_summary, stage_needs_revision
+from video_defense import defense_for
 from project_workspace import next_step
 from teacher_queue import sent_date
 
 PAGE_SIZE = 12
 STATES = {'all': 'Все результаты', 'revision': 'Нужна доработка', 'review': 'На проверке',
           'accepted': 'Принято', 'draft': 'Ещё не отправлено', 'grade': 'Личные оценки'}
+
+
+def load_focus(conn, user, project):
+    """Read one project after rechecking membership, including personal grade visibility."""
+    row = conn.execute('''SELECT p.owner_id,
+        EXISTS (SELECT 1 FROM users u WHERE u.role='teacher' AND (u.id=p.owner_id OR EXISTS
+            (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=u.id))) AS has_teacher,
+        EXISTS (SELECT 1 FROM project_assessments a WHERE a.project_id=p.id AND a.student_id=? AND a.state='published') AS published
+        FROM projects p WHERE p.id=? AND
+        (p.owner_id=? OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?))''',
+        (user['id'], project['id'], user['id'], user['id'])).fetchone()
+    if row is None:
+        raise PermissionError('Доступ к выбранному проекту изменился. Обновите страницу.')
+    stages = get_stages(conn, project['id'])
+    defense = defense_for(conn, project['id'])
+    step = next_step(stages, 'student', row['owner_id'] == user['id'],
+                     bool(row['has_teacher']), defense, bool(row['published']))
+    _, current = stage_summary(stages)
+    comment = current['teacher_comment'] if current and stage_needs_revision(current) else (
+        defense['teacher_comment'] if step['key'] == 'defense-prepare' and defense['state'] == 'returned' else '')
+    return dict(project=project, step=step, comment=comment)
 
 # Access is checked here, not inferred from a filter or a notification. There is
 # one current row per stage/defense; old notifications never manufacture results.
@@ -95,6 +117,8 @@ def load_results(conn, user, params):
 
 def result_url(params, page):
     values = dict(result_page=page)
+    if params.get('home_project'):
+        values['project'] = params['home_project']
     if params['project']:
         values['result_project'] = params['project']
     if params['state'] != 'all':
@@ -116,6 +140,8 @@ def result_date(item):
 
 
 def render_results(result, params, projects):
+    focus_field = f'<input type="hidden" name="project" value="{params["home_project"]}">' if params.get('home_project') else ''
+    reset = f'/?project={params["home_project"]}#student-results' if params.get('home_project') else '/#student-results'
     options = '<option value="">Все проекты</option>' + ''.join(
         f'<option value="{p["id"]}" {"selected" if params["project"] == p["id"] else ""}>{escape(p["name"])}</option>' for p in projects)
     states = ''.join(f'<option value="{key}" {"selected" if params["state"] == key else ""}>{label}</option>' for key, label in STATES.items())
@@ -125,9 +151,10 @@ def render_results(result, params, projects):
         <h2 id="results-title">Центр результатов</h2><p>Сначала то, что нужно исправить. Только актуальные результаты и твои опубликованные оценки.</p></div></div>
         <p class="t-muted">Доработать: {counts.get('revision', 0)} · На проверке: {counts.get('review', 0)} · Принято: {counts.get('accepted', 0)} · Личных оценок: {counts.get('grade', 0)}</p>
         <form class="results-filters" method="get" action="/#student-results">
+            {focus_field}
             <label>Проект<select name="result_project">{options}</select></label>
             <label>Состояние<select name="result_state">{states}</select></label>
-            <button type="submit">Показать</button><a class="action-link" href="/#student-results">Сбросить</a></form>
+            <button type="submit">Показать</button><a class="action-link" href="{reset}">Сбросить</a></form>
         <details class="results-help"><summary>О датах и состояниях</summary><p class="t-muted">Даты: Москва (UTC+3). У этапа после правок известна дата последнего обновления, а не отдельная дата прежней проверки. Отчёты находятся в задачах и не получают статус принятого этапа.</p></details>'''
     if not projects:
         html += '<div class="results-empty"><h3>Пока нет проектов</h3><p>Создай проект — здесь появятся результаты и обратная связь учителя.</p><a class="action-link" href="#project-create" data-open-project>Создать первый проект →</a></div>'

@@ -105,7 +105,8 @@ class StudentResultsCases:
         with closing(self.module.get_db()) as conn:
             conn.execute('DELETE FROM project_members WHERE project_id=1 AND user_id=4')
             conn.commit()
-        self.assertNotIn('Общая обратная связь', self.result_section(user=4))
+        self.sign_in(4)
+        self.assertNotIn('Общая обратная связь', self.client.get('/').text)
         self.assertEqual(self.client.get('/?result_project=1').status_code, 403)
 
     def test_results_foreign_scope_and_legacy_owner_without_membership(self):
@@ -167,9 +168,11 @@ class StudentResultsCases:
         for value in ('',None,'bad','9999-12-31 23:59:59','0001-01-01T00:00:00+10:00'):
             self.assertEqual(result_date(dict(updated_at=value,category='revision',kind='stage')),'Дата не указана')
         self.add_candidate()
-        html = self.result_section(user=4)
-        self.assertIn('Пока нет проектов',html)
-        self.assertIn('Создать первый проект',html)
+        self.sign_in(4)
+        html = self.client.get('/').text
+        self.assertIn('Начни свой проект.',html)
+        self.assertIn('Ввести код группы',html)
+        self.assertNotIn('id="student-results"',html)
 
     def test_results_unsubmitted_empty_and_malformed_grade_do_not_invent_completion(self):
         html = self.result_section()
@@ -213,7 +216,7 @@ class StudentResultsCases:
                 conn.execute("INSERT INTO project_stages(project_id,number,state,result) VALUES(?,1,'review',?)",(pid,'X'*5000))
             conn.commit()
         self.assertEqual(self.count_page_queries('/'),before)
-        self.assertLessEqual(before,10)
+        self.assertLessEqual(before,13)  # Three bounded reads for the focused project.
         with closing(self.module.get_db()) as conn:
             data = load_results(conn,dict(id=3),dict(project=0,state='all',page=1))
         self.assertEqual(len(data['items']),PAGE_SIZE)

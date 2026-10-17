@@ -41,7 +41,8 @@ from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, r
 from dashboard_view import student_dashboard
 from graphics import illustration
 from project_workspace import render_workspace, task_deadline
-from student_results import parameters as result_parameters, load_results, render_results
+from navigation import project_navigation
+from student_results import parameters as result_parameters, load_results, render_results, load_focus
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
 from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, change_stage, render_stages, STATE_LABELS
 from teamwork import (initialize_teamwork, profile_for, save_profile, directory, invite_student,
@@ -150,14 +151,10 @@ def render_page(html):
         '<link rel="stylesheet" href="/static/notifications.css?v=20261013">'
         '<link rel="stylesheet" href="/static/deadlines.css?v=20261013-filters">'
         '<script src="/static/dashboard.js?v=20261006" defer></script>'
+        '<link rel="stylesheet" href="/static/navigation.css?v=20261017">'
+        '<script src="/static/navigation.js?v=20261017" defer></script>'
             f'</head><body id="page-content"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
-
-def teacher_nav(user):
-    team_link = '<a href="/teams" class="logout">Команды</a><a href="/settings" class="logout">Настройки</a>'
-    if user["role"] == "teacher":
-        return '<a href="/teacher" class="logout">Кабинет учителя</a>' + team_link
-    return team_link
 
 DATABASE_SETTINGS = DatabaseSettings.from_environment(app.root_path)
 DATABASE_PATH = DATABASE_SETTINGS.path
@@ -1384,16 +1381,24 @@ def index():
     projects = get_projects(with_counts=True)
     try:
         result_params = result_parameters(request.args, projects)
+        selected = result_parameters({'result_project': request.args.get('project', '')}, projects)['project']
+        selected = selected or result_params['project'] or (projects[0]['id'] if projects else 0)
+        result_params['home_project'] = selected
     except ValueError as error:
         return render_error_page('Некорректный фильтр', str(error), 400)
     except PermissionError as error:
         return render_error_page('Нет доступа', str(error), 403)
     with closing(get_db()) as conn:
         results = render_results(load_results(conn, user, result_params), result_params, projects)
+        try:
+            focus = load_focus(conn, user, next(p for p in projects if p['id'] == selected)) if selected else None
+        except PermissionError as error:
+            return render_error_page('Нет доступа', str(error), 403)
     messages = ''.join(f'<div class="{escape(category, quote=True)}" role="status">{escape(message)}</div>'
                        for category, message in get_flashed_messages(with_categories=True))
     return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/student-results.css?v=20261015">'
-                       + student_dashboard(user, projects, csrf_token(), render_header(user), messages, results))
+                       + student_dashboard(user, projects, csrf_token(), render_header(user), messages, results, focus,
+                                           any(key.startswith("result_") for key in request.args)))
 
 
 # =========================================================
@@ -2113,6 +2118,7 @@ def project(project_id):
             <main class="project-workspace">
                 <a href="/" class="back">← Все проекты</a>
                 {messages}
+                {project_navigation(project_id)}
                 {workspace_html}
 
 
@@ -2270,7 +2276,7 @@ def add_member(project_id):
 
     if user['role'] != 'student':
         conn.close()
-        return render_error_page('Нужно приглашение', 'Учителя нельзя добавить по логину. Примите его приглашение в разделе «Руководство».', 403)
+        return render_error_page('Нужно приглашение', 'Учителя нельзя добавить по логину. Примите его приглашение в разделе «Руководитель проекта».', 403)
 
     current_user = get_current_user()
 
@@ -2394,7 +2400,7 @@ def remove_member(
     target = conn.execute('SELECT role FROM users WHERE id=?', (user_id,)).fetchone()
     if target and target['role'] == 'teacher':
         conn.close()
-        return render_error_page('Руководитель защищён', 'Удаление учителя учеником запрещено. Запросите согласованную смену или завершение в разделе «Руководство».', 403)
+        return render_error_page('Руководитель защищён', 'Удаление учителя учеником запрещено. Запросите согласованную смену или завершение в разделе «Руководитель проекта».', 403)
 
     removed = conn.execute(
         """
@@ -2757,28 +2763,33 @@ def percent(done, total):
 
 
 def render_header(user, notification_data=None):
-    nav = teacher_nav(user)
     if notification_data is None:
         with closing(get_db()) as conn:
             count, rows = notification_feed(conn, user['id'])
     else:
         count, rows = notification_data
     bell = render_bell(count, rows, csrf_input())
+    home = '/teacher' if user['role'] == 'teacher' else '/'
+    label = 'Кабинет' if user['role'] == 'teacher' else 'Мои проекты'
+    home_current = ' aria-current="page"' if request.path == home else ''
+    group_current = ' aria-current="page"' if request.path.startswith('/groups') else ''
+    links = f'<a href="{home}"{home_current}>{label}</a><a href="/groups"{group_current}>Учебные группы</a>'
     return f"""
-    <header class="main-header">
-        <a href="/" class="brand">M<span>-</span>Flow</a>
-        <div class="account">
-            <div class="account-text">
-                <strong>{escape(user["username"])}</strong>
-                <small>{"Учитель" if user["role"] == "teacher" else "Ученик"}</small>
-            </div>
-            <div class="avatar">{escape(user["username"][0].upper())}</div>
+    <header class="main-header simple-header">
+        <a href="{home}" class="brand" aria-label="M-Flow — на главную" title="На главную">M<span>-</span>Flow</a>
+        <nav class="primary-navigation" aria-label="Основные разделы">{links}</nav>
+        <div class="header-actions">
             {bell}
-            {nav}
-            <a href="/profile" class="logout">Профиль</a>
-            <a href="/supervision" class="logout">Руководство</a>
-            <a href="/groups" class="logout">Учебные группы</a>
-            {logout_form()}
+            <details class="account-menu">
+                <summary aria-controls="account-panel"><span class="account-desktop-label">Мой аккаунт</span><span class="account-mobile-label">Меню</span><span aria-hidden="true">⌄</span></summary>
+                <div class="account-panel" id="account-panel">
+                    <nav class="mobile-navigation" aria-label="Основные разделы">{links}</nav>
+                    <div class="account-identity"><strong>{escape(user['username'])}</strong><small>{'Учитель' if user['role'] == 'teacher' else 'Ученик'}</small></div>
+                    <a href="/profile">Мой профиль</a>
+                    <a href="/settings">Настройки</a>
+                    {logout_form()}
+                </div>
+            </details>
         </div>
     </header>
     """
@@ -2913,7 +2924,7 @@ def learning_group_page(group_id):
                     flash('Вы вышли из группы. Проект и действующее руководство сохранены.')
                     return redirect('/groups')
                 if action != 'invite':
-                    flash('Запрос сопровождения создан. Откройте «Руководство» для согласования.' if action == 'propose'
+                    flash('Запрос сопровождения создан. Откройте «Руководитель проекта» для согласования.' if action == 'propose'
                           else 'Выбор проекта для группы обновлён. Доступ к работам не изменён.' if action == 'select'
                           else 'Группа обновлена. Проекты и действующее руководство сохранены.')
                     return redirect(f'/groups/{group_id}')
@@ -2944,7 +2955,7 @@ def supervision_page():
         source = client_source(request.remote_addr, request.headers.get('X-Forwarded-For', ''), TRUSTED_AUTH_PROXIES)
         retry = reserve_supervision_attempt(get_db, SECRET_KEY, user['id'], source)
         if retry:
-            return render_collaboration_page(user, 'Руководство проектами', '<p><a href="/supervision">Вернуться к приглашениям</a></p>',
+            return render_collaboration_page(user, 'Руководитель проекта', '<p><a href="/supervision">Вернуться к приглашениям</a></p>',
                 error=f'Слишком много попыток. Повторите через {retry} сек.', status=429)[0], 429, {'Retry-After': str(retry)}
     error, status, code, preview = '', 200, None, None
     with closing(get_db()) as conn:
@@ -2978,7 +2989,7 @@ def supervision_page():
             conn.rollback()
             error, status = str(exc), 403 if isinstance(exc, PermissionError) else 400
         body = render_hub(conn, user, csrf_token(), before=before, preview=preview, code=code)
-    return render_collaboration_page(user, 'Руководство проектами', body, error=error, status=status)
+    return render_collaboration_page(user, 'Руководитель проекта', body, error=error, status=status)
 
 
 def render_unsaved_result(form, user, target, defense=False):
@@ -3004,12 +3015,12 @@ def render_unsaved_result(form, user, target, defense=False):
 
 def render_collaboration_page(user, title, body, project_id=None, error="", status=200, back_url=None, back_label=None):
     messages = ''.join(f'<div class="success" role="status">{escape(message)}</div>' for message in get_flashed_messages())
-    back = f'<a class="back" href="/project/{project_id}">← К задачам проекта</a>' if project_id else '<a class="back" href="/">← К моим проектам</a>'
+    back = f'<a class="back" href="/project/{project_id}">← К обзору проекта</a>' if project_id else '<a class="back" href="/">← К моим проектам</a>'
     if back_url:
         back = f'<a class="back" href="{escape(back_url, quote=True)}">{escape(back_label or "Назад")}</a>'
     error_html = f'<div class="error" role="alert">{escape(error)}</div>' if error else ''
     return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/teamwork.css"><div class="container">{render_header(user)}
-        <main class="team-page">{back}<h1>{escape(title)}</h1>{messages}{error_html}{body}</main></div>'''), status
+        <main class="team-page">{back}{project_navigation(project_id, "team" if request.path.endswith("/team") else "") if project_id else ""}<h1>{escape(title)}</h1>{messages}{error_html}{body}</main></div>'''), status
 
 
 @app.route('/skills', methods=['GET','POST'])
@@ -3182,8 +3193,8 @@ def project_stage_page(project_id):
     unsaved = render_unsaved_result(request.form, user, f'/project/{project_id}/stages') if error and submitted is None else ''
     return render_page(PAGE_STYLE + f'''
         <link rel="stylesheet" href="/static/project-stages.css"><link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback"><div class="container">{render_header(user)}
-        <main class="stages-page"><a class="back" href="/project/{project_id}">← К задачам проекта</a>
-        <h1>Пять этапов · {escape(project_name)}</h1>
+        <main class="stages-page"><a class="back" href="/project/{project_id}">← К обзору проекта</a>
+        {project_navigation(project_id, "stages")}<h1>Пять этапов · {escape(project_name)}</h1>
         <p>Ученики сохраняют результат и отправляют его учителю. После принятия открывается следующий этап.
         Этапы общие для участников проекта; их прохождение не меняет статусы задач и итоговые баллы.</p>
         {messages}<p role="alert">{escape(error)}</p>{unsaved}{render_stages(stages, user, token, submitted, has_teacher=has_teacher)}</main></div>'''), status
@@ -3319,8 +3330,8 @@ def project_assessment(project_id):
     messages = "".join(f'<p role="status">{escape(message)}</p>' for message in get_flashed_messages())
     return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/assessment.css">
         <div class="app">{render_header(user)}<main class="main-content assessment-page">
-        <a class="back" href="/project/{project_id}">← К задачам проекта</a>
-        <h1>Оценивание · {escape(project_name)}</h1>
+        <a class="back" href="/project/{project_id}">← К обзору проекта</a>
+        {project_navigation(project_id, "")}<h1>Оценивание · {escape(project_name)}</h1>
         <p>12 критериев · максимум 45 баллов. Шкала: «5» — 39–45, «4» — 30–38, «3» — 21–29, «2» — 0–20.</p>
         {messages}<p role="alert">{escape(error)}</p>{content}</main></div>
         <script src="/static/assessment.js"></script>'''), status
@@ -3683,7 +3694,7 @@ def teacher_cabinet():
     """ if overview else """
         <div class="empty">
             <h3>Ваше рабочее пространство готово</h3>
-            <p>Создайте приглашение в разделе «Руководство». Владелец подтвердит конкретный проект, затем вы сможете принять его на сопровождение. Здесь появятся доступные вам результаты.</p>
+            <p>Создайте приглашение в разделе «Руководитель проекта». Владелец подтвердит конкретный проект, затем вы сможете принять его на сопровождение. Здесь появятся доступные вам результаты.</p>
         </div>
     """)
 
@@ -3758,7 +3769,7 @@ def teacher_cabinet():
                 <div class="section-title"><h2>Проекты</h2>
                     <span class="t-muted">Показано {len(visible_projects)} из {len(overview)}</span></div>
                 {projects_html}
-                <section class="teacher-panel"><h2>Как подключиться к проекту</h2><p>Создайте одноразовый код, передайте его ученику. Владелец подтверждает конкретный проект, затем вы берёте его на сопровождение. Другие проекты не открываются автоматически.</p><a class="teacher-primary-link" href="/supervision">Приглашения и руководство →</a></section>
+                <section class="teacher-panel"><h2>Как подключиться к проекту</h2><p>Создайте одноразовый код, передайте его ученику. Владелец подтверждает конкретный проект, затем вы берёте его на сопровождение. Другие проекты не открываются автоматически.</p><a class="teacher-primary-link" href="/supervision">Руководитель проекта →</a></section>
                 <footer class="workspace-footer"><span>M-Flow <small>by Minich</small></span><a href="/settings">Настройки оформления ↗</a></footer>
             </main>
         </div>
@@ -3769,7 +3780,7 @@ def teacher_cabinet():
 @app.route("/teacher/projects", methods=["POST"])
 @login_required
 def create_teacher_project():
-    return render_error_page('Нет доступа', 'Проекты создают ученики. Пригласите владельца кодом в разделе «Руководство».', 403)
+    return render_error_page('Нет доступа', 'Проекты создают ученики. Пригласите владельца кодом в разделе «Руководитель проекта».', 403)
 
 
 @app.route('/project/<int:project_id>/transfer', methods=['POST'])

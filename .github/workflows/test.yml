@@ -45,5 +45,6 @@ jobs:
         run: |
           node tests/test_kanban.cjs
           node tests/test_dashboard.cjs
+          node tests/test_navigation.cjs
           node tests/test_motion.cjs
           node tests/test_preferences.cjs

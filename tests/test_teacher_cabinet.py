@@ -15,6 +15,7 @@ from auth_cases import AuthSecurityCases
 from supervision_cases import SupervisionCases
 from results_cases import StudentResultsCases
 from group_cases import LearningGroupCases
+from navigation_cases import NavigationCases
 
 
 class FormTokens(HTMLParser):
@@ -39,7 +40,7 @@ class FormTokens(HTMLParser):
             self.current = None
 
 
-class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, unittest.TestCase):
+class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, NavigationCases, unittest.TestCase):
     def test_result_pages_show_moscow_update_time_for_both_roles(self):
         self.stage_post(3)
         self.defense_post()
@@ -536,7 +537,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         conn.commit()
         conn.close()
         self.assertEqual(self.count_page_queries('/'), before)
-        self.assertLessEqual(before, 7)  # Two bounded reads for the student results center.
+        self.assertLessEqual(before, 10)  # Results plus three bounded reads for the current project.
         page = self.client.get('/').text.split('aria-labelledby="upcoming-title"')[1].split('</section>')[0]
         self.assertEqual(page.count('#task-'), 6)
         self.assertIn('Показано 6 из 200', page)
@@ -1342,7 +1343,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertIn('<details id="project-create"', page)
         self.assertIn('for="project-name"', page)
         forms = FormTokens(page).forms
-        self.assertEqual(len(forms), 4)  # Three existing POSTs plus read-only result filters.
+        self.assertEqual(len(forms), 5)  # Three POSTs, project switch and result filters.
         self.assertEqual(sum(form['method'] == 'post' for form in forms), 3)
         for path in ('/project/1', '/project/1/stages', '/project/1/defense', '/profile', '/settings'):
             self.assertIn('/static/product-design.css', self.client.get(path).text)
@@ -1351,15 +1352,16 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.sign_in(3)
         before = self.database_snapshot()
         page = self.client.get('/').text
-        self.assertIn('1 из 3 задач выполнено', page)
-        self.assertIn('33%', page)
+        self.assertIn('1 из 1 задач выполнено', page)
+        self.assertIn('0 из 2 задач выполнено', page)
+        self.assertIn('100%', page)
         self.assertNotIn('Private project', page)
         self.assertEqual(self.database_snapshot(), before)
         self.add_candidate()
         self.sign_in(4)
         page = self.client.get('/').text
-        self.assertIn('Пока чистый лист.', page)
-        self.assertIn('0 из 0 задач выполнено', page)
+        self.assertIn('Начни свой проект.', page)
+        self.assertNotIn('Прогресс задач', page)
         self.assertNotIn('project-row project-tile', page)
 
     def test_teacher_review_counter_uses_submitted_results_not_task_completion(self):
@@ -1404,10 +1406,10 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         page = self.client.get('/').text
         self.assertIn('class="hero-art student-art"', page)
         self.assertIn('/static/illustrations/research-bridge-480.webp', page)
-        self.assertIn('/static/illustrations/team-study.svg', page)
+        self.assertIn('Найти команду', page)
         self.assertNotIn('blank-study.svg', page)  # Existing projects, not an empty state.
-        self.assertIn('От идеи —', page)
-        self.assertIn('33%', page)
+        self.assertIn('data-home-step=', page)
+        self.assertIn('100%', page)
         self.sign_in(1)
         page = self.client.get('/teacher').text
         self.assertIn('class="hero-art teacher-art"', page)
@@ -1420,8 +1422,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.add_candidate()
         self.sign_in(4)
         page = self.client.get('/').text
-        self.assertIn('Пока чистый лист.', page)
-        self.assertIn('blank-study.svg" alt="" width="480" height="360" loading="lazy"', page)
+        self.assertIn('Начни свой проект.', page)
+        self.assertIn('research-bridge-480.webp', page)
         self.assertIn('data-open-project', page)
         for name in ('blank-study.svg', 'team-study.svg'):
             with self.client.get('/static/illustrations/' + name) as response:
