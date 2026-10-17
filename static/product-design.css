@@ -35,7 +35,6 @@ body input[type="checkbox"] { accent-color: var(--mf-accent); }
 .skip-link:focus { transform: translateY(0); }
 body .main-header { min-height: 100px; padding: 20px 0; border-bottom: 0; gap: 24px; }
 body .brand { display: inline-flex; align-items: center; gap: 0; font-size: 26px; letter-spacing: -.055em; color: var(--mf-text); }
-.brand::before { content: 'М'; display: grid; place-items: center; background: var(--mf-action); color: #222226; width: 38px; height: 38px; border-radius: 12px; margin-right: 10px; font-size: 25px; font-weight: 700; }
 body .brand span { color: inherit; }
 body .account { gap: 8px; }
 body .account-text { margin-right: 6px; }
@@ -285,6 +284,6 @@ html[data-theme="dark"] body .project-progress, html[data-theme="dark"] body .t-
   *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
 }
 @media (forced-colors: active) {
-  body .workspace-hero, body .project-tile, body .teacher-panel, body .auth-hero, .brand::before { border: 1px solid CanvasText; }
+  body .workspace-hero, body .project-tile, body .teacher-panel, body .auth-hero { border: 1px solid CanvasText; }
   .orbit-track { stroke: GrayText; } .orbit-fill { stroke: Highlight; }
 }

@@ -21,7 +21,7 @@ function setup(panels) {
   const window = {matchMedia: () => ({addEventListener: (_, fn) => {resized = fn;}}), addEventListener: () => {}};
   vm.runInNewContext(source, {document, window});
   handlers.DOMContentLoaded();
-  return {handlers, resize: () => resized()};
+  return {handlers, document, resize: () => resized()};
 }
 const account = panel(), notifications = panel();
 const app = setup([account, notifications]);
@@ -48,5 +48,14 @@ assert.equal(notifications.open, false);
 account.open = true; account.handlers.toggle();
 app.resize();
 assert.equal(account.open, false);
+const focusedPanel = panel();
+const focusedApp = setup([focusedPanel]);
+const menuLink = {};
+focusedPanel.contains = node => node === menuLink || node === focusedPanel.trigger;
+focusedApp.document.activeElement = menuLink;
+focusedPanel.open = true; focusedPanel.handlers.toggle();
+focusedApp.resize();
+assert.equal(focusedPanel.open, false);
+assert.equal(focusedPanel.trigger.focused, true, 'Resizing must not leave keyboard focus in a closed menu');
 assert.doesNotThrow(() => setup([]));
 console.log('Navigation checks passed: disclosure state, Escape/focus, outside click, focus leaving, exclusive panels, viewport changes.');

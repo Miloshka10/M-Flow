@@ -24,7 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('focusin', event => {
     panels.filter(panel => panel.open && !panel.contains(event.target)).forEach(panel => close(panel));
   });
-  window.matchMedia('(max-width: 800px)').addEventListener('change', () => panels.forEach(panel => close(panel)));
+  window.matchMedia('(max-width: 800px)').addEventListener('change', () => {
+    panels.forEach(panel => close(panel, panel.open && panel.contains(document.activeElement)));
+  });
   // Both links share the board URL; its fragment identifies the tasks section.
   function syncProjectTab() {
     const overview = document.querySelector('[data-project-tab="overview"]');

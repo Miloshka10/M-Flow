@@ -31,8 +31,11 @@ def load_focus(conn, user, project):
     step = next_step(stages, 'student', row['owner_id'] == user['id'],
                      bool(row['has_teacher']), defense, bool(row['published']))
     _, current = stage_summary(stages)
-    comment = current['teacher_comment'] if current and stage_needs_revision(current) else (
-        defense['teacher_comment'] if step['key'] == 'defense-prepare' and defense['state'] == 'returned' else '')
+    needs_revision = bool(current and stage_needs_revision(current))
+    defense_returned = step['key'] == 'defense-prepare' and defense['state'] == 'returned'
+    comment = current['teacher_comment'] if needs_revision else defense['teacher_comment'] if defense_returned else ''
+    if (needs_revision or defense_returned) and not (comment or '').strip():
+        comment = 'Комментарий не указан. Уточни у учителя, что нужно исправить.'
     return dict(project=project, step=step, comment=comment)
 
 # Access is checked here, not inferred from a filter or a notification. There is

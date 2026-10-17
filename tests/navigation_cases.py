@@ -19,8 +19,18 @@ class NavigationCases:
                 self.assertIn(text, header)
             for text in ('class="avatar"', 'href="/teams"', 'href="/supervision"'):
                 self.assertNotIn(text, header)
+            trigger = header.split('<details class="account-menu">')[1].split('</summary>')[0]
+            self.assertNotIn('⌄', trigger)
             self.assertEqual(self.client.get('/logout').status_code, 405)
             self.assertEqual(self.client.post('/logout').status_code, 400)
+
+    def test_teacher_cabinet_link_is_current_on_both_home_routes(self):
+        self.sign_in(1)
+        for path in ('/', '/teacher'):
+            page = self.client.get(path)
+            self.assertEqual(page.status_code, 200)
+            header = page.text.split('<header class="main-header')[1].split('</header>')[0]
+            self.assertIn('<a href="/teacher" aria-current="page">Кабинет</a>', header)
 
     def test_home_switch_rejects_foreign_projects_and_never_writes(self):
         self.sign_in(3)
@@ -99,6 +109,20 @@ class NavigationCases:
         page = self.client.get('/?project=1&result_state=review').text
         self.assertIn('name="project" value="1"', page)
         self.assertIn('<details class="home-details" open>', page)
+
+    def test_home_return_without_stored_comment_offers_a_clear_explanation(self):
+        with closing(self.module.get_db()) as conn:
+            conn.execute("INSERT INTO project_stages(project_id,number,state,reviewed_by) VALUES(2,1,'progress',1)")
+            conn.commit()
+        focus = self.home_focus()
+        self.assertIn('data-home-step="revise"', focus)
+        self.assertIn('Комментарий не указан', focus)
+        with closing(self.module.get_db()) as conn:
+            conn.execute("UPDATE project_stages SET state='done' WHERE project_id=2")
+            conn.executemany("INSERT INTO project_stages(project_id,number,state) VALUES(2,?,'done')", [(n,) for n in range(2,6)])
+            conn.execute("INSERT INTO project_defenses(project_id,state,teacher_comment) VALUES(2,'returned','   ')")
+            conn.commit()
+        self.assertIn('Комментарий не указан', self.home_focus())
 
     def test_project_navigation_is_shared_and_keeps_access_checks(self):
         self.sign_in(3)

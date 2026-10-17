@@ -146,13 +146,13 @@ def render_page(html):
         '<link rel="stylesheet" href="/static/controls.css?v=20261006-csrf">'
         '<script src="/static/preferences.js?v=20261005"></script>'
         '<script src="/static/motion.js?v=20261005-controls"></script>'
-        '<link rel="stylesheet" href="/static/product-design.css?v=20261006">'
+        '<link rel="stylesheet" href="/static/product-design.css?v=20261017-text-logo">'
         '<link rel="stylesheet" href="/static/graphics.css?v=20261015">'
         '<link rel="stylesheet" href="/static/notifications.css?v=20261013">'
         '<link rel="stylesheet" href="/static/deadlines.css?v=20261013-filters">'
         '<script src="/static/dashboard.js?v=20261006" defer></script>'
-        '<link rel="stylesheet" href="/static/navigation.css?v=20261017">'
-        '<script src="/static/navigation.js?v=20261017" defer></script>'
+        '<link rel="stylesheet" href="/static/navigation.css?v=20261017-fixes">'
+        '<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
             f'</head><body id="page-content"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
 
@@ -2771,7 +2771,7 @@ def render_header(user, notification_data=None):
     bell = render_bell(count, rows, csrf_input())
     home = '/teacher' if user['role'] == 'teacher' else '/'
     label = 'Кабинет' if user['role'] == 'teacher' else 'Мои проекты'
-    home_current = ' aria-current="page"' if request.path == home else ''
+    home_current = ' aria-current="page"' if request.path in ('/', home) else ''
     group_current = ' aria-current="page"' if request.path.startswith('/groups') else ''
     links = f'<a href="{home}"{home_current}>{label}</a><a href="/groups"{group_current}>Учебные группы</a>'
     return f"""
@@ -2781,7 +2781,7 @@ def render_header(user, notification_data=None):
         <div class="header-actions">
             {bell}
             <details class="account-menu">
-                <summary aria-controls="account-panel"><span class="account-desktop-label">Мой аккаунт</span><span class="account-mobile-label">Меню</span><span aria-hidden="true">⌄</span></summary>
+                <summary aria-controls="account-panel"><span class="account-desktop-label">Мой аккаунт</span><span class="account-mobile-label">Меню</span></summary>
                 <div class="account-panel" id="account-panel">
                     <nav class="mobile-navigation" aria-label="Основные разделы">{links}</nav>
                     <div class="account-identity"><strong>{escape(user['username'])}</strong><small>{'Учитель' if user['role'] == 'teacher' else 'Ученик'}</small></div>

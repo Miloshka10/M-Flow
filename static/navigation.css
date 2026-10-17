@@ -9,12 +9,18 @@ body .simple-header { display: flex; flex-direction: row; align-items: center; g
 .account-menu > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 10px 16px; min-height: 44px; border: 1px solid var(--mf-line); border-radius: 14px; background: var(--mf-card); white-space: nowrap; }
 .account-menu > summary::-webkit-details-marker { display: none; }
 .account-menu[open] > summary { background: var(--mf-accent-soft); }
-.account-panel { position: absolute; right: 0; top: calc(100% + 8px); width: 250px; max-width: calc(100vw - 32px); max-height: 75vh; overflow-y: auto; padding: 12px; border: 1px solid var(--mf-line); border-radius: 18px; background: var(--mf-card); box-shadow: 0 8px 32px #0002; z-index: 60; }
+.account-panel { position: absolute; right: 0; top: calc(100% + 8px); width: 250px; max-width: calc(100vw - 32px); max-height: 75vh; max-height: min(75vh, calc(100dvh - 116px)); overflow-y: auto; padding: 12px; border: 1px solid var(--mf-line); border-radius: 18px; background: var(--mf-card); box-shadow: 0 8px 32px #0002; z-index: 60; }
 .account-identity { display: flex; flex-direction: column; padding: 10px 14px 16px; border-bottom: 1px solid var(--mf-line); margin-bottom: 8px; overflow-wrap: anywhere; }
 .account-identity small { color: var(--mf-muted); }
 .account-panel > a { display: flex; }
 .account-panel .logout-form { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--mf-line); }
-body .account-panel .logout { width: 100%; text-align: left; background: var(--mf-panel); color: var(--mf-text); }
+body .account-panel > a, body .account-panel .logout {
+  display: flex; align-items: center; width: 100%; min-height: 44px;
+  padding: 10px 14px; border: 0; border-radius: 12px; margin: 0;
+  background: transparent; color: var(--mf-text); text-align: left;
+  font: inherit; text-decoration: none; box-sizing: border-box;
+}
+body .account-panel > a:hover, body .account-panel .logout:hover { background: var(--mf-panel); color: var(--mf-text); }
 .account-mobile-label, .mobile-navigation { display: none; }
 .project-navigation { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; padding-bottom: 16px; border-bottom: 1px solid var(--mf-line); }
 .simple-home { padding-top: 24px; }
@@ -64,7 +70,6 @@ body .focus-switch select { width: auto; min-width: 0; max-width: 100%; flex: 1;
   .header-actions { gap: 6px; }
   .account-menu > summary { padding: 10px; gap: 6px; }
   body .simple-header .brand { font-size: 20px; }
-  .simple-header .brand::before { width: 32px; height: 32px; font-size: 23px; margin-right: 6px; border-radius: 10px; }
   .home-focus { padding: 20px; }
   .welcome-actions > a { width: 100%; text-align: center; }
   .project-navigation { gap: 2px; }
