@@ -7,6 +7,7 @@ from database import execute_schema, begin_project_write
 from notifications import notify_project
 from teacher_supervision import participant
 from deadlines import format_timestamp
+from work_history import before_change, record_change
 
 STAGES = (
     (1, "Выбор темы и согласование с учителем"),
@@ -127,6 +128,7 @@ def change_stage(conn, project_id, user, form):
             state = "done" if action == "accept" else "progress"
         else:
             raise ValueError("Недопустимая роль участника.")
+        before_change(conn, project_id, 'stage', current['number'], current)
         conn.execute("""INSERT INTO project_stages
             (project_id, number, state, result, presentation_url, teacher_comment, submitted_by, reviewed_by, revision)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -135,6 +137,9 @@ def change_stage(conn, project_id, user, form):
             teacher_comment=excluded.teacher_comment, submitted_by=excluded.submitted_by,
             reviewed_by=excluded.reviewed_by, revision=excluded.revision, updated_at=CAST(CURRENT_TIMESTAMP AS TEXT)""",
             (project_id, current["number"], state, result, url, comment, submitted_by, reviewed_by, current["revision"] + 1))
+        record_change(conn, project_id, 'stage', current['number'], action,
+                      dict(current, state=state, result=result, presentation_url=url,
+                           teacher_comment=comment, submitted_by=submitted_by, reviewed_by=reviewed_by), user)
         if action == 'submit':
             notify_project(conn, project_id, 'teacher',
                 f'stage:{project_id}:{current["number"]}:{current["revision"] + 1}',
@@ -152,7 +157,7 @@ def change_stage(conn, project_id, user, form):
         raise
 
 
-def render_stages(stages, user, token, submitted=None, has_teacher=True):
+def render_stages(stages, user, token, submitted=None, has_teacher=True, project_id=None):
     completed, current = stage_summary(stages)
     current_number = current["number"] if current else None
     html = f'<p class="stage-summary">Принято {completed} из 5 этапов · {completed * 20}%</p><div class="stage-timeline">'
@@ -194,5 +199,8 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True):
                 html += prefix + f'<label>Комментарий учителя<textarea name="teacher_comment" rows="3" maxlength="2000">{escape(comment)}</textarea></label><div class="stage-actions"><button name="action" value="accept">{"Согласовать тему" if number == 1 else "Принять этап"}</button><button name="action" value="return">Вернуть на доработку</button></div></form>'
             else:
                 html += f'<p>{"Ожидается проверка учителя. Пока результат менять нельзя." if stage["state"] == "review" else "Ожидается результат от учеников проекта."}</p>'
+        pid = stage.get('project_id', project_id)
+        if pid is not None:
+            html += f'<p><a class="action-link" href="/project/{pid}/history?work=stage-{number}">История отправок и решений →</a></p>'
         html += '</section>'
     return html + '</div>'

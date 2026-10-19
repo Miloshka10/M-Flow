@@ -1,0 +1,12 @@
+.history-intro { max-width: 75ch; color: var(--mf-muted); }
+.history-filters, .history-pages { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 24px 0; }
+.history-filters label { display: grid; gap: 6px; }
+.history-event { padding: 24px; margin: 18px 0; border: 1px solid var(--mf-line); border-radius: 20px; background: var(--mf-card); overflow-wrap: anywhere; }
+.history-event h2 { font-size: 22px; margin: 8px 0; }
+.history-event summary { min-height: 44px; padding-block: 10px; cursor: pointer; }
+.history-text, .history-comment p { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow-y: auto; }
+.history-comment, .history-notice { background: var(--mf-panel); padding: 16px; border-radius: 12px; }
+.history-comment { border-left: 3px solid var(--mf-action); margin-top: 16px; }
+.history-comment p { max-height: 240px; }
+.history-legacy { margin-top: 32px; border-top: 1px solid var(--mf-line); padding-top: 16px; }
+@media (max-width: 520px) { .history-event { padding: 18px; } .history-filters label { width: 100%; } }

@@ -136,6 +136,7 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
             <small data-task-deadline>{task_deadline(tasks, today)}</small><small>Срок относится к задаче, не к этапу</small></div>
             <div class="journey-action" data-next-step="{step['key']}"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>{step['title']}</h2><p>{step['text']}</p>{action}</div></div>
         {feedback}
+        <p><a class="action-link" href="{base}/history">История отправок и решений →</a></p>
         <div class="journey-progress"><div><div><strong>Прогресс задач</strong><b data-project-progress>{progress}%</b></div>
             <p data-project-progress-text>{completed_tasks} из {len(tasks)} задач выполнено</p><div class="project-progress"><div data-project-progress-fill style="width:{progress}%"></div></div></div>
             <div><div><strong>Этапы, принятые учителем</strong><b>{done * 20}%</b></div><p>Принято {done} из 5 этапов</p><div class="project-progress"><div style="width:{done * 20}%"></div></div></div></div>

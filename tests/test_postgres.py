@@ -18,7 +18,7 @@ import database
 
 
 TEST_URL = os.environ.get("M_FLOW_TEST_POSTGRES_URL", "")
-TABLES = ("learning_group_invitations", "learning_group_members", "learning_groups", "supervision_requests", "teacher_invitations", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles",
+TABLES = ("work_history", "work_history_sources", "learning_group_invitations", "learning_group_members", "learning_groups", "supervision_requests", "teacher_invitations", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles",
           "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users")
 
 
@@ -136,6 +136,9 @@ class PostgresCabinetTests(fixtures.TeacherCabinetTests):
         with ThreadPoolExecutor(max_workers=2) as pool:
             self.assertEqual(sorted(pool.map(lambda _: submit(), range(2))), ["saved", "stale"])
         self.assertEqual([row['recipient_id'] for row in self.notification_rows()], [1])
+        with closing(self.module.get_db()) as conn:
+            events = list(conn.execute("SELECT event,attempt,revision FROM work_history WHERE project_id=2"))
+            self.assertEqual([tuple(row) for row in events], [('submit', 1, 1)])
 
     def test_concurrent_group_join_is_idempotent_and_capacity_is_enforced(self):
         import learning_groups

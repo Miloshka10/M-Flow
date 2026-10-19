@@ -73,6 +73,11 @@ class DatabaseBackupTests(unittest.TestCase):
                 role_text,message,state,updated_at) VALUES(1,2,?,'Инженер','Приглашение — тест',?,'2026-10-09 12:00:00')""",
                 [(2, "accepted"), (3, "pending")])
             conn.execute("PRAGMA user_version=7")
+            from work_history import before_change, record_change
+            from video_defense import defense_for
+            record = defense_for(conn, 1)
+            before_change(conn, 1, 'defense', 0, record)
+            record_change(conn, 1, 'defense', 0, 'accept', record, {'id': 1})
             conn.execute("INSERT INTO learning_groups(id,teacher_id,name) VALUES(1,1,'Учебная группа — тест')")
             conn.execute('INSERT INTO learning_group_members(group_id,student_id,project_id) VALUES(1,2,1)')
             conn.execute("INSERT INTO learning_group_invitations(group_id,code_hash,expires) VALUES(1,?,2000000000)", ('1' * 64,))

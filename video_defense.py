@@ -8,6 +8,7 @@ from database import execute_schema, begin_project_write
 from notifications import notify_project
 from teacher_supervision import participant
 from deadlines import format_timestamp
+from work_history import before_change, record_change
 
 DEFENSE_STATES = {"draft": "Черновик", "submitted": "На проверке", "accepted": "Защита принята", "returned": "Нужна доработка"}
 
@@ -40,6 +41,7 @@ def change_defense(conn, project_id, user, form):
         if not participant(conn, project_id, user['id']):
             raise ValueError('Доступ к проекту изменился. Откройте главную страницу; сохранение недоступно.')
         current = defense_for(conn, project_id)
+        previous = dict(current)
         if form.get("revision") != str(current["revision"]):
             raise ValueError("Запись защиты уже изменена другим участником. Обновите страницу.")
         action = form.get("action")
@@ -73,11 +75,13 @@ def change_defense(conn, project_id, user, form):
             current.update(teacher_comment=comment, reviewer_id=user["id"], state="accepted" if action == "accept" else "returned")
         else:
             raise ValueError("Недопустимая роль участника.")
+        before_change(conn, project_id, 'defense', 0, previous)
         conn.execute("""INSERT INTO project_defenses(project_id,video_url,description,state,teacher_comment,author_id,reviewer_id,revision)
             VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET video_url=excluded.video_url,
             description=excluded.description,state=excluded.state,teacher_comment=excluded.teacher_comment,
             author_id=excluded.author_id,reviewer_id=excluded.reviewer_id,revision=excluded.revision,updated_at=CAST(CURRENT_TIMESTAMP AS TEXT)""",
             (project_id,current['video_url'],current['description'],current['state'],current['teacher_comment'],current['author_id'],current['reviewer_id'],current['revision']+1))
+        record_change(conn, project_id, 'defense', 0, action, current, user)
         if action == 'submit':
             notify_project(conn, project_id, 'teacher', f'defense:{project_id}:{current["revision"] + 1}',
                            'Видеозащита отправлена на проверку', '', f'/project/{project_id}/defense')
@@ -129,4 +133,5 @@ def render_defense(record, user, token, form=None, has_teacher=True):
     if user['role'] == 'student' and not has_teacher:
         body += f'<p role="alert">{TEACHER_REQUIRED}</p>'
     grading_hint = 'Оценить участников' if user['role'] == 'teacher' else 'Посмотреть свои оценки'
+    body += f'<p><a class="action-link" href="/project/{record["project_id"]}/history?work=defense">История отправок и решений →</a></p>'
     return body + f'</section><p>Видеозащита не заменяет пять этапов и не выставляет итоговые баллы автоматически. {grading_hint} можно в разделе <a href="/project/{record["project_id"]}/assessment">«Оценивание»</a>.</p>'

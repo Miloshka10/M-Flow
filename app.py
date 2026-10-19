@@ -49,6 +49,7 @@ from teamwork import (initialize_teamwork, profile_for, save_profile, directory,
                       respond_to_invitation, change_team, render_profile as render_skill_profile,
                       render_directory, render_team)
 from video_defense import initialize_defenses, defense_for, change_defense, render_defense, DEFENSE_STATES
+from work_history import initialize_history, history_parameters, load_history, render_history
 from database import (DatabaseSettings, DatabaseUnavailable, INTEGRITY_ERRORS,
                       PostgresConnection, connect_database, execute_schema_script,
                       table_columns, insert_id, begin_project_write, initialization_settings, form_database_id)
@@ -281,6 +282,7 @@ def _prepare_database(conn):
     initialize_stages(conn)
     initialize_teamwork(conn)
     initialize_defenses(conn)
+    initialize_history(conn)
     initialize_notifications(conn)
     initialize_auth(conn)
     initialize_supervision(conn)
@@ -3132,6 +3134,25 @@ def project_team(project_id):
     return render_collaboration_page(user,f'Команда · {name}',body,project_id,error,status)
 
 
+@app.route('/project/<int:project_id>/history')
+@login_required
+def project_work_history(project_id):
+    user = get_current_user()
+    name = get_project_name(project_id)
+    if name is None:
+        return render_error_page('Нет доступа', 'Вы не участвуете в этом проекте.', 403)
+    try:
+        work, page = history_parameters(request.args)
+    except ValueError as exc:
+        return render_error_page('История работ', str(exc), 400)
+    conn = get_db()
+    try:
+        body = render_history(project_id, load_history(conn, project_id, work, page), work)
+    finally:
+        conn.close()
+    return render_collaboration_page(user, f'История работ · {name}', body, project_id)
+
+
 @app.route('/project/<int:project_id>/defense',methods=['GET','POST'])
 @login_required
 def project_video_defense(project_id):
@@ -3197,7 +3218,7 @@ def project_stage_page(project_id):
         {project_navigation(project_id, "stages")}<h1>Пять этапов · {escape(project_name)}</h1>
         <p>Ученики сохраняют результат и отправляют его учителю. После принятия открывается следующий этап.
         Этапы общие для участников проекта; их прохождение не меняет статусы задач и итоговые баллы.</p>
-        {messages}<p role="alert">{escape(error)}</p>{unsaved}{render_stages(stages, user, token, submitted, has_teacher=has_teacher)}</main></div>'''), status
+        {messages}<p role="alert">{escape(error)}</p>{unsaved}{render_stages(stages, user, token, submitted, has_teacher=has_teacher, project_id=project_id)}</main></div>'''), status
 
 
 @app.route("/project/<int:project_id>/assessment", methods=["GET", "POST"])
