@@ -8,7 +8,7 @@ function updateKanbanCounts() {
     if (count && empty) empty.remove();
     if (!count && !empty) {
       const message = document.createElement('div');
-      message.className = 'kanban-empty'; message.textContent = 'Пока нет задач'; cards.appendChild(message);
+      message.className = 'kanban-empty'; message.textContent = {todo:'Новые задачи появятся здесь.',progress:'Перенесите сюда задачу, которую начали.',done:'Здесь будут выполненные задачи.'}[column.dataset.status]; cards.appendChild(message);
     }
   });
 }
@@ -20,7 +20,7 @@ async function saveTask(card, endpoint, value) {
   const controls = card.querySelectorAll('select');
   controls.forEach(control => control.disabled = true);
   try {
-    const response = await fetch(window.location.pathname + '/' + endpoint, {
+    const response = await fetch((document.querySelector('#task-board')?.dataset.projectUrl || window.location.pathname) + '/' + endpoint, {
       method: 'POST', headers: {'Content-Type': 'application/json',
         'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''},
       body: JSON.stringify({task_id: Number(card.dataset.taskId), [endpoint]: value})
@@ -66,18 +66,20 @@ async function moveTask(card, target) {
   try {
     const result = await saveTask(card, 'status', target);
     if (needsBoardRefresh()) { location.reload(); return; }
+    window.beforeBoardTaskMove?.(card);
     document.querySelector('.kanban-column[data-status="' + target + '"] .kanban-cards').appendChild(card);
     sortTaskCards(card.parentElement);
     if (select) select.value = target;
     card.classList.toggle('done-card', target === 'done');
-    const deadline = card.querySelector('.task-deadline');
-    if (deadline && result.task_deadline) {
+    [card.querySelector('.task-deadline'), card.querySelector('.task-detail-deadline')].forEach(deadline => {
+      if (!deadline || !result.task_deadline) return;
       deadline.textContent = result.task_deadline.text;
       deadline.classList.toggle('deadline-overdue', result.task_deadline.css === 'deadline-overdue');
       deadline.classList.toggle('deadline-soon', result.task_deadline.css === 'deadline-soon');
-    }
+    });
     updateDeadlineStrip(result.deadline_tasks);
     updateKanbanCounts(); updateProjectMetrics(result.metrics, result.deadline_text);
+    window.boardTaskSaved?.(card, target);
     (result.students || []).forEach(student => {
       const progress = document.querySelector('[data-student-progress="' + student.id + '"]');
       if (progress) progress.textContent = student.done + ' из ' + student.total + ' задач · ' + (student.total ? Math.round(student.done / student.total * 100) : 0) + '%';
@@ -97,7 +99,7 @@ function updateDeadlineStrip(rows) {
   rows.forEach(row => {
     const item = document.createElement('li');
     const link = document.createElement('a');
-    link.href = window.location.pathname + '#task-' + row.id;
+    link.href = (document.querySelector('#task-board')?.dataset.projectUrl || window.location.pathname) + '#task-' + row.id;
     link.textContent = row.title + ' — ' + row.text;
     item.appendChild(link); list.appendChild(item);
   });
@@ -123,6 +125,7 @@ async function changePriority(select) {
   try {
     await saveTask(card, 'priority', next);
     if (needsBoardRefresh()) { location.reload(); return; }
+    window.beforeBoardTaskMove?.(card);
     select.dataset.savedValue = next;
     card.dataset.priority = next;
     const badge = card.querySelector('.task-priority');
@@ -140,7 +143,7 @@ function setupKanban() {
   document.querySelectorAll('.task-priority-select').forEach(select => select.dataset.savedValue = select.value);
   document.querySelectorAll('.task-card').forEach(card => {
     card.addEventListener('dragstart', event => {
-      if (card.draggable !== true || card.dataset.saving === '1' || event.target.closest('select,button,input,textarea,a')) {
+      if (card.draggable !== true || card.dataset.saving === '1' || event.target.closest('select,button,input,textarea,a,dialog')) {
         event.preventDefault(); return;
       }
       card.classList.add('dragging');

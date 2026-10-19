@@ -22,11 +22,12 @@ from html import escape
 import json
 import secrets
 import time
+from urllib.parse import urlencode, urlsplit, parse_qsl
 from datetime import timedelta
 from auth_security import (initialize_auth, reserve_attempt, client_source, proxy_networks,
                            new_session, revoke_session, fingerprint, SESSION_SECONDS, begin_auth_write)
 from collections import defaultdict
-from deadlines import business_today, deadline_info, deadline_text, parse_deadline, urgent_tasks, TIMEZONE_LABEL
+from deadlines import business_today, deadline_info, deadline_text, parse_deadline, urgent_tasks, TIMEZONE_LABEL, format_timestamp
 from deadlines import DEADLINE_FILTERS, TASK_SORTS, matches_deadline, task_sort_key
 from notifications import (initialize_notifications, notify, notify_project,
                            notification_feed, mark_read, render_bell, render_items)
@@ -50,6 +51,7 @@ from teamwork import (initialize_teamwork, profile_for, save_profile, directory,
                       render_directory, render_team)
 from video_defense import initialize_defenses, defense_for, change_defense, render_defense, DEFENSE_STATES
 from work_history import initialize_history, history_parameters, load_history, render_history
+from task_board import initialize_task_board, task_fields, board_return, render_filters, create_form, task_edit_fields
 from database import (DatabaseSettings, DatabaseUnavailable, INTEGRITY_ERRORS,
                       PostgresConnection, connect_database, execute_schema_script,
                       table_columns, insert_id, begin_project_write, initialization_settings, form_database_id)
@@ -294,6 +296,7 @@ def _prepare_database(conn):
         conn.execute("ALTER TABLE projects ADD COLUMN owner_id INTEGER")
 
     column_names = table_columns(conn, "tasks")
+    initialize_task_board(conn)
 
     if "status" not in column_names:
 
@@ -676,6 +679,8 @@ def get_tasks(project_id):
             tasks.status,
             tasks.priority,
             tasks.assignee_id,
+            tasks.description,
+            tasks.stage_number,
             users.username AS assignee_name
         FROM tasks
         LEFT JOIN users
@@ -699,72 +704,29 @@ def get_tasks(project_id):
     return tasks
 
 
-def add_task(
-    project_id,
-    title,
-    deadline,
-    priority,
-    assignee_id
-):
-
-    allowed_priorities = {
-        "low",
-        "normal",
-        "high",
-        "urgent"
-    }
-
-    if not isinstance(priority, str) or priority not in allowed_priorities:
-        priority = "normal"
-
-    if assignee_id is not None and not valid_database_id(assignee_id):
-        assignee_id = None
-
-    if assignee_id is not None:
-        conn = get_db()
-        member = conn.execute(
-            """
-            SELECT 1
-            FROM project_members
-            JOIN users ON users.id = project_members.user_id
-            WHERE project_members.project_id = ?
-            AND project_members.user_id = ?
-            AND users.role = 'student'
-            """,
-            (project_id, assignee_id)
-        ).fetchone()
-        conn.close()
-
-        if member is None:
-            assignee_id = None
-
+def add_task(project_id, title, deadline, priority, assignee_id, description='', stage_number=None):
+    user = get_current_user()
     conn = get_db()
-
-    conn.execute(
-        """
-        INSERT INTO tasks
-        (
-            project_id,
-            title,
-            deadline,
-            done,
-            status,
-            priority,
-            assignee_id
-        )
-        VALUES (?, ?, ?, 0, 'todo', ?, ?)
-        """,
-        (
-            project_id,
-            title,
-            deadline,
-            priority,
-            assignee_id
-        )
-    )
-
-    conn.commit()
-    conn.close()
+    try:
+        begin_project_write(conn, project_id)
+        owned = conn.execute('SELECT owner_id FROM projects WHERE id=?', (project_id,)).fetchone()
+        if user['role'] != 'student' or owned is None or owned['owner_id'] != user['id']:
+            raise ValueError('Владелец проекта изменился. Обновите страницу.')
+        if priority not in ('low','normal','high','urgent'):
+            priority = 'normal'
+        if assignee_id is not None and (not valid_database_id(assignee_id) or not conn.execute(
+                "SELECT 1 FROM project_members m JOIN users u ON u.id=m.user_id WHERE m.project_id=? AND u.id=? AND u.role='student'",
+                (project_id,assignee_id)).fetchone()):
+            assignee_id = None
+        task_id = insert_id(conn, "INSERT INTO tasks(project_id,title,deadline,done,status,priority,assignee_id,description,stage_number) VALUES(?,?,?,0,'todo',?,?,?,?)",
+                            (project_id,title,deadline or None,priority,assignee_id,description,stage_number))
+        conn.commit()
+        return task_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def delete_task(project_id, task_id):
@@ -1046,7 +1008,7 @@ def get_student_progress(project_id):
 # STYLE + JAVASCRIPT
 # =========================================================
 
-PAGE_STYLE = '<script src="/static/kanban.js?v=20261013-polish" defer></script>'
+PAGE_STYLE = '<script src="/static/kanban.js?v=20261019-board" defer></script>'
 
 
 # =========================================================
@@ -1495,15 +1457,21 @@ def project(project_id):
     deadline_today = business_today()
     # ---------- фильтры (поиск, приоритет, только мои, срок) ----------
 
-    search_query = request.args.get("q", "").strip()[:100]
-    priority_filter = request.args.get("priority", "")
+    board_args = request.args
+    if request.method == 'POST' and request.path.endswith('/add'):
+        try:
+            board_args = dict(parse_qsl(urlsplit(board_return(project_id, request.form.get('return_to'))).query, max_num_fields=20))
+        except ValueError:
+            board_args = {}
+    search_query = board_args.get("q", "").strip()[:100]
+    priority_filter = board_args.get("priority", "")
     if priority_filter not in ("low", "normal", "high", "urgent"):
         priority_filter = ""
-    only_mine = current_user['role'] == 'student' and request.args.get("mine") == "1"
-    deadline_filter = request.args.get('due', '')
+    only_mine = current_user['role'] == 'student' and board_args.get("mine") == "1"
+    deadline_filter = board_args.get('due', '')
     if deadline_filter not in DEADLINE_FILTERS:
         deadline_filter = ''
-    sort_mode = request.args.get('sort', 'priority')
+    sort_mode = board_args.get('sort', 'priority')
     if sort_mode not in TASK_SORTS:
         sort_mode = 'priority'
 
@@ -1533,6 +1501,20 @@ def project(project_id):
             deadline_info(task['deadline'], task['status'], deadline_today), deadline_filter)]
     tasks.sort(key=lambda task: task_sort_key(task, sort_mode))
     filters_active = bool(search_query or priority_filter or only_mine or deadline_filter)
+    assignee_filter = board_args.get('assignee', '')
+    if assignee_filter not in {'none', *[str(m['id']) for m in members if m['role'] == 'student']}:
+        assignee_filter = ''
+    stage_filter = board_args.get('stage', '')
+    if stage_filter not in ('none','1','2','3','4','5'):
+        stage_filter = ''
+    column = board_args.get('column', 'todo')
+    if column not in ('todo','progress','done'):
+        column = 'todo'
+    if assignee_filter:
+        tasks = [t for t in tasks if (t['assignee_id'] is None if assignee_filter == 'none' else str(t['assignee_id']) == assignee_filter)]
+    if stage_filter:
+        tasks = [t for t in tasks if (t['stage_number'] is None if stage_filter == 'none' else str(t['stage_number']) == stage_filter)]
+    filters_active = filters_active or bool(assignee_filter or stage_filter)
     refresh_board = filters_active or sort_mode != 'priority'
 
     # Every shortcut must point to a card that is visible under these filters.
@@ -1543,42 +1525,15 @@ def project(project_id):
                 f'<strong>Задачи с ближайшими сроками</strong><small>{TIMEZONE_LABEL} · не сроки проверки учителем</small>'
                 f'<ul data-deadline-list>{hot_items}</ul></div>')
 
-    def selected(value):
-        return "selected" if priority_filter == value else ""
-
-    mine_checked = "checked" if only_mine else ""
-    mine_filter = f'<label><input type="checkbox" name="mine" value="1" {mine_checked}> Только мои</label>' if current_user['role'] == 'student' else ''
-    reset_link = (
-        f'<a class="filter-reset" href="/project/{project_id}">Сбросить</a>'
-        if refresh_board
-        else ""
-    )
-    deadline_options = ''.join(f'<option value="{value}" {"selected" if value == deadline_filter else ""}>{label}</option>'
-                               for value, label in DEADLINE_FILTERS.items())
-    sort_options = ''.join(f'<option value="{value}" {"selected" if value == sort_mode else ""}>{label}</option>'
-                           for value, label in TASK_SORTS.items())
-
-    filters_html = f"""
-    <form method="get" class="task-filters" action="/project/{project_id}#task-board">
-        <input type="search" name="q" value="{escape(search_query)}" placeholder="Поиск по названию задачи" aria-label="Поиск по названию задачи">
-        <select name="priority" aria-label="Фильтр приоритета">
-            <option value="">Любой приоритет</option>
-            <option value="low" {selected("low")}>Низкий</option>
-            <option value="normal" {selected("normal")}>Обычный</option>
-            <option value="high" {selected("high")}>Высокий</option>
-            <option value="urgent" {selected("urgent")}>Срочный</option>
-        </select>
-        <select name="due" aria-label="Фильтр срока">{deadline_options}</select>
-        <select name="sort" aria-label="Сортировка задач">{sort_options}</select>
-        {mine_filter}
-        <button type="submit">Найти</button>
-        {reset_link}
-    </form>
-    """
     filter_summary = (f'<p class="board-filter-summary">Показано {len(tasks)} из {len(all_tasks)} задач. '
                       'Показатели проекта учитывают все задачи команды.</p>')
     if filters_active and not tasks:
         filter_summary += '<div class="board-filter-empty" role="status">Нет задач по выбранным условиям. Измените фильтры или нажмите «Сбросить».</div>'
+    board_state = dict(q=search_query, priority=priority_filter, mine='1' if only_mine else '',
+                       due=deadline_filter, sort=sort_mode, assignee=assignee_filter, stage=stage_filter, column=column)
+    filters_html = render_filters(project_id, current_user, members, board_state)
+    canonical_filters = {k:v for k,v in board_state.items() if v and not (k == 'sort' and v == 'priority') and not (k == 'column' and v == 'todo')}
+    board_location = f'/project/{project_id}' + ('?' + urlencode(canonical_filters) if canonical_filters else '')
 
 
     todo_tasks = [
@@ -1668,21 +1623,21 @@ def project(project_id):
         # Mutation routes still perform their own database permission checks.
         can_update = current_user['role'] == 'student' and (owner or task["assignee_id"] == current_user["id"])
         draggable = "true" if can_update else "false"
-        assignee_name = escape(task["assignee_name"] or "Не назначена")
+        assignee_name = escape(task["assignee_name"] or "Не назначен")
 
         updates = task_update_history.get(task_id, [])
         latest_update_html = ""
         if updates:
             latest_update = updates[0]
             update_author = escape(latest_update["username"] or "Участник")
-            update_timestamp = escape(latest_update["created_at"] or "")
+            update_timestamp = format_timestamp(latest_update["created_at"])
             update_body = escape(latest_update["body"])
 
             history_items = "".join(
                 f'''<article class="task-report-entry">
                     <div class="task-report-head">
                         <strong>{escape(update["username"])}</strong>
-                        <span>{escape(update["created_at"])}</span>
+                        <span>{format_timestamp(update["created_at"])}</span>
                     </div>
                     <p>{escape(update["body"])}</p>
                 </article>'''
@@ -1710,7 +1665,9 @@ def project(project_id):
                     <summary>Добавить отчёт</summary>
                     <form method="post" action="/project/{project_id}/task/{task_id}/update">
                         {csrf_input()}
+                        <input type="hidden" name="return_to" value="{escape(board_location + '#task-' + str(task_id),quote=True)}">
                         <textarea name="body" maxlength="500" rows="3" required
+                            aria-label="Отчёт по задаче"
                             placeholder="Что уже сделано? Что мешает двигаться дальше?"></textarea>
                         <button type="submit">Сохранить отчёт</button>
                     </form>
@@ -1720,6 +1677,7 @@ def project(project_id):
         delete_control = f"""
             <form action="/project/{project_id}/delete/{task_id}" method="post">
                 {csrf_input()}
+                <input type="hidden" name="return_to" value="{escape(board_location + '#task-board',quote=True)}">
                 <button type="submit" class="delete-task" title="Удалить задачу">Удалить</button>
             </form>
         """ if owner else ""
@@ -1765,13 +1723,19 @@ def project(project_id):
             </select></label>''' if can_update else ''
 
         priority_control = f"""
-            <select class="task-priority-select" data-task-id="{task_id}" aria-label="Приоритет задачи: {task_title}" onchange="changePriority(this)">
+            <label class="task-priority-control">Приоритет<select class="task-priority-select" data-task-id="{task_id}" aria-label="Приоритет задачи: {task_title}" onchange="changePriority(this)">
                 <option value="low" {low_selected}>Низкий</option>
                 <option value="normal" {normal_selected}>Обычный</option>
                 <option value="high" {high_selected}>Высокий</option>
                 <option value="urgent" {urgent_selected}>Срочный</option>
-            </select>
+            </select></label>
         """ if owner else ""
+        edit_control = f'''<details class="task-edit"><summary>Редактировать задачу</summary>
+            <form method="post" action="/project/{project_id}/edit/{task_id}" class="board-task-form">
+            {csrf_input()}<input type="hidden" name="return_to" value="{escape(board_location + '#task-' + str(task_id),quote=True)}">
+            {task_edit_fields(task, members)}<button>Сохранить задачу</button></form></details>''' if owner else ''
+        description_html = f'<p class="task-description" tabindex="0">{escape(task["description"])}</p>' if task['description'] else '<p class="t-muted">Описание пока не добавлено.</p>'
+        stage_html = f'<a class="task-stage" href="/project/{project_id}/stages#stage-{task["stage_number"]}">Этап {task["stage_number"]} →</a>' if task['stage_number'] else '<span class="task-stage">Без этапа</span>'
 
 
         return f"""
@@ -1784,23 +1748,17 @@ def project(project_id):
             data-priority="{escape(priority, quote=True)}"
         >
 
-            <div class="task-title">
-                {task_title}
-            </div>
-
-
+            <details class="board-disclosure task-details" id="task-details-{task_id}">
+                <summary class="task-title">{task_title}</summary>
+                <div class="task-detail-content"><h2>{task_title}</h2>{description_html}
+                    <div class="task-detail-meta"><span>Ответственный: {assignee_name}</span><span class="task-detail-deadline {deadline_class}">{safe_deadline}</span></div>
+                    <p>{stage_html}</p><p class="t-muted">Выполнение задачи не означает принятие этапа учителем.</p>
+                    {status_control}{priority_control}{edit_control}{latest_update_html}{report_form}{delete_control}
+                </div>
+            </details>
             <div class="task-priority priority-{escape(priority)}">
                 {priority_name}
             </div>
-
-
-            {priority_control}
-
-            {status_control}
-
-            {latest_update_html}
-
-            {report_form}
 
 
             <div class="task-footer">
@@ -1811,9 +1769,8 @@ def project(project_id):
 
                 <span class="role">{assignee_name}</span>
 
-                {delete_control}
-
             </div>
+            <div class="task-meta"><span>{'Этап ' + str(task['stage_number']) if task['stage_number'] else 'Без этапа'}</span><span>Отчётов: {len(updates)}</span></div>
 
         </div>
         """
@@ -1843,7 +1800,7 @@ def project(project_id):
 
             cards = f"""
             <div class="kanban-empty">
-                {"Нет задач по фильтрам" if filters_active else "Пока нет задач"}
+                {"Нет задач по фильтрам" if filters_active else {"todo":"Новые задачи появятся здесь.","progress":"Перенесите сюда задачу, которую начали.","done":"Здесь будут выполненные задачи."}[status]}
             </div>
             """
 
@@ -1854,6 +1811,7 @@ def project(project_id):
         return f"""
         <div
             class="kanban-column"
+            id="column-{status}"
             data-status="{status}"
         >
 
@@ -1913,6 +1871,17 @@ def project(project_id):
     </div>
 
     """
+    mobile_tabs = '<nav class="board-columns" aria-label="Колонки доски">' + ''.join(
+        f'<a href="/project/{project_id}?{escape(urlencode(dict(board_state,column=key)),quote=True)}#task-board" data-column="{key}" aria-controls="column-{key}">{label} <span data-column-count="{key}">{len(rows)}</span></a>'
+        for key,label,rows in (('todo','Новые',todo_tasks),('progress','В работе',progress_tasks),('done','Готово',done_tasks))) + '</nav>'
+    if not all_tasks:
+        kanban_html = f'''<section class="board-start"><span class="eyebrow">ОТ ИДЕИ К ПЕРВОМУ ДЕЙСТВИЮ</span><h3>Начните с первой задачи</h3>
+            <p>{'Например: «Собрать материалы по теме». Определите результат и того, кто за него отвечает.' if owner else 'Владелец проекта сможет добавить задачи и распределить работу команды.'}</p>
+            {f'<a class="btn" href="#task-create">+ Создать задачу</a>' if owner else ''}</section>'''
+        mobile_tabs = ''
+    elif not tasks:
+        kanban_html = ''
+        mobile_tabs = ''
 
 
     # =====================================================
@@ -1981,16 +1950,6 @@ def project(project_id):
         </div>
         """
 
-    student_options = '<option value="">Не назначать</option>'
-
-    for member in members:
-        if member["role"] == "student":
-            student_options += (
-                f'<option value="{member["id"]}">'
-                f'{escape(member["username"])}'
-                f'</option>'
-            )
-
     student_progress_html = ""
 
     if current_user["role"] == "teacher":
@@ -2018,26 +1977,9 @@ def project(project_id):
     </div>
     """ if current_user["role"] == "teacher" else ""
 
-    add_task_section = f"""
-    <div class="card">
-        <h2>Добавить задачу</h2>
-        <form action="/project/{project_id}/add" method="post" class="add-task-form">
-            {csrf_input()}
-            <input name="title" placeholder="Название задачи" aria-label="Название задачи" required>
-            <input name="deadline" type="date" aria-label="Дедлайн задачи">
-            <select name="priority" class="priority-select add-task-priority" aria-label="Приоритет новой задачи">
-                <option value="low">Низкий</option>
-                <option value="normal" selected>Обычный</option>
-                <option value="high">Высокий</option>
-                <option value="urgent">Срочный</option>
-            </select>
-            <select name="assignee_id" class="priority-select" aria-label="Ответственный за задачу">
-                {student_options}
-            </select>
-            <button type="submit">Добавить</button>
-        </form>
-    </div>
-    """ if owner else ""
+    create_values = request.form.to_dict() if request.method == 'POST' and request.path.endswith('/add') else None
+    create_error = ' '.join(text for category,text in session.get('_flashes',[]) if category == 'error') if create_values is not None else ''
+    add_task_section = create_form(project_id, members, csrf_input(), board_location + '#task-board', create_values, create_error) if owner else ''
 
 
     # =====================================================
@@ -2115,6 +2057,7 @@ def project(project_id):
         PAGE_STYLE
         + f"""
         <link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">
+        <link rel="stylesheet" href="/static/task-board.css?v=20261019"><script src="/static/task-board.js?v=20261019" defer></script>
         <div class="container">
             {render_header(current_user)}
             <main class="project-workspace">
@@ -2149,38 +2092,36 @@ def project(project_id):
                 </section>
 
 
-                <div class="kanban-wrapper" id="task-board" data-board-refresh="{int(refresh_board)}">
+                <div class="kanban-wrapper" id="task-board" data-project-url="/project/{project_id}" data-board-location="{escape(board_location,quote=True)}" data-board-refresh="{int(refresh_board)}" data-column="{column}" data-open-create="{int(create_values is not None)}">
 
                     <div class="section-title">
 
                         <div>
 
                             <h2>
-                                Доска задач
+                                Доска задач <span class="board-total">{total_tasks}</span>
                             </h2>
 
                             <p>
-                                {"Здесь показаны задачи учеников. Учитель проверяет этапы, видеозащиту и оценки." if current_user['role'] == 'teacher' else "Меняй статус в карточке или перетаскивай задачи между колонками"}
+                                {"Здесь показаны задачи учеников. Учитель проверяет этапы, видеозащиту и оценки." if current_user['role'] == 'teacher' else "От конкретного действия — к готовому результату. Открой задачу или перенеси её в другую колонку."}
                             </p>
 
                         </div>
-
+                        {f'<a class="btn board-add" href="#task-create">+ Задача</a>' if owner else ''}
                     </div>
 
-                    {hot_html}
-
                     {filters_html}
+                    <details class="board-deadlines"><summary>Ближайшие сроки</summary>{hot_html}</details>
                     {filter_summary}
 
                     <p id="board-status" role="status" aria-live="polite" hidden></p>
 
-                    {kanban_html}
+                    {add_task_section}{mobile_tabs}{kanban_html}
 
                 </div>
 
                 {teacher_dashboard}
 
-                {add_task_section}
 
 
                 <div class="card">
@@ -2488,40 +2429,22 @@ def add_project_task(project_id):
         "assignee_id",
         type=int
     )
+    target = board_return(project_id, request.form.get('return_to'))
+    try:
+        description, stage_number = task_fields(request.form)
+    except ValueError as exc:
+        flash(str(exc), 'error')
+        return project(project_id), 400
+    if not title or len(title) > 160 or not is_valid_date(deadline):
+        flash('Введите название до 160 символов и корректную дату дедлайна.', 'error')
+        return project(project_id), 400
+    try:
+        add_task(project_id, title, deadline, priority, assignee_id, description, stage_number)
+    except ValueError as exc:
+        return render_error_page('Нет доступа', str(exc), 403)
+    flash('Задача создана. Если она не видна, проверьте активные фильтры.', 'success')
 
-
-    if title:
-
-        if len(title) > 160:
-
-            flash(
-                "Название задачи должно быть не длиннее 160 символов.",
-                "error"
-            )
-
-            return redirect(f"/project/{project_id}")
-
-        if not is_valid_date(deadline):
-
-            flash(
-                "Укажите корректную дату дедлайна.",
-                "error"
-            )
-
-            return redirect(f"/project/{project_id}")
-
-        add_task(
-            project_id,
-            title,
-            deadline,
-            priority,
-            assignee_id
-        )
-
-
-    return redirect(
-        f"/project/{project_id}"
-    )
+    return redirect(target)
 
 
 # =========================================================
@@ -2624,11 +2547,11 @@ def submit_task_update(project_id, task_id):
 
     if not body:
         flash("Напишите короткий отчёт перед отправкой.", "error")
-        return redirect(f"/project/{project_id}")
+        return redirect(board_return(project_id, request.form.get('return_to')))
 
     if len(body) > 500:
         flash("Отчёт должен быть не длиннее 500 символов.", "error")
-        return redirect(f"/project/{project_id}")
+        return redirect(board_return(project_id, request.form.get('return_to')))
 
     conn = get_db()
     assigned = conn.execute(
@@ -2646,7 +2569,7 @@ def submit_task_update(project_id, task_id):
     if not add_task_update(project_id, task_id, user["id"], body):
         return render_error_page('Нет доступа', 'Задача удалена или назначена другому участнику.', 403)
     flash("Отчёт сохранён в истории задачи.", "success")
-    return redirect(f"/project/{project_id}")
+    return redirect(board_return(project_id, request.form.get('return_to')))
 
 
 # =========================================================
@@ -2748,9 +2671,7 @@ def delete_project_task(
         flash('Задача не удалена: задачи с отчётами сохраняют историю работы. Исправьте название или статус; если задачи уже нет, обновите страницу.', 'error')
 
 
-    return redirect(
-        f"/project/{project_id}"
-    )
+    return redirect(board_return(project_id, request.form.get('return_to')))
 
 
 # =========================================================
@@ -3851,76 +3772,45 @@ def edit_project_task(project_id, task_id):
             403
         )
 
-    target = (
-        "/teacher"
-        if request.form.get("next") == "/teacher"
-        else f"/project/{project_id}"
-    )
-
-    title = request.form.get("title", "").strip()
-    deadline = request.form.get("deadline", "").strip()
-    assignee_id = request.form.get("assignee_id", type=int)
+    target = '/teacher' if request.form.get('next') == '/teacher' else board_return(project_id, request.form.get('return_to'))
+    title = request.form.get('title', '').strip()
+    deadline = request.form.get('deadline', '').strip()
+    assignee_id = request.form.get('assignee_id', type=int)
     if assignee_id is not None and not valid_database_id(assignee_id):
-        flash("Укажите корректного ответственного.", "error")
+        flash('Укажите корректного ответственного.', 'error')
         return redirect(target)
-
-    if len(title) > 160:
-        flash("Название задачи должно быть не длиннее 160 символов.", "error")
+    if len(title) > 160 or not is_valid_date(deadline):
+        flash('Название — до 160 символов; укажите корректную дату дедлайна.', 'error')
         return redirect(target)
-
-    if not is_valid_date(deadline):
-        flash("Укажите корректную дату дедлайна.", "error")
-        return redirect(target)
-
+    user = get_current_user()
     conn = get_db()
-
-    task = conn.execute(
-        "SELECT title FROM tasks WHERE id = ? AND project_id = ?",
-        (task_id, project_id)
-    ).fetchone()
-
-    if task is None:
-        conn.close()
-        flash("Задача не найдена.", "error")
-        return redirect(target)
-
-    if assignee_id is not None:
-        member = conn.execute(
-            """
-            SELECT 1
-            FROM project_members
-            JOIN users ON users.id = project_members.user_id
-            WHERE project_members.project_id = ?
-            AND project_members.user_id = ?
-            AND users.role = 'student'
-            """,
-            (project_id, assignee_id)
-        ).fetchone()
-
-        if member is None:
+    try:
+        begin_project_write(conn, project_id)
+        owned = conn.execute('SELECT owner_id FROM projects WHERE id=?', (project_id,)).fetchone()
+        if owned is None or owned['owner_id'] != user['id'] or user['role'] != 'student':
+            return render_error_page('Нет доступа', 'Владелец проекта изменился.', 403)
+        task = conn.execute('SELECT title,description,stage_number FROM tasks WHERE id=? AND project_id=?', (task_id,project_id)).fetchone()
+        if task is None:
+            flash('Задача не найдена.', 'error')
+            return redirect(target)
+        try:
+            description, stage_number = task_fields(request.form, dict(task))
+        except ValueError as exc:
+            flash(str(exc), 'error')
+            return redirect(target)
+        if assignee_id is not None and not conn.execute(
+                "SELECT 1 FROM project_members m JOIN users u ON u.id=m.user_id WHERE m.project_id=? AND u.id=? AND u.role='student'",
+                (project_id,assignee_id)).fetchone():
             assignee_id = None
-
-    conn.execute(
-        """
-        UPDATE tasks
-        SET title = ?, deadline = ?, assignee_id = ?
-        WHERE id = ? AND project_id = ?
-        """,
-        (
-            title or task["title"],
-            deadline or None,
-            assignee_id,
-            task_id,
-            project_id
-        )
-    )
-
-
-    conn.commit()
-    conn.close()
-
-    flash("Задача обновлена.", "success")
-
+        conn.execute('UPDATE tasks SET title=?,deadline=?,assignee_id=?,description=?,stage_number=? WHERE id=? AND project_id=?',
+                     (title or task['title'],deadline or None,assignee_id,description,stage_number,task_id,project_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    flash('Задача обновлена.', 'success')
     return redirect(target)
 
 

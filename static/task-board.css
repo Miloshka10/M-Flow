@@ -1,0 +1,98 @@
+/* Task board, using the shared M-Flow palette. Native details remain usable without JS. */
+#task-board { margin-block: 32px; }
+#task-board .section-title { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+#task-board .section-title h2 { display: flex; gap: 12px; align-items: center; font-size: 28px; margin: 0; }
+.board-total { background: var(--mf-panel); color: var(--mf-muted); font-size: 14px; padding: 3px 10px; border-radius: 10px; letter-spacing: 0; }
+.board-add { white-space: nowrap; display: inline-flex; align-items: center; }
+#task-board .board-filters { display: flex; align-items: flex-start; margin: 24px 0 12px; gap: 12px; }
+.board-search { display: flex; flex: 1; gap: 10px; min-width: 0; }
+#task-board .board-search input { flex: 1; min-width: 0; }
+.board-advanced { min-width: 140px; }
+.board-advanced > summary { background: var(--mf-card); border: 1px solid var(--mf-line); min-height: 48px; padding: 11px 18px; border-radius: 14px; cursor: pointer; }
+.board-advanced[open] { flex-basis: 100%; }
+.board-advanced[open] > summary { width: fit-content; background: var(--mf-accent-soft); }
+.board-advanced > div { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; padding: 20px; margin-top: 12px; border-radius: 20px; background: var(--mf-card); }
+#task-board .board-advanced label { display: grid; min-width: 0; gap: 6px; }
+#task-board .board-advanced select { width: 100%; min-width: 0; }
+.board-advanced button { align-self: end; }
+.board-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.board-quick a { display: inline-flex; align-items: center; padding: 10px 16px; min-height: 44px; border-radius: 12px; color: var(--mf-muted); }
+.board-quick a[aria-current="true"] { background: var(--mf-text); color: var(--mf-bg); }
+.board-quick a:hover { background: var(--mf-accent-soft); color: var(--mf-text); }
+.board-active { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 12px; overflow-wrap: anywhere; }
+.board-active:empty { display: none; }
+.board-active > span { border: 1px solid var(--mf-line); border-radius: 9px; padding: 5px 10px; font-size: 12px; max-width: 100%; }
+.board-active a { font-size: 12px; padding: 8px; }
+.board-deadlines { font-size: 12px; color: var(--mf-muted); margin: 12px 0; }
+.board-deadlines > summary { min-height: 36px; cursor: pointer; padding-block: 6px; }
+.board-filter-summary { font-size: 12px; color: var(--mf-muted); margin: 14px 0; }
+.board-filter-empty, .board-start { background: var(--mf-card); border: 1px solid var(--mf-line); border-radius: 24px; padding: 32px; }
+.board-start { margin-top: 20px; text-align: center; padding: 48px 24px; }
+.board-start h3 { font-size: 28px; margin: 12px 0; }
+.board-start p { max-width: 55ch; margin: 0 auto 24px; color: var(--mf-muted); }
+.board-start .btn { display: inline-flex; }
+#task-board .kanban { gap: 18px; }
+#task-board .kanban-column { background: var(--mf-panel); min-height: 190px; border: 0; padding: 14px; border-radius: 22px; }
+#task-board .kanban-cards { min-height: 100px; }
+#task-board .kanban-title { font-size: 14px; }
+#task-board .kanban-count { background: var(--mf-card); color: var(--mf-muted); }
+#task-board .kanban-header { padding: 4px 4px 16px; }
+#task-board .task-card { border: 1px solid transparent; padding: 18px; margin-bottom: 12px; overflow-wrap: anywhere; }
+#task-board .task-card:hover { border-color: var(--mf-line); }
+#task-board .task-card .task-title { cursor: pointer; font-size: 16px; line-height: 1.45; font-weight: 650; list-style: none; margin: 0 0 14px; }
+.task-title::-webkit-details-marker { display: none; }
+#task-board .task-priority { display: inline-flex; font-size: 11px; padding: 4px 9px; margin-bottom: 12px; }
+#task-board .priority-high, #task-board .priority-urgent { background: var(--mf-accent-soft); color: var(--mf-accent); }
+#task-board .task-footer { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; font-size: 12px; margin: 0; }
+#task-board .task-footer > span { max-width: 100%; overflow-wrap: anywhere; }
+#task-board .task-footer .role { padding: 0; background: none; font-size: 12px; color: var(--mf-muted); }
+.task-meta { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--mf-line); padding-top: 12px; margin-top: 14px; font-size: 11px; color: var(--mf-muted); }
+.board-disclosure > .task-detail-content { padding: 20px 0; }
+.task-create { margin: 18px 0; }
+.task-create > summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--mf-accent); }
+.board-enhanced .task-create > summary { display: none; }
+.board-columns { display: none; }
+.task-drawer { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(560px,100%); max-width: 100%; height: 100dvh; max-height: 100dvh; padding: 24px 28px; border: 0; border-left: 1px solid var(--mf-line); background: var(--mf-card); color: var(--mf-text); overflow: auto; overscroll-behavior: contain; border-radius: 24px 0 0 24px; }
+.task-drawer::backdrop { background: rgb(0 0 0 / .4); }
+.task-drawer .drawer-top { display: flex; justify-content: space-between; align-items: center; gap: 16px; position: sticky; top: -24px; padding-block: 12px; z-index: 1; background: var(--mf-card); color: var(--mf-muted); font-size: 12px; }
+body .task-drawer .drawer-close { background: var(--mf-panel); color: var(--mf-text); padding: 10px 14px; }
+.task-drawer h2 { font-size: 28px; line-height: 1.25; overflow-wrap: anywhere; margin-block: 18px; }
+.task-drawer .task-status-control { display: grid; gap: 6px; margin-block: 18px; }
+.task-drawer .task-priority-control { display: grid; gap: 6px; font-size: 13px; color: var(--mf-muted); }
+.task-detail-meta { display: flex; flex-wrap: wrap; gap: 10px 16px; font-size: 13px; color: var(--mf-muted); }
+.task-drawer .task-priority-select { margin-bottom: 18px; }
+.task-drawer .task-description, .task-drawer .task-report p { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 45vh; overflow: auto; }
+.task-drawer .task-stage { display: inline-block; min-height: 44px; padding-block: 10px; }
+.task-drawer details > summary { cursor: pointer; min-height: 44px; padding-block: 10px; }
+body .board-task-form { display: grid; grid-template-columns: minmax(0,1fr); gap: 16px; }
+body .board-task-form label { display: grid; gap: 6px; font-size: 13px; color: var(--mf-muted); min-width: 0; }
+body .board-task-form input, body .board-task-form select, body .board-task-form textarea { width: 100%; min-width: 0; }
+.task-drawer .task-report { margin-top: 24px; }
+.task-drawer .delete-task { margin-top: 24px; }
+html.board-dialog-open { overflow: hidden; }
+@media (max-width: 800px) {
+  #task-board .board-filters { flex-wrap: wrap; }
+  #task-board .board-search { flex-basis: 100%; }
+  .board-advanced > div { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .board-columns { display: flex; gap: 6px; margin: 20px 0 14px; flex-wrap: wrap; }
+  .board-columns a { flex: 1; text-align: center; white-space: nowrap; padding: 10px 6px; min-height: 44px; background: var(--mf-panel); color: var(--mf-muted); border-radius: 12px; font-size: 12px; }
+  .board-columns a[aria-current="true"] { background: var(--mf-action); color: #222226; }
+  #task-board .kanban { grid-template-columns: minmax(0,1fr); }
+  .board-enhanced .kanban-column[hidden] { display: none; }
+  #task-board .section-title h2 { font-size: 24px; }
+  #task-board .section-title p { font-size: 12px; }
+}
+@media (max-width: 520px) {
+  #task-board .section-title { align-items: flex-start; gap: 12px; }
+  #task-board .section-title h2 { font-size: 22px; }
+  .board-add { padding: 10px 14px; font-size: 13px; }
+  .board-advanced > div { grid-template-columns: minmax(0,1fr); padding: 16px; }
+  .board-quick a { padding-inline: 12px; font-size: 12px; }
+  .task-drawer { width: 100%; border: 0; border-radius: 0; padding: 16px 20px max(24px, env(safe-area-inset-bottom)); }
+  .task-drawer .drawer-top { top: -16px; }
+  .task-drawer h2 { font-size: 24px; }
+}
+@media (forced-colors: active) {
+  #task-board .task-card, .board-columns a, .board-quick a, .task-drawer { border: 1px solid CanvasText; }
+  .board-quick a[aria-current="true"], .board-columns a[aria-current="true"] { outline: 2px solid Highlight; }
+}

@@ -17,6 +17,7 @@ from results_cases import StudentResultsCases
 from group_cases import LearningGroupCases
 from navigation_cases import NavigationCases
 from history_cases import WorkHistoryCases
+from board_cases import TaskBoardCases
 
 
 class FormTokens(HTMLParser):
@@ -41,7 +42,7 @@ class FormTokens(HTMLParser):
             self.current = None
 
 
-class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, NavigationCases, WorkHistoryCases, unittest.TestCase):
+class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, NavigationCases, WorkHistoryCases, TaskBoardCases, unittest.TestCase):
     def test_result_pages_show_moscow_update_time_for_both_roles(self):
         self.stage_post(3)
         self.defense_post()
@@ -424,8 +425,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         page = self.board_page('?q=assigned&priority=high&mine=1&due=tomorrow&sort=deadline')
         self.assertEqual(self.board_ids(page), [32])
         for fragment in ('name="q" value="assigned"', 'value="high" selected', 'value="tomorrow" selected',
-                         'value="deadline" selected', 'value="1" checked', 'action="/project/2#task-board"',
-                         'class="filter-reset" href="/project/2"', 'Показано 1 из 15 задач'):
+                         'value="deadline" selected', 'name="mine" value="1"', 'action="/project/2#task-board"',
+                         'class="filter-reset" href="/project/2#task-board"', 'Показано 1 из 15 задач'):
             self.assertIn(fragment, page)
         self.assertEqual(self.board_ids(self.board_page('?due=overdue&mine=1')), [31])
         self.assertEqual(set(self.board_ids(self.board_page('?due=overdue&mine=1', user=1))), {24,31})
@@ -433,7 +434,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         empty = self.board_page('?due=tomorrow&q=No-matching-title')
         self.assertEqual(self.board_ids(empty), [])
         self.assertIn('Нет задач по выбранным условиям', empty)
-        self.assertEqual(empty.count('Нет задач по фильтрам'), 3)
+        self.assertIn('Нет задач по выбранным условиям', empty)
+        self.assertNotIn('class="kanban-column"', empty)
 
     def test_board_deadline_order_is_stable_inside_each_status(self):
         self.seed_board_filters()

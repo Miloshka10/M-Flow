@@ -44,6 +44,7 @@ jobs:
       - name: JavaScript checks
         run: |
           node tests/test_kanban.cjs
+          node tests/test_task_board.cjs
           node tests/test_dashboard.cjs
           node tests/test_navigation.cjs
           node tests/test_motion.cjs

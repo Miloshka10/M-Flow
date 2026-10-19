@@ -138,5 +138,27 @@ function setup(response) {
   const ordered = [];
   prioritySuccess.context.sortTaskCards({querySelectorAll: () => cards, appendChild: card => ordered.push(card.dataset.taskId)});
   assert.deepEqual(ordered, ['2', '3', '1']);
+  const drag = setup({});
+  const cardEvents = {}, columnEvents = {};
+  drag.card.draggable = true;
+  drag.card.addEventListener = (key, fn) => cardEvents[key] = fn;
+  drag.card.classList.add = value => drag.classes.add(value);
+  drag.card.classList.remove = value => drag.classes.delete(value);
+  const targetColumn = {dataset:{status:'done'},addEventListener:(key,fn)=>columnEvents[key]=fn,
+    classList:{add(){},remove(){}},contains:()=>false};
+  drag.context.document.querySelectorAll = selector => selector === '.task-card' ? [drag.card] : selector === '.kanban-column' ? [targetColumn] : [];
+  drag.context.document.querySelector = selector => selector === '.dragging' ? drag.card : null;
+  drag.context.updateKanbanCounts = () => {};
+  let dropped;
+  drag.context.moveTask = (card,status) => dropped = {card,status};
+  drag.context.setupKanban();
+  let prevented = false;
+  cardEvents.dragstart({target:{closest:()=>({tagName:'DIALOG'})},preventDefault(){prevented=true;}});
+  assert.equal(prevented,true,'Dragging inside the detail dialog must not drag its task');
+  cardEvents.dragstart({target:{closest:()=>null},preventDefault(){throw Error('Unexpected denial');}});
+  assert.ok(drag.classes.has('dragging'));
+  columnEvents.drop({preventDefault(){}});
+  assert.equal(dropped.card,drag.card);
+  assert.equal(dropped.status,'done','Dropping uses the same permission-checked save path');
   console.log('Kanban checks passed: save, live metrics, student progress, network errors, denied access, expired session.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

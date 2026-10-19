@@ -73,6 +73,7 @@ class DatabaseBackupTests(unittest.TestCase):
                 role_text,message,state,updated_at) VALUES(1,2,?,'Инженер','Приглашение — тест',?,'2026-10-09 12:00:00')""",
                 [(2, "accepted"), (3, "pending")])
             conn.execute("PRAGMA user_version=7")
+            conn.execute("UPDATE tasks SET description='Сохранённое описание задачи',stage_number=3 WHERE id=1")
             from work_history import before_change, record_change
             from video_defense import defense_for
             record = defense_for(conn, 1)
