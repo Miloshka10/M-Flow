@@ -175,4 +175,8 @@ class NavigationCases:
         page = self.client.get('/project/2').text
         for target in ('/supervision', '/project/2/defense', '/project/2/assessment'):
             self.assertIn(f'href="{target}"', page)
+        team = self.client.get('/project/2/team').text
+        self.assertIn('/project/2#project-members', team)
+        self.assertIn('Добавление и удаление участников доступны в разделе «Управление составом» ниже.', team)
+        self.assertNotIn('Удаление участников доступно на доске проекта.', team)
         self.assertEqual(self.database_snapshot(), before)
