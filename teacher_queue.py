@@ -85,10 +85,10 @@ def queue_url(params, page):
 
 
 def render_queue(result, params):
-    html = (f'<p class="t-muted">Найдено работ: {result["total"]} · Требуется решение: {result["decisions"]}. '
+    html = (f'<p class="t-muted">Найдено работ: {result["total"]} · Требуется решение: {result["decisions"]}.</p><details class="ui-queue-note"><summary>Как устроена очередь</summary><p class="t-muted">'
             'Сначала результаты для решения, затем информационные отчёты; сортировка по дате внутри групп.</p>'
             '<p class="t-muted">Отчёты: последний по каждой задаче, без статуса проверки. '
-            'Прочтение уведомления не означает проверку результата. Даты: Москва (UTC+3).</p>')
+            'Прочтение уведомления не означает проверку результата. Даты: Москва (UTC+3).</p></details>')
     previous_group = None
     for item in result['items']:
         group = 'Требуется решение' if item['requires_decision'] else 'Отчёты — информация'

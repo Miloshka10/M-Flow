@@ -284,7 +284,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertNotIn('Owned project', self.queue_html(page))
         for value in ('stage','2','review','newest'):
             self.assertIn(f'value="{value}" selected', page)
-        self.assertIn('class="review-counter"><strong>2</strong>', page)
+        self.assertIn('data-review-count="2"', page)
         queue = self.queue_html(self.client.get('/teacher?kind=report&q=КОМАНДНЫЙ').text)
         self.assertIn('report-1-11', queue)
         self.assertNotIn('report-1-10', queue)
@@ -540,7 +540,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         conn.commit()
         conn.close()
         self.assertEqual(self.count_page_queries('/'), before)
-        self.assertLessEqual(before, 10)  # Results plus three bounded reads for the current project.
+        self.assertLessEqual(before, 11)  # Includes one bounded read for the home group cards.
         page = self.client.get('/').text.split('aria-labelledby="upcoming-title"')[1].split('</section>')[0]
         self.assertEqual(page.count('#task-'), 6)
         self.assertIn('Показано 6 из 200', page)
@@ -1338,7 +1338,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
             page = self.client.get(path).text
             self.assertEqual(page.count('/static/product-design.css'), 1)
-            self.assertIn('width="480" height="360"', page)
+            self.assertIn('class="ui-project-art" aria-hidden="true"', page)
+            self.assertEqual(page.count('/static/interface.css'), 1)
             self.assertIn('К содержимому', page)
         self.sign_in(3)
         page = self.client.get('/').text
@@ -1372,8 +1373,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.defense_post()
         self.sign_in(1)
         page = self.client.get('/teacher').text
-        self.assertIn('class="review-counter"><strong>2</strong>', page)
-        self.assertIn('href="#review-queue"', page)
+        self.assertIn('data-review-count="2"', page)
+        self.assertIn('href="/teacher#review-queue"', page)
         self.assertNotIn('project-create', page)
         self.assertIn('Этап ожидает проверки', page)
         self.assertIn('Видеозащита ожидает проверки', page)
@@ -1402,22 +1403,22 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
             page = self.client.get(path).text
             self.assertEqual(page.count('/static/graphics.css'), 1)
-            self.assertIn('/static/illustrations/research-notebook-480.webp', page)
+            self.assertIn('class="ui-project-art" aria-hidden="true"', page)
             self.assertIn('by Minich', page)
             self.assertNotIn('project-kit.svg', page)
         self.sign_in(3)
         page = self.client.get('/').text
-        self.assertIn('class="hero-art student-art"', page)
-        self.assertIn('/static/illustrations/research-bridge-480.webp', page)
+        self.assertIn('class="ui-project-art" aria-hidden="true"', page)
+        self.assertIn('viewBox="0 0 320 230"', page)
         self.assertIn('Найти команду', page)
         self.assertNotIn('blank-study.svg', page)  # Existing projects, not an empty state.
         self.assertIn('data-home-step=', page)
         self.assertIn('100%', page)
         self.sign_in(1)
         page = self.client.get('/teacher').text
-        self.assertIn('class="hero-art teacher-art"', page)
-        self.assertIn('/static/illustrations/review-study-480.webp', page)
-        self.assertIn('class="review-counter"', page)
+        self.assertIn('data-interface-shell="teacher"', page)
+        self.assertIn('data-review-count=', page)
+        self.assertNotIn('class="hero-art teacher-art"', page)
         self.assertNotIn('project-kit.svg', page)
         self.assertEqual(self.database_snapshot(), before)
 
@@ -1426,7 +1427,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.sign_in(4)
         page = self.client.get('/').text
         self.assertIn('Начни свой проект.', page)
-        self.assertIn('research-bridge-480.webp', page)
+        self.assertIn('class="ui-project-art" aria-hidden="true"', page)
         self.assertIn('data-open-project', page)
         for name in ('blank-study.svg', 'team-study.svg'):
             with self.client.get('/static/illustrations/' + name) as response:

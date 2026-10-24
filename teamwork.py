@@ -241,5 +241,5 @@ def render_team(conn, project_id, owner, token):
                 <input type="hidden" name="invitation_id" value="{invitation['id']}"><button class="secondary" name="action" value="cancel">Отменить приглашение</button></form></article>'''
         if not pending:
             body += '<p>Нет приглашений, ожидающих ответа.</p>'
-        body += '<p>Удаление участников доступно на доске проекта.</p></section>'
+        body += '<p>Добавление и удаление участников доступны в разделе «Управление составом» ниже.</p></section>'
     return body

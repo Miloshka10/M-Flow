@@ -57,7 +57,7 @@ class ProjectWorkspaceTests(unittest.TestCase):
         self.assertIn('Принято 0 из 5 этапов', page)
         self.assertIn('data-next-step="start"', page)
         self.assertIn('id="task-board"', page)
-        self.assertIn('<details class="journey-route">', page)
+        self.assertIn('<details class="journey-route" open>', page)
         self.assertEqual(page.count('class="route-stage'), 5)
         self.assertIn('Откроется после принятия этапа 1 учителем.', page)
         self.assertIn('aria-current="step"', page)

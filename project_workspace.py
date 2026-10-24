@@ -5,6 +5,7 @@ from html import escape
 from grading import MAX_SCORE, load_scores, summarize
 from project_stages import stage_summary, stage_label, stage_needs_revision, STAGE_DESCRIPTIONS
 from video_defense import DEFENSE_STATES
+from navigation import project_navigation
 
 
 def task_deadline(tasks, today=None):
@@ -128,23 +129,25 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
                 grades.append('Оценка опубликована · подробности в разделе оценивания')
         grading = '<br>'.join(grades) or 'Ваша оценка ещё не опубликована'
     defense_label = DEFENSE_STATES[defense['state']] if defense['revision'] else 'Запись ещё не добавлена'
-    return f'''<section class="project-overview" aria-label="Маршрут проекта">
-        <div class="journey-heading"><div><span class="eyebrow">ПРОЕКТ / ОТ ТЕМЫ ДО ЗАЩИТЫ</span><h1>{escape(name)}</h1>
-            <details class="journey-members"><summary>Участники: {len(members)} · {escape(names) or 'Команда пока не сформирована'}</summary><ul>{member_list}</ul></details></div>
-            <a class="action-link" href="#task-board">К доске задач ↓</a></div>
-        <div class="journey-next"><div class="journey-context"><span>{current_name}</span><strong>{current_label}</strong>
-            <small data-task-deadline>{task_deadline(tasks, today)}</small><small>Срок относится к задаче, не к этапу</small></div>
-            <div class="journey-action" data-next-step="{step['key']}"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>{step['title']}</h2><p>{step['text']}</p>{action}</div></div>
-        {feedback}
-        <p><a class="action-link" href="{base}/history">История отправок и решений →</a></p>
-        <div class="journey-progress"><div><div><strong>Прогресс задач</strong><b data-project-progress>{progress}%</b></div>
-            <p data-project-progress-text>{completed_tasks} из {len(tasks)} задач выполнено</p><div class="project-progress"><div data-project-progress-fill style="width:{progress}%"></div></div></div>
-            <div><div><strong>Этапы, принятые учителем</strong><b>{done * 20}%</b></div><p>Принято {done} из 5 этапов</p><div class="project-progress"><div style="width:{done * 20}%"></div></div></div></div>
-        <details class="journey-route"><summary>Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
-            <p class="journey-explanation">Задачи помогают выполнять работу. Этап принимается только после решения учителя; защита и оценки проверяются отдельно.</p><ol>{route}</ol></details>
+    return f'''<div class="journey-heading"><div><span class="eyebrow">ПРОЕКТ / ОТ ТЕМЫ ДО ЗАЩИТЫ</span><h1>{escape(name)}</h1>
+            <details class="journey-members"><summary>Участники: {len(members)} · {escape(names) or 'Команда пока не сформирована'}</summary><ul>{member_list}</ul></details></div></div>
+        {project_navigation(project_id)}<section class="project-overview" aria-label="Маршрут проекта">
+        <div class="ui-project-overview-grid"><section class="ui-project-next" aria-label="Следующий шаг проекта">
+            <div class="journey-action" data-next-step="{step['key']}"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span>
+            <p>{current_name} · {current_label}</p><h2>{step['title']}</h2><p>{step['text']}</p>{action}</div>
+            {feedback}<p><a class="action-link" href="{base}/history">История отправок и решений →</a></p>
+            <p class="ui-project-deadline"><span data-task-deadline>{task_deadline(tasks, today)}</span><br>Срок относится к задаче, не к этапу</p></section>
+        <aside class="ui-project-aside"><section class="ui-project-progress" aria-label="Прогресс проекта"><span class="eyebrow">ПУТЬ К ЗАЩИТЕ</span>
+            <div class="ui-progress-number">{done:02d} <small>/ 05</small></div><p>Принято {done} из 5 этапов · {done * 20}%</p>
+            <div class="project-progress" aria-hidden="true"><div style="width:{done * 20}%"></div></div>
+            <div class="ui-task-summary"><span>Прогресс задач</span><strong data-project-progress>{progress}%</strong></div>
+            <p data-project-progress-text>{completed_tasks} из {len(tasks)} задач выполнено</p>
+            <div class="project-progress" aria-hidden="true"><div data-project-progress-fill style="width:{progress}%"></div></div></section>
         <section class="project-supervisor" aria-labelledby="supervisor-title"><h2 id="supervisor-title">Руководитель проекта</h2>
             <p>{escape(', '.join(m['username'] for m in members if m['role'] == 'teacher')) if has_teacher else 'Учитель пока не подключён. Черновики можно готовить уже сейчас.'}</p>
-            <a class="action-link" href="/supervision">Приглашения и согласование →</a></section>
+            <a class="action-link" href="/supervision">Приглашения и согласование →</a></section></aside></div>
+        <details class="journey-route" open><summary>Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
+            <p class="journey-explanation">Задачи помогают выполнять работу. Этап принимается только после решения учителя; защита и оценки проверяются отдельно.</p><ol>{route}</ol></details>
         <section class="project-finish" aria-labelledby="finish-title"><h2 id="finish-title">Завершение проекта</h2>
             <p>После пяти этапов — видеозащита и итоговая оценка. Открыть эти разделы можно в любое время.</p>
             <div class="project-finish-links"><a href="{base}/defense"><strong>Видеозащита ↗</strong><span>{defense_label}</span></a>
