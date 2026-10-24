@@ -1,8 +1,45 @@
 """Shared navigation and home-state checks on disposable SQLite/PostgreSQL."""
 from contextlib import closing
+import re
 
 
 class NavigationCases:
+    def test_shared_workspace_covers_all_existing_sections_without_get_writes(self):
+        paths = ('/', '/project/1', '/project/1/stages', '/project/1/team', '/project/1/defense',
+                 '/project/1/assessment', '/project/1/history', '/groups', '/teams', '/supervision',
+                 '/notifications', '/profile', '/settings')
+        for uid in (1, 3):
+            self.sign_in(uid)
+            before = self.database_snapshot()
+            for path in paths:
+                with self.subTest(user=uid, path=path):
+                    page = self.client.get(path)
+                    self.assertEqual(page.status_code, 200)
+                    self.assertIn('class="mf-v2 ui-authenticated"', page.text)
+                    self.assertEqual(page.text.count('/static/interface.css'), 1)
+                    self.assertEqual(page.text.count('id="account-panel"'), 1)
+                    ids = re.findall(r'(?<![-\w])id="([^"]+)"', page.text)
+                    self.assertEqual(len(ids), len(set(ids)), 'Deep-link and form targets must be unique')
+                    self.assertIn('action="/logout"', page.text)
+                    self.assertIn('data-interface-shell=', page.text)
+            self.assertEqual(self.database_snapshot(), before)
+
+    def test_home_group_cards_are_escaped_and_limited_to_own_memberships(self):
+        with closing(self.module.get_db()) as conn:
+            conn.execute("INSERT INTO learning_groups(id,teacher_id,name) VALUES(700,1,?)", ('<img src=x onerror=alert(1)>',))
+            conn.execute("INSERT INTO learning_groups(id,teacher_id,name) VALUES(701,2,'Secret class')")
+            conn.execute('INSERT INTO learning_group_members(group_id,student_id,project_id) VALUES(700,3,2)')
+            conn.commit()
+        self.sign_in(3)
+        before = self.database_snapshot()
+        page = self.client.get('/').text
+        self.assertIn('/groups/700', page)
+        self.assertIn('&lt;img src=x onerror=alert(1)&gt;', page)
+        self.assertNotIn('<img src=x onerror=alert(1)>', page)
+        self.assertNotIn('/groups/701', page)
+        self.assertNotIn('Secret class', page)
+        self.assertEqual(self.database_snapshot(), before)
+
     def home_focus(self, project=2):
         self.sign_in(3)
         page = self.client.get(f'/?project={project}')
@@ -17,7 +54,7 @@ class NavigationCases:
             for text in (label, 'Учебные группы', 'Мой аккаунт', 'Меню', 'Мой профиль',
                          '/settings', 'action="/logout"', 'csrf_token', 'aria-controls="account-panel"'):
                 self.assertIn(text, header)
-            for text in ('class="avatar"', 'href="/teams"', 'href="/supervision"'):
+            for text in ('class="avatar"', 'href="/supervision"'):
                 self.assertNotIn(text, header)
             trigger = header.split('<details class="account-menu">')[1].split('</summary>')[0]
             self.assertNotIn('⌄', trigger)
@@ -30,7 +67,8 @@ class NavigationCases:
             page = self.client.get(path)
             self.assertEqual(page.status_code, 200)
             header = page.text.split('<header class="main-header')[1].split('</header>')[0]
-            self.assertIn('<a href="/teacher" aria-current="page">Кабинет</a>', header)
+            self.assertRegex(header, r'<a href="/teacher"[^>]*data-nav-key="home"[^>]*aria-current="page"')
+            self.assertIn('Кабинет', header)
 
     def test_home_switch_rejects_foreign_projects_and_never_writes(self):
         self.sign_in(3)
@@ -97,7 +135,7 @@ class NavigationCases:
         page = self.client.get('/').text
         for text in ('Начни свой проект.', '/groups#group-code', 'Ввести код группы', 'Создать проект', '/teams'):
             self.assertIn(text, page)
-        self.assertNotIn('id="student-results"', page)
+        self.assertIn('id="student-results"', page)  # The sidebar result link must have a target even before the first project.
         self.assertEqual(self.database_snapshot(), before)
         with closing(self.module.get_db()) as conn:
             conn.execute('DELETE FROM project_members WHERE project_id=2 AND user_id=1')

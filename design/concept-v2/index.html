@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="M-Flow — концепция нового рабочего пространства ученика и учителя. Демонстрационные данные.">
+  <title>M-Flow · Новое пространство</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="concept.css">
+  <script src="concept.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+  <div class="concept-bar" aria-label="Просмотр концепции">
+    <span class="concept-label"><span class="concept-dot"></span> КОНЦЕПЦИЯ 01 <span class="demo-note">/ демонстрационные данные</span></span>
+    <nav class="screen-switch" aria-label="Три экрана концепции">
+      <a href="#student" data-screen="student">Ученик</a>
+      <a href="#teacher" data-screen="teacher">Учитель</a>
+      <a href="#project" data-screen="project">Проект</a>
+    </nav>
+  </div>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Боковая панель">
+      <div class="sidebar-top"><a class="wordmark" href="#student" aria-label="M-Flow — главная">M-Flow<span>.</span></a><button class="icon-button close-nav" data-action="close-nav" aria-label="Закрыть меню"></button></div>
+      <div class="workspace-label">ПРОСТРАНСТВО <span id="role-label">УЧЕНИКА</span></div>
+      <nav id="main-nav" class="main-nav" aria-label="Основная навигация"></nav>
+      <div class="sidebar-projects" id="sidebar-projects"></div>
+      <div class="sidebar-bottom"><div class="sidebar-motto">От первой идеи<br>до своего результата<span>Это твой M-Flow.</span></div><button class="nav-item" data-modal="settings"><span data-icon="settings"></span>Настройки</button><div class="sidebar-signature">СОЗДАВАЙ. ПРОБУЙ. РАСТИ.</div></div>
+    </aside>
+    <button class="nav-backdrop" aria-label="Закрыть навигацию" hidden></button>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="topbar-left"><button class="icon-button mobile-menu" data-action="open-nav" aria-controls="sidebar" aria-expanded="false" aria-label="Открыть меню"><span data-icon="menu"></span></button><a class="mobile-brand wordmark" href="#student">M-Flow<span>.</span></a><div class="breadcrumb" id="breadcrumb">Моё пространство <span>/</span> Главная</div></div>
+        <div class="topbar-actions"><span class="topbar-date">Четверг, 22 октября</span><button class="icon-button notification-button" data-modal="notifications" aria-label="Уведомления: 2 новых"><span data-icon="bell"></span><i></i></button><div class="account-wrap"><button class="account-button" id="account-toggle" aria-expanded="false" aria-controls="account-panel">Мой аккаунт</button><div class="account-panel" id="account-panel" hidden></div></div></div>
+      </header>
+      <main id="main" tabindex="-1"></main>
+      <footer class="page-footer"><span>M-Flow <span class="muted">/ пространство для твоих идей</span></span><span>by Minich</span></footer>
+    </div>
+  </div>
+  <dialog id="detail-dialog" class="detail-dialog" aria-labelledby="dialog-title"><div class="dialog-top"><span class="eyebrow" id="dialog-kicker">M-FLOW</span><button class="icon-button" data-action="close-dialog" aria-label="Закрыть панель"><span data-icon="close"></span></button></div><div id="dialog-body"></div></dialog>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <noscript><p class="noscript">Для просмотра интерактивной концепции включите JavaScript. Рабочий сайт M-Flow не изменён.</p></noscript>
+</body>
+</html>

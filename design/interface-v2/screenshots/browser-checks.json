@@ -1,0 +1,1405 @@
+[
+  {
+    "overflow": false,
+    "path": "/",
+    "theme": "dark",
+    "title": "Привет, preview-student.",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1",
+    "theme": "dark",
+    "title": "Умная теплица",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1#task-board",
+    "theme": "dark",
+    "title": "Умная теплица",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/stages",
+    "theme": "dark",
+    "title": "Пять этапов · Умная теплица",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/team",
+    "theme": "dark",
+    "title": "Команда · Умная теплица",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/defense",
+    "theme": "dark",
+    "title": "Видеозащита · Умная теплица",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/assessment",
+    "theme": "dark",
+    "title": "Оценивание · Умная теплица",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/history",
+    "theme": "dark",
+    "title": "История работ · Умная теплица",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/groups",
+    "theme": "dark",
+    "title": "Учебные группы",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "theme": "dark",
+    "title": "10 «А» — проектная работа",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/teams",
+    "theme": "dark",
+    "title": "Команды и участники",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/skills",
+    "theme": "dark",
+    "title": "Мои навыки и направление",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "theme": "dark",
+    "title": "Руководитель проекта",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/notifications",
+    "theme": "dark",
+    "title": "Уведомления",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/profile",
+    "theme": "dark",
+    "title": "Профиль",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/settings",
+    "theme": "dark",
+    "title": "Настройки сайта",
+    "width": 1440,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/",
+    "theme": "dark",
+    "title": "Привет, preview-student.",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1",
+    "theme": "dark",
+    "title": "Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1#task-board",
+    "theme": "dark",
+    "title": "Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/stages",
+    "theme": "dark",
+    "title": "Пять этапов · Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/team",
+    "theme": "dark",
+    "title": "Команда · Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/defense",
+    "theme": "dark",
+    "title": "Видеозащита · Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/assessment",
+    "theme": "dark",
+    "title": "Оценивание · Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/history",
+    "theme": "dark",
+    "title": "История работ · Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/groups",
+    "theme": "dark",
+    "title": "Учебные группы",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "theme": "dark",
+    "title": "10 «А» — проектная работа",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/teams",
+    "theme": "dark",
+    "title": "Команды и участники",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/skills",
+    "theme": "dark",
+    "title": "Мои навыки и направление",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "theme": "dark",
+    "title": "Руководитель проекта",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/notifications",
+    "theme": "dark",
+    "title": "Уведомления",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/profile",
+    "theme": "dark",
+    "title": "Профиль",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/settings",
+    "theme": "dark",
+    "title": "Настройки сайта",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/",
+    "theme": "light",
+    "title": "Привет, preview-student.",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1",
+    "theme": "light",
+    "title": "Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1#task-board",
+    "theme": "light",
+    "title": "Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/stages",
+    "theme": "light",
+    "title": "Пять этапов · Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/team",
+    "theme": "light",
+    "title": "Команда · Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/defense",
+    "theme": "light",
+    "title": "Видеозащита · Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/assessment",
+    "theme": "light",
+    "title": "Оценивание · Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/history",
+    "theme": "light",
+    "title": "История работ · Умная теплица",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/groups",
+    "theme": "light",
+    "title": "Учебные группы",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "theme": "light",
+    "title": "10 «А» — проектная работа",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/teams",
+    "theme": "light",
+    "title": "Команды и участники",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/skills",
+    "theme": "light",
+    "title": "Мои навыки и направление",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "theme": "light",
+    "title": "Руководитель проекта",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/notifications",
+    "theme": "light",
+    "title": "Уведомления",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/profile",
+    "theme": "light",
+    "title": "Профиль",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/settings",
+    "theme": "light",
+    "title": "Настройки сайта",
+    "width": 390,
+    "role": "student"
+  },
+  {
+    "overflow": false,
+    "path": "/teacher",
+    "theme": "light",
+    "title": "Кабинет учителя",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1",
+    "theme": "light",
+    "title": "Умная теплица",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1#task-board",
+    "theme": "light",
+    "title": "Умная теплица",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/stages",
+    "theme": "light",
+    "title": "Пять этапов · Умная теплица",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/team",
+    "theme": "light",
+    "title": "Команда · Умная теплица",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/defense",
+    "theme": "light",
+    "title": "Видеозащита · Умная теплица",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/3/assessment",
+    "theme": "light",
+    "title": "Оценивание · Школьный экогид",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/history",
+    "theme": "light",
+    "title": "История работ · Умная теплица",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/groups",
+    "theme": "light",
+    "title": "Учебные группы",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "theme": "light",
+    "title": "10 «А» — проектная работа",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/teams",
+    "theme": "light",
+    "title": "Команды и участники",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "theme": "light",
+    "title": "Руководитель проекта",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/notifications",
+    "theme": "light",
+    "title": "Уведомления",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/profile",
+    "theme": "light",
+    "title": "Профиль",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/settings",
+    "theme": "light",
+    "title": "Настройки сайта",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/teacher",
+    "theme": "dark",
+    "title": "Кабинет учителя",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1",
+    "theme": "dark",
+    "title": "Умная теплица",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1#task-board",
+    "theme": "dark",
+    "title": "Умная теплица",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/stages",
+    "theme": "dark",
+    "title": "Пять этапов · Умная теплица",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/team",
+    "theme": "dark",
+    "title": "Команда · Умная теплица",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/defense",
+    "theme": "dark",
+    "title": "Видеозащита · Умная теплица",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/3/assessment",
+    "theme": "dark",
+    "title": "Оценивание · Школьный экогид",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/history",
+    "theme": "dark",
+    "title": "История работ · Умная теплица",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/groups",
+    "theme": "dark",
+    "title": "Учебные группы",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "theme": "dark",
+    "title": "10 «А» — проектная работа",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/teams",
+    "theme": "dark",
+    "title": "Команды и участники",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "theme": "dark",
+    "title": "Руководитель проекта",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/notifications",
+    "theme": "dark",
+    "title": "Уведомления",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/profile",
+    "theme": "dark",
+    "title": "Профиль",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/settings",
+    "theme": "dark",
+    "title": "Настройки сайта",
+    "width": 390,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/teacher",
+    "theme": "dark",
+    "title": "Кабинет учителя",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1",
+    "theme": "dark",
+    "title": "Умная теплица",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1#task-board",
+    "theme": "dark",
+    "title": "Умная теплица",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/stages",
+    "theme": "dark",
+    "title": "Пять этапов · Умная теплица",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/team",
+    "theme": "dark",
+    "title": "Команда · Умная теплица",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/defense",
+    "theme": "dark",
+    "title": "Видеозащита · Умная теплица",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/3/assessment",
+    "theme": "dark",
+    "title": "Оценивание · Школьный экогид",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/history",
+    "theme": "dark",
+    "title": "История работ · Умная теплица",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/groups",
+    "theme": "dark",
+    "title": "Учебные группы",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "theme": "dark",
+    "title": "10 «А» — проектная работа",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/teams",
+    "theme": "dark",
+    "title": "Команды и участники",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "theme": "dark",
+    "title": "Руководитель проекта",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/notifications",
+    "theme": "dark",
+    "title": "Уведомления",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/profile",
+    "theme": "dark",
+    "title": "Профиль",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/settings",
+    "theme": "dark",
+    "title": "Настройки сайта",
+    "width": 1440,
+    "role": "teacher"
+  },
+  {
+    "overflow": false,
+    "path": "/teacher",
+    "role": "teacher",
+    "theme": "light",
+    "title": "Кабинет учителя",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/1",
+    "role": "teacher",
+    "theme": "light",
+    "title": "Умная теплица",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/1#task-board",
+    "role": "teacher",
+    "theme": "light",
+    "title": "Умная теплица",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/stages",
+    "role": "teacher",
+    "theme": "light",
+    "title": "Пять этапов · Умная теплица",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/team",
+    "role": "teacher",
+    "theme": "light",
+    "title": "Команда · Умная теплица",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/defense",
+    "role": "teacher",
+    "theme": "light",
+    "title": "Видеозащита · Умная теплица",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/3/assessment",
+    "role": "teacher",
+    "theme": "light",
+    "title": "Оценивание · Школьный экогид",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/history",
+    "role": "teacher",
+    "theme": "light",
+    "title": "История работ · Умная теплица",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/groups",
+    "role": "teacher",
+    "theme": "light",
+    "title": "Учебные группы",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "role": "teacher",
+    "theme": "light",
+    "title": "10 «А» — проектная работа",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/teams",
+    "role": "teacher",
+    "theme": "light",
+    "title": "Команды и участники",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "role": "teacher",
+    "theme": "light",
+    "title": "Руководитель проекта",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/notifications",
+    "role": "teacher",
+    "theme": "light",
+    "title": "Уведомления",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/profile",
+    "role": "teacher",
+    "theme": "light",
+    "title": "Профиль",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/settings",
+    "role": "teacher",
+    "theme": "light",
+    "title": "Настройки сайта",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/",
+    "role": "student",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/project/1",
+    "role": "student",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/project/1#task-board",
+    "role": "student",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/groups",
+    "role": "student",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "role": "student",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/teams",
+    "role": "student",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "role": "student",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/project/3/assessment",
+    "role": "student",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/profile",
+    "role": "student",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/settings",
+    "role": "student",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/",
+    "role": "student",
+    "theme": "dark",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/project/1",
+    "role": "student",
+    "theme": "dark",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/project/1#task-board",
+    "role": "student",
+    "theme": "dark",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/groups",
+    "role": "student",
+    "theme": "dark",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "role": "student",
+    "theme": "dark",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/teams",
+    "role": "student",
+    "theme": "dark",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "role": "student",
+    "theme": "dark",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/project/3/assessment",
+    "role": "student",
+    "theme": "dark",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/profile",
+    "role": "student",
+    "theme": "dark",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/settings",
+    "role": "student",
+    "theme": "dark",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/",
+    "role": "student",
+    "theme": "dark",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/project/1",
+    "role": "student",
+    "theme": "dark",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/project/1#task-board",
+    "role": "student",
+    "theme": "dark",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/groups",
+    "role": "student",
+    "theme": "dark",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "role": "student",
+    "theme": "dark",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/teams",
+    "role": "student",
+    "theme": "dark",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "role": "student",
+    "theme": "dark",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/project/3/assessment",
+    "role": "student",
+    "theme": "dark",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/profile",
+    "role": "student",
+    "theme": "dark",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/settings",
+    "role": "student",
+    "theme": "dark",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/1",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/1#task-board",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/stages",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/team",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/defense",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/assessment",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/history",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/groups",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/teams",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/skills",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/notifications",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/profile",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/settings",
+    "role": "student",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/login",
+    "role": "public",
+    "theme": "light",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/register",
+    "role": "public",
+    "theme": "light",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/teacher/login",
+    "role": "public",
+    "theme": "light",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/teacher/register",
+    "role": "public",
+    "theme": "light",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/login",
+    "role": "public",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/register",
+    "role": "public",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/teacher/login",
+    "role": "public",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/teacher/register",
+    "role": "public",
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/login",
+    "role": "public",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/register",
+    "role": "public",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/teacher/login",
+    "role": "public",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/teacher/register",
+    "role": "public",
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/login",
+    "role": "public",
+    "theme": "dark",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/register",
+    "role": "public",
+    "theme": "dark",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/teacher/login",
+    "role": "public",
+    "theme": "dark",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/teacher/register",
+    "role": "public",
+    "theme": "dark",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "path": "/teacher",
+    "role": "teacher",
+    "theme": "light",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "role": "teacher",
+    "theme": "light",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/stages",
+    "role": "teacher",
+    "theme": "light",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/project/3/assessment",
+    "role": "teacher",
+    "theme": "light",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "role": "teacher",
+    "theme": "light",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "path": "/teacher",
+    "role": "teacher",
+    "theme": "light",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "role": "teacher",
+    "theme": "light",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/stages",
+    "role": "teacher",
+    "theme": "light",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/project/3/assessment",
+    "role": "teacher",
+    "theme": "light",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "role": "teacher",
+    "theme": "light",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "path": "/teacher",
+    "role": "teacher",
+    "theme": "light",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/groups/1",
+    "role": "teacher",
+    "theme": "light",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/project/1/stages",
+    "role": "teacher",
+    "theme": "light",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/project/3/assessment",
+    "role": "teacher",
+    "theme": "light",
+    "width": 1024
+  },
+  {
+    "overflow": false,
+    "path": "/supervision",
+    "role": "teacher",
+    "theme": "light",
+    "width": 1024
+  }
+]

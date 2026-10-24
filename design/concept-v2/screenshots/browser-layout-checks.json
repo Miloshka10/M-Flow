@@ -1,0 +1,207 @@
+[
+  {
+    "client": 305,
+    "overflow": false,
+    "screen": "Привет, Саша.",
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "client": 305,
+    "overflow": false,
+    "screen": "Всё важное — перед вами.",
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "client": 305,
+    "overflow": false,
+    "screen": "Умная теплица",
+    "scroll": 305,
+    "width": 320
+  },
+  {
+    "client": 375,
+    "overflow": false,
+    "screen": "Привет, Саша.",
+    "scroll": 375,
+    "width": 390
+  },
+  {
+    "client": 375,
+    "overflow": false,
+    "screen": "Всё важное — перед вами.",
+    "scroll": 375,
+    "width": 390
+  },
+  {
+    "client": 375,
+    "overflow": false,
+    "screen": "Умная теплица",
+    "scroll": 375,
+    "width": 390
+  },
+  {
+    "client": 753,
+    "overflow": false,
+    "screen": "Привет, Саша.",
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "client": 753,
+    "overflow": false,
+    "screen": "Всё важное — перед вами.",
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "client": 753,
+    "overflow": false,
+    "screen": "Умная теплица",
+    "scroll": 753,
+    "width": 768
+  },
+  {
+    "client": 1009,
+    "overflow": false,
+    "screen": "Привет, Саша.",
+    "scroll": 1009,
+    "width": 1024
+  },
+  {
+    "client": 1009,
+    "overflow": false,
+    "screen": "Всё важное — перед вами.",
+    "scroll": 1009,
+    "width": 1024
+  },
+  {
+    "client": 1009,
+    "overflow": false,
+    "screen": "Умная теплица",
+    "scroll": 1009,
+    "width": 1024
+  },
+  {
+    "client": 1425,
+    "overflow": false,
+    "screen": "Привет, Саша.",
+    "scroll": 1425,
+    "width": 1440
+  },
+  {
+    "client": 1425,
+    "overflow": false,
+    "screen": "Всё важное — перед вами.",
+    "scroll": 1425,
+    "width": 1440
+  },
+  {
+    "client": 1425,
+    "overflow": false,
+    "screen": "Умная теплица",
+    "scroll": 1425,
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "view": "Обзор",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "view": "Этапы5",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "view": "Задачи12",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "view": "Команда3",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "view": "Защита и результат",
+    "width": 320
+  },
+  {
+    "overflow": false,
+    "view": "Обзор",
+    "width": 390
+  },
+  {
+    "overflow": false,
+    "view": "Этапы5",
+    "width": 390
+  },
+  {
+    "overflow": false,
+    "view": "Задачи12",
+    "width": 390
+  },
+  {
+    "overflow": false,
+    "view": "Команда3",
+    "width": 390
+  },
+  {
+    "overflow": false,
+    "view": "Защита и результат",
+    "width": 390
+  },
+  {
+    "overflow": false,
+    "view": "Обзор",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "view": "Этапы5",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "view": "Задачи12",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "view": "Команда3",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "view": "Защита и результат",
+    "width": 768
+  },
+  {
+    "overflow": false,
+    "view": "Обзор",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "view": "Этапы5",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "view": "Задачи12",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "view": "Команда3",
+    "width": 1440
+  },
+  {
+    "overflow": false,
+    "view": "Защита и результат",
+    "width": 1440
+  }
+]

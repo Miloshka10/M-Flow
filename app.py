@@ -43,6 +43,7 @@ from dashboard_view import student_dashboard
 from graphics import illustration
 from project_workspace import render_workspace, task_deadline
 from navigation import project_navigation
+from interface import shell_header, project_art, document_title
 from student_results import parameters as result_parameters, load_results, render_results, load_focus
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
 from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, change_stage, render_stages, STATE_LABELS
@@ -138,9 +139,10 @@ def render_page(html):
     if '<main' in html and 'id="main-content"' not in html:
         html = html.replace('<main', '<main id="main-content"', 1)
     skip_target = 'main-content' if '<main' in html else 'page-content'
+    body_class = 'mf-v2 ui-authenticated' if 'data-interface-shell=' in html else 'mf-v2'
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
-            '<title>M-Flow — проекты и задачи</title>'
+            f'<title>{document_title(html)}</title>'
             f'<meta name="csrf-token" content="{escape(csrf_token(), quote=True)}">'
         '<link rel="stylesheet" href="/static/mflow-theme.css?v=20261005-mobile">'
         '<link rel="stylesheet" href="/static/mobile.css?v=20261006-scrollbar">'
@@ -156,7 +158,9 @@ def render_page(html):
         '<script src="/static/dashboard.js?v=20261006" defer></script>'
         '<link rel="stylesheet" href="/static/navigation.css?v=20261017-fixes">'
         '<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
-            f'</head><body id="page-content"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
+        '<link rel="stylesheet" href="/static/interface.css?v=20261024-v2">'
+        '<script src="/static/interface.js?v=20261024-v2" defer></script>'
+            f'</head><body id="page-content" class="{body_class}"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
 
 DATABASE_SETTINGS = DatabaseSettings.from_environment(app.root_path)
@@ -1068,9 +1072,9 @@ def render_auth_page(mode, error=None, role="student"):
         + f"""
         <div class="auth-page auth-role-{role}">
             <div class="auth-card">
-                <div class="auth-form-side">
+                <main class="auth-form-side">
                     <div class="auth-form-inner">
-                    <a href="{prefix}/login" class="brand auth-form-brand" aria-label="M-Flow — вход">M<span>-</span>Flow</a>
+                    <a href="{prefix}/login" class="brand auth-form-brand" aria-label="M-Flow — вход">M-Flow<span class="ui-brand-dot">.</span></a>
                     <h1>{"С возвращением" if is_login else "Создать аккаунт"}</h1>
                     <p class="auth-intro">{role_title} · {"Продолжите работу над проектами." if is_login else "Всё для работы над школьным проектом."}</p>
                     <nav class="auth-role-switch" aria-label="Выбор роли">
@@ -1089,14 +1093,14 @@ def render_auth_page(mode, error=None, role="student"):
                     </form>
                     <p class="auth-footer">{"Приглашайте учеников и проверяйте результаты в одном кабинете." if is_teacher else "Создайте проект и примите приглашение учителя."}<br><a href="/settings">Настройки оформления</a></p>
                     </div>
-                </div>
+                </main>
                 <aside class="auth-hero" aria-label="О проекте M-Flow">
                     <div class="auth-hero-top">Рабочее пространство школьных проектов</div>
                     <div class="auth-hero-content">
                         <span class="auth-product-tag">ДЛЯ БОЛЬШИХ ИДЕЙ</span>
-                        <h2 class="auth-logo auth-shimmer">M-Flow</h2>
+                        <h2 class="auth-logo">От идеи<br>к результату.</h2>
                         <div class="auth-byline auth-shimmer">by Minich</div>
-                        {illustration('auth')}
+                        {project_art()}
                         <h3>{hero_title}</h3>
                         <p>{hero_text}</p>
                     </div>
@@ -1281,7 +1285,7 @@ def profile():
         + f"""
         <div class="container">
             {render_header(user)}
-            <div class="profile-card">
+            <main class="profile-card">
                 <a class="back" href="/">← На главную</a>
                 <h1>Профиль</h1>
                 <dl>
@@ -1307,7 +1311,7 @@ def profile():
                     <input id="repeat-password" type="password" name="repeat_password" autocomplete="new-password" minlength="8" maxlength="256" required>
                     <button type="submit">Сменить пароль</button>
                 </form>
-            </div>
+            </main>
         </div>
         """
     )
@@ -1354,6 +1358,7 @@ def index():
         return render_error_page('Нет доступа', str(error), 403)
     with closing(get_db()) as conn:
         results = render_results(load_results(conn, user, result_params), result_params, projects)
+        groups = own_groups(conn, user)
         try:
             focus = load_focus(conn, user, next(p for p in projects if p['id'] == selected)) if selected else None
         except PermissionError as error:
@@ -1362,7 +1367,7 @@ def index():
                        for category, message in get_flashed_messages(with_categories=True))
     return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/student-results.css?v=20261015">'
                        + student_dashboard(user, projects, csrf_token(), render_header(user), messages, results, focus,
-                                           any(key.startswith("result_") for key in request.args)))
+                                           any(key.startswith("result_") for key in request.args), groups=groups))
 
 
 # =========================================================
@@ -2060,10 +2065,9 @@ def project(project_id):
         <link rel="stylesheet" href="/static/task-board.css?v=20261019"><script src="/static/task-board.js?v=20261019" defer></script>
         <div class="container">
             {render_header(current_user)}
-            <main class="project-workspace">
+            <main class="project-workspace" data-project-views>
                 <a href="/" class="back">← Все проекты</a>
                 {messages}
-                {project_navigation(project_id)}
                 {workspace_html}
 
 
@@ -2120,11 +2124,11 @@ def project(project_id):
 
                 </div>
 
-                {teacher_dashboard}
+                <div class="ui-project-teacher-details">{teacher_dashboard}</div>
 
 
 
-                <div class="card">
+                <div class="card ui-project-team-controls">
 
                     <h2>
                         Участники
@@ -2140,7 +2144,7 @@ def project(project_id):
                 </div>
 
 
-                {owner_section}
+                <div class="ui-project-team-controls">{owner_section}</div>
 
             </main>
 
@@ -2692,30 +2696,7 @@ def render_header(user, notification_data=None):
     else:
         count, rows = notification_data
     bell = render_bell(count, rows, csrf_input())
-    home = '/teacher' if user['role'] == 'teacher' else '/'
-    label = 'Кабинет' if user['role'] == 'teacher' else 'Мои проекты'
-    home_current = ' aria-current="page"' if request.path in ('/', home) else ''
-    group_current = ' aria-current="page"' if request.path.startswith('/groups') else ''
-    links = f'<a href="{home}"{home_current}>{label}</a><a href="/groups"{group_current}>Учебные группы</a>'
-    return f"""
-    <header class="main-header simple-header">
-        <a href="{home}" class="brand" aria-label="M-Flow — на главную" title="На главную">M<span>-</span>Flow</a>
-        <nav class="primary-navigation" aria-label="Основные разделы">{links}</nav>
-        <div class="header-actions">
-            {bell}
-            <details class="account-menu">
-                <summary aria-controls="account-panel"><span class="account-desktop-label">Мой аккаунт</span><span class="account-mobile-label">Меню</span></summary>
-                <div class="account-panel" id="account-panel">
-                    <nav class="mobile-navigation" aria-label="Основные разделы">{links}</nav>
-                    <div class="account-identity"><strong>{escape(user['username'])}</strong><small>{'Учитель' if user['role'] == 'teacher' else 'Ученик'}</small></div>
-                    <a href="/profile">Мой профиль</a>
-                    <a href="/settings">Настройки</a>
-                    {logout_form()}
-                </div>
-            </details>
-        </div>
-    </header>
-    """
+    return shell_header(user, request.path, bell, logout_form())
 
 
 @app.route('/notifications')
@@ -2943,7 +2924,7 @@ def render_collaboration_page(user, title, body, project_id=None, error="", stat
         back = f'<a class="back" href="{escape(back_url, quote=True)}">{escape(back_label or "Назад")}</a>'
     error_html = f'<div class="error" role="alert">{escape(error)}</div>' if error else ''
     return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/teamwork.css"><div class="container">{render_header(user)}
-        <main class="team-page">{back}{project_navigation(project_id, "team" if request.path.endswith("/team") else "") if project_id else ""}<h1>{escape(title)}</h1>{messages}{error_html}{body}</main></div>'''), status
+        <main class="team-page">{back}<h1>{escape(title)}</h1>{project_navigation(project_id, request.path.rsplit('/', 1)[-1]) if project_id else ""}{messages}{error_html}{body}</main></div>'''), status
 
 
 @app.route('/skills', methods=['GET','POST'])
@@ -3050,6 +3031,8 @@ def project_team(project_id):
                 conn.rollback()
                 error,status = str(exc),400
         body = render_team(conn,project_id,owner,token)
+        if owner:
+            body += f'<section class="card"><h2>Управление составом</h2><p>Добавление по логину, удаление участников и управление руководителем.</p><a class="action-link" href="/project/{project_id}#project-members">Открыть управление командой →</a></section>'
     finally:
         conn.close()
     return render_collaboration_page(user,f'Команда · {name}',body,project_id,error,status)
@@ -3136,7 +3119,7 @@ def project_stage_page(project_id):
     return render_page(PAGE_STYLE + f'''
         <link rel="stylesheet" href="/static/project-stages.css"><link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback"><div class="container">{render_header(user)}
         <main class="stages-page"><a class="back" href="/project/{project_id}">← К обзору проекта</a>
-        {project_navigation(project_id, "stages")}<h1>Пять этапов · {escape(project_name)}</h1>
+        <h1>Пять этапов · {escape(project_name)}</h1>{project_navigation(project_id, "stages")}
         <p>Ученики сохраняют результат и отправляют его учителю. После принятия открывается следующий этап.
         Этапы общие для участников проекта; их прохождение не меняет статусы задач и итоговые баллы.</p>
         {messages}<p role="alert">{escape(error)}</p>{unsaved}{render_stages(stages, user, token, submitted, has_teacher=has_teacher, project_id=project_id)}</main></div>'''), status
@@ -3273,7 +3256,7 @@ def project_assessment(project_id):
     return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/assessment.css">
         <div class="app">{render_header(user)}<main class="main-content assessment-page">
         <a class="back" href="/project/{project_id}">← К обзору проекта</a>
-        {project_navigation(project_id, "")}<h1>Оценивание · {escape(project_name)}</h1>
+        <h1>Оценивание · {escape(project_name)}</h1>{project_navigation(project_id, "assessment")}
         <p>12 критериев · максимум 45 баллов. Шкала: «5» — 39–45, «4» — 30–38, «3» — 21–29, «2» — 0–20.</p>
         {messages}<p role="alert">{escape(error)}</p>{content}</main></div>
         <script src="/static/assessment.js"></script>'''), status
@@ -3527,7 +3510,7 @@ def render_teacher_project(project):
         <div class="t-project-head">
             <h2>{escape(project["name"])}</h2>
             <span class="teacher-health {health}">{health_labels[health]}</span>
-            <a href="/project/{project["id"]}" class="teacher-board-link">Открыть доску →</a>
+            <a href="/project/{project["id"]}" class="teacher-board-link">Открыть проект →</a>
             <a href="/project/{project["id"]}/assessment" class="teacher-board-link">Оценивание →</a>
             <a href="/project/{project["id"]}/stages" class="teacher-board-link">Этапы: {project["completed_stages"]}/5 приняты →</a>
             <a href="/project/{project["id"]}/team" class="teacher-board-link">Команда →</a>
@@ -3536,7 +3519,7 @@ def render_teacher_project(project):
         {access_note}
         <p class="t-muted">{stage_note}</p>
         <p class="t-muted">Видеозащита: {project['defense_state']}</p>
-        <div class="t-chips">
+        <details class="ui-project-more"><summary>Задачи и прогресс команды</summary><div class="t-chips">
             <span class="t-chip">Новые: {counts["todo"]}</span>
             <span class="t-chip">В работе: {counts["progress"]}</span>
             <span class="t-chip">Готово: {counts["done"]}</span>
@@ -3548,7 +3531,7 @@ def render_teacher_project(project):
         <details class="teacher-students"><summary>Прогресс учеников ({len(project["students"])})</summary>
             <div class="teacher-table-scroll">{students_html}</div>
         </details>
-        {attention_html}
+        {attention_html}</details>
     </section>
     """
 
@@ -3673,27 +3656,26 @@ def teacher_cabinet():
             <main>
                 <div class="workspace-intro"><span>РАБОЧЕЕ ПРОСТРАНСТВО УЧИТЕЛЯ</span><span>M-Flow / проверка</span></div>
                 <section class="teacher-hero workspace-hero">
-                    <div class="hero-copy"><span class="hero-kicker">КОНТРОЛЬ ПРОЕКТОВ</span>
+                    <div class="hero-copy"><span class="hero-kicker">РАБОЧЕЕ ПРОСТРАНСТВО УЧИТЕЛЯ</span>
                         <h1>Кабинет учителя</h1>
-                        <p>{escape(user["username"])}, всё важное — перед вами.<br>Помогайте ученикам двигаться от идеи к результату.</p>
-                        <a class="btn" href="#review-queue">Перейти к проверке <span aria-hidden="true">↗</span></a>
+                        <p>{escape(user["username"])}, всё важное — перед вами. На проверке: {review_count}.</p>
                     </div>
-                    {illustration('teacher')}
-                    <div class="review-counter"><strong>{review_count}</strong><span>на проверке<br>этапы и видеозащиты</span></div>
+                    <a class="btn" href="/supervision">Подключить проект <span aria-hidden="true">↗</span></a>
                 </section>
                 {messages}
                 <div class="t-stats">
+                    <div class="t-stat"><strong data-review-count="{review_count}">{review_count:02d}</strong><span>На проверке</span></div>
                     <div class="t-stat"><strong>{len(overview)}</strong><span>Проектов</span></div>
                     <div class="t-stat"><strong>{len(student_ids)}</strong><span>Учеников</span></div>
-                    <div class="t-stat"><strong>{total_tasks}</strong><span>Всего задач</span></div>
-                    <div class="t-stat"><strong>{percent(done_tasks, total_tasks)}%</strong><span>Выполнено</span></div>
                     <div class="t-stat {overdue_class}"><strong>{overdue_tasks}</strong><span>Просрочено</span></div>
                 </div>
                 <div class="teacher-signal-strip">
+                    <span>Выполнено задач: <b>{done_tasks} из {total_tasks}</b> · {percent(done_tasks, total_tasks)}%</span>
                     <span>В ближайшие 3 дня: <b>{soon_tasks}</b></span>
                     <span>Без ответственного: <b>{unassigned_tasks}</b></span>
                     <span>Сроки задач: {TIMEZONE_LABEL}. Ожидание проверки — не просрочка сдачи.</span>
                 </div>
+                <details class="ui-teacher-filters" {'open' if query or focus != 'all' or kind != 'all' or sort != 'oldest' or project_id is not None or queue['page'] > 1 else ''}><summary>Поиск и фильтры работ</summary>
                 <form class="teacher-filters" method="get">
                     <input type="search" name="q" value="{escape(query)}"
                         aria-label="Поиск проекта, автора или работы" placeholder="Найти проект, автора или работу">
@@ -3703,12 +3685,12 @@ def teacher_cabinet():
                     <select name="sort" aria-label="Порядок отправки работ">{sort_options}</select>
                     <button type="submit">Показать</button>
                     <a href="/teacher" class="back">Сбросить</a>
-                </form>
+                </form></details>
                 <div class="teacher-dashboard-grid">
                     <section class="teacher-panel review-panel" id="review-queue"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>Очередь работ</h2>{queue_html}</section>
                     <section class="teacher-panel" id="task-attention"><h2>{attention_title}</h2><p class="t-muted">Дедлайны учеников отдельно от ожидания проверки учителем.</p>{attention_html}</section>
                 </div>
-                <div class="section-title"><h2>Проекты</h2>
+                <div class="section-title" id="teacher-projects"><h2>Проекты</h2>
                     <span class="t-muted">Показано {len(visible_projects)} из {len(overview)}</span></div>
                 {projects_html}
                 <section class="teacher-panel"><h2>Как подключиться к проекту</h2><p>Создайте одноразовый код, передайте его ученику. Владелец подтверждает конкретный проект, затем вы берёте его на сопровождение. Другие проекты не открываются автоматически.</p><a class="teacher-primary-link" href="/supervision">Руководитель проекта →</a></section>

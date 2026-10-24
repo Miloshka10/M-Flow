@@ -172,7 +172,7 @@ class StudentResultsCases:
         html = self.client.get('/').text
         self.assertIn('Начни свой проект.',html)
         self.assertIn('Ввести код группы',html)
-        self.assertNotIn('id="student-results"',html)
+        self.assertIn('id="student-results"',html)  # The result navigation remains usable before a first project.
 
     def test_results_unsubmitted_empty_and_malformed_grade_do_not_invent_completion(self):
         html = self.result_section()
@@ -216,7 +216,7 @@ class StudentResultsCases:
                 conn.execute("INSERT INTO project_stages(project_id,number,state,result) VALUES(?,1,'review',?)",(pid,'X'*5000))
             conn.commit()
         self.assertEqual(self.count_page_queries('/'),before)
-        self.assertLessEqual(before,13)  # Three bounded reads for the focused project.
+        self.assertLessEqual(before,14)  # Focused project plus one bounded read for home groups.
         with closing(self.module.get_db()) as conn:
             data = load_results(conn,dict(id=3),dict(project=0,state='all',page=1))
         self.assertEqual(len(data['items']),PAGE_SIZE)
