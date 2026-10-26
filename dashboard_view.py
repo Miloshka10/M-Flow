@@ -31,10 +31,10 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
         for p, task in upcoming[:6])
     upcoming_html = (f'<ul class="upcoming-list">{upcoming_rows}</ul>' if upcoming else
                      '<p class="t-muted">Нет незавершённых задач со сроками.</p>')
-    create = f'''<details id="project-create" class="project-create"><summary>+ Новый проект</summary>
+    create = f'''<details id="project-create" class="project-create"><summary>{icon('plus')} Новый проект</summary>
         <form id="project-form" class="new-project show" action="/add_project" method="post">
         <input type="hidden" name="csrf_token" value="{escape(token, quote=True)}"><label for="project-name">Название проекта</label>
-        <input id="project-name" name="name" placeholder="Название проекта" maxlength="80" required><button type="submit">Создать</button></form></details>'''
+        <input id="project-name" name="name" placeholder="Название проекта" maxlength="80" required><button type="submit" data-ui-icon="plus">Создать</button></form></details>'''
     if focus:
         p, step = focus['project'], focus['step']
         state = project_states.get(p['id'])
@@ -51,8 +51,8 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
             <div class="ui-project-cover"><span class="eyebrow">ТВОЙ ТЕКУЩИЙ ПРОЕКТ</span><h2 id="focus-name"><a href="{base}">{escape(p['name'])}</a></h2>
             <span class="ui-cover-meta">{cover_meta}</span>{project_art()}</div><div class="ui-focus-body">
             <div class="home-next" data-home-step="{step['key']}"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span>
-            <h2>{step['title']}</h2><p>{step['text']}</p>{comment}<a class="btn" href="{url}">{step['action'] or 'Открыть проект'} →</a></div>
-            <a class="focus-overview" href="{base}">Обзор проекта →</a></div></section>
+            <h2>{step['title']}</h2><p>{step['text']}</p>{comment}<a class="btn" href="{url}">{step['action'] or 'Открыть проект'} {icon('arrow')}</a></div>
+            <a class="focus-overview" href="{base}">Обзор проекта {icon('arrow')}</a></div></section>
             <section class="ui-agenda" aria-labelledby="upcoming-title"><h2 id="upcoming-title">На ближайшее время</h2>{upcoming_html}<p class="ui-agenda-foot">Твои задачи и задачи без ответственного · {TIMEZONE_LABEL}<br>Показано {min(6,len(upcoming))} из {len(upcoming)}.</p></section></div>'''
     else:
         hero = f'''<section class="home-focus home-welcome"><div class="ui-hello-empty">
@@ -60,17 +60,17 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
             <p>Есть код от учителя? Вступи в учебную группу. Готов начать работу? Создай свой проект.</p>
             <div class="welcome-actions"><a class="btn" href="/groups#group-code">Ввести код группы</a>
             <a class="action-link" href="#project-create" data-open-project>Создать проект</a></div>
-            <a class="focus-overview" href="/teams">Найти команду →</a>{project_art()}</div></section>
+            <a class="focus-overview" href="/teams">Найти команду {icon('arrow')}</a>{project_art()}</div></section>
             <div class="ui-welcome-steps"><div><span class="eyebrow">01 / НАЧАЛО</span><h3>Найди свою тему</h3><p>Сформулируй идею и согласуй её с руководителем.</p></div>
             <div><span class="eyebrow">02 / РАБОТА</span><h3>Пробуй и улучшай</h3><p>Распредели задачи в команде, сдавай этапы и получай обратную связь.</p></div>
             <div><span class="eyebrow">03 / РЕЗУЛЬТАТ</span><h3>Покажи, что получилось</h3><p>Подготовь документацию, презентацию и запись защиты.</p></div></div>'''
-    secondary = f'''<details class="home-details" {"open" if results_open else ""}><summary>Результаты и обратная связь</summary>{results}</details>'''
+    secondary = f'''<details class="home-details" {"open" if results_open else ""}><summary data-ui-icon="results">Результаты и обратная связь</summary>{results}</details>'''
     projects_html = f'''<section class="workspace-projects" id="my-projects"><div class="section-title"><div><h2>Мои проекты</h2>
-        <p>Выбери проект, чтобы увидеть следующий шаг.</p></div><a class="action-link" href="/teams">Найти команду →</a></div>
+        <p>Выбери проект, чтобы увидеть следующий шаг.</p></div><a class="action-link" href="/teams">Найти команду {icon('arrow')}</a></div>
         <div class="projects-list project-grid">{''.join(cards)}</div>{create}</section>''' if projects else f'<section class="workspace-projects" id="my-projects"><h2>Мои проекты</h2><p>Первый проект начнётся с названия. Тему и команду можно уточнить позже.</p>{create}</section>'
     group_cards = ''.join(f'''<a class="ui-group-teaser" href="/groups/{group['id']}"><span class="eyebrow">УЧЕБНАЯ ГРУППА</span><h3>{escape(group['name'])}</h3>
-        <p>{escape(group['teacher_name'])}</p><span>{'В архиве' if group['archived'] else 'Открыть группу'} →</span></a>''' for group in list(groups)[:3])
-    groups_html = f'<aside class="ui-home-groups"><div class="section-title"><h2>Учебные группы</h2></div>{group_cards}</aside>' if group_cards else '''<aside class="ui-home-groups"><div class="section-title"><h2>Учебные группы</h2></div><div class="ui-group-teaser"><span class="eyebrow">ВМЕСТЕ С КЛАССОМ</span><h3>Есть код от учителя?</h3><p>Присоединись к группе и выбери свой проект.</p><a class="action-link" href="/groups#group-code">Ввести код группы →</a></div></aside>'''
+        <p>{escape(group['teacher_name'])}</p><span>{'В архиве' if group['archived'] else 'Открыть группу'} {icon('arrow')}</span></a>''' for group in list(groups)[:3])
+    groups_html = f'<aside class="ui-home-groups"><div class="section-title"><h2>Учебные группы</h2></div>{group_cards}</aside>' if group_cards else f'<aside class="ui-home-groups"><div class="section-title"><h2>Учебные группы</h2></div><div class="ui-group-teaser"><span class="eyebrow">ВМЕСТЕ С КЛАССОМ</span><h3>Есть код от учителя?</h3><p>Присоединись к группе и выбери свой проект.</p><a class="action-link" href="/groups#group-code">Ввести код группы {icon('arrow')}</a></div></aside>'
     lower = f'<div class="ui-home-lower">{projects_html}{groups_html}</div>' if projects else projects_html
     today = business_today()
     months = ('января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря')

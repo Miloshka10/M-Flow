@@ -59,7 +59,7 @@ class LearningGroupCases:
         self.assertNotIn('candidate-engineer', self.client.get(f'/groups/{gid}').text)
         self.assertIn('Учебные группы', self.client.get('/').text)
         self.sign_in(4)
-        self.assertIn('Создать проект →', self.client.get(f'/groups/{gid}').text)
+        self.assertIn('Создать проект <svg', self.client.get(f'/groups/{gid}').text)
         self.assertNotIn('value="propose"', self.client.get(f'/groups/{gid}').text)
 
     def test_groups_project_selection_is_owner_only_and_proposal_reuses_supervision(self):

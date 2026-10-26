@@ -2,6 +2,7 @@
 from html import escape
 import re
 from database import execute_schema
+from interface import icon
 
 
 def initialize_notifications(conn):
@@ -100,8 +101,8 @@ def render_items(rows, token):
 def render_bell(count, rows, token):
     badge = f'<span class="notification-count" aria-hidden="true">{count if count < 100 else "99+"}</span>' if count else ''
     return f'''<details class="notification-bell"><summary aria-label="Уведомления: непрочитанных {count}">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>{badge}</summary>
+        {icon('bell')}{badge}</summary>
         <section class="notification-panel" aria-label="Последние уведомления"><h2>Уведомления</h2>
         {render_items(rows, token)}<a class="action-link" href="/notifications">Все уведомления</a>
-        <form method="post" action="/notifications/read-all">{token}<button class="secondary" type="submit">Прочитать все</button></form>
+        <form method="post" action="/notifications/read-all">{token}<button class="secondary" type="submit" data-ui-icon="check">Прочитать все</button></form>
         </section></details>'''

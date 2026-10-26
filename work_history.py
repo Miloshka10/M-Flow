@@ -8,6 +8,7 @@ from urllib.parse import urlencode, urlsplit
 
 from database import execute_schema
 from deadlines import format_timestamp
+from interface import icon
 
 PAGE_SIZE = 12
 WORKS = {'all': 'Все работы', **{f'stage-{n}': f'Этап {n}' for n in range(1, 6)}, 'defense': 'Видеозащита'}
@@ -155,26 +156,26 @@ def _render_event(row):
     if row['resource_url']:
         url = row['resource_url']
         resource = (f'<a class="action-link" href="{escape(url, quote=True)}" target="_blank" rel="noopener noreferrer">'
-                    + ('Презентация этой версии ↗' if row['kind'] == 'stage' else 'Запись этой версии ↗') + '</a>') if _safe_url(url) else '<p>Сохранённая ссылка некорректна; переход отключён.</p>'
+                    + ('Презентация этой версии' if row['kind'] == 'stage' else 'Запись этой версии') + f' {icon("external")}</a>') if _safe_url(url) else '<p>Сохранённая ссылка некорректна; переход отключён.</p>'
     explanation = (f'<p class="history-notice">Это доступное состояние старой записи, включая возможный черновик и прежнее замечание. '
         f'Точная дата отправки и содержание прошлых попыток неизвестны. Состояние: {escape({"review":"На проверке","submitted":"На проверке","done":"Принято","accepted":"Принято","progress":"В работе или на доработке","returned":"На доработке","draft":"Черновик"}.get(row["state"], row["state"]))}.</p>') if old else ''
     return f'''<article class="history-event" data-history-event="{row['event']}"><span class="eyebrow">{work}{attempt}</span>
         <h2>{EVENTS[row['event']]}</h2><p class="t-muted">{date}</p>{actor}{author}{reviewer}{explanation}
-        <details><summary>Текст и ссылка этой записи</summary><p class="history-text" tabindex="0">{escape(row['result'] or 'Текст не указан.')}</p>{resource}</details>{comment}</article>'''
+        <details><summary data-ui-icon="history">Текст и ссылка этой записи</summary><p class="history-text" tabindex="0">{escape(row['result'] or 'Текст не указан.')}</p>{resource}</details>{comment}</article>'''
 
 
 def render_history(pid, data, work):
     options = ''.join(f'<option value="{key}" {"selected" if key == work else ""}>{label}</option>' for key,label in WORKS.items())
     html = f'''<link rel="stylesheet" href="/static/work-history.css?v=20261019"><p class="history-intro">Здесь сохраняются отправленные версии и решения учителя. Изменения черновиков не записываются.
         Номера отправок учитывают только новые сдачи после включения истории. Ранее перезаписанные версии восстановить нельзя.</p>
-        <form class="history-filters" method="get"><label>Работа<select name="work">{options}</select></label><button>Показать</button></form>
+        <form class="history-filters" method="get"><label>Работа<select name="work">{options}</select></label><button data-ui-icon="filter">Показать</button></form>
         <p class="t-muted">Записей: {data['total']} · Страница {data['page']} из {data['pages']}. Новые события сверху.</p>'''
     html += ''.join(_render_event(row) for row in data['items']) or '<p>Новых отправок и решений пока нет. Они появятся после отправки работы учителю.</p>'
     if data['pages'] > 1:
         html += '<nav class="history-pages" aria-label="Страницы истории">'
-        for page, label in ((data['page']-1, '← Новее'), (data['page']+1, 'Ранее →')):
+        for page, label in ((data['page']-1, 'Новее'), (data['page']+1, 'Ранее')):
             if 1 <= page <= data['pages']:
-                html += f'<a class="action-link" href="/project/{pid}/history?{escape(urlencode(dict(work=work,page=page)),quote=True)}">{label}</a>'
+                html += f'<a class="action-link" href="/project/{pid}/history?{escape(urlencode(dict(work=work,page=page)),quote=True)}">{icon("arrow-left" if page < data["page"] else "arrow")} {label}</a>'
         html += '</nav>'
     if data['legacy']:
         html += '<section class="history-legacy"><h2>Ранее сохранённые работы</h2><p>Текущие старые записи показаны без восстановления неизвестной истории.</p>'

@@ -1,4 +1,5 @@
 """Bounded, read-only projection of existing results on the student's home page."""
+from interface import icon
 from collections import defaultdict
 from html import escape
 from urllib.parse import urlencode
@@ -190,14 +191,14 @@ def render_results(result, params, projects):
             <button type="submit">Показать</button><a class="action-link" href="{reset}">Сбросить</a></form>
         <details class="results-help"><summary>О датах и состояниях</summary><p class="t-muted">Даты: Москва (UTC+3). У этапа после правок известна дата последнего обновления, а не отдельная дата прежней проверки. Отчёты находятся в задачах и не получают статус принятого этапа.</p></details>'''
     if not projects:
-        html += '<div class="results-empty"><h3>Пока нет проектов</h3><p>Создай проект — здесь появятся результаты и обратная связь учителя.</p><a class="action-link" href="#project-create" data-open-project>Создать первый проект →</a></div>'
+        html += f'<div class="results-empty"><h3>Пока нет проектов</h3><p>Создай проект — здесь появятся результаты и обратная связь учителя.</p><a class="action-link" href="#project-create" data-open-project>Создать первый проект {icon('arrow')}</a></div>'
     elif not result['total']:
         if params['state'] != 'all':
             html += '<div class="results-empty"><h3>Нет результатов по выбранным условиям</h3><p>Попробуй другое состояние или сбрось фильтры.</p></div>'
         else:
             html += '<div class="results-empty"><h3>Ещё ничего не отправлено</h3><p>Начни с темы проекта. Сводка проекта подскажет следующий шаг, а сохранённые черновики появятся здесь.</p>'
             available = [p for p in projects if not params['project'] or p['id'] == params['project']]
-            html += ''.join(f'<a class="action-link" href="/project/{p["id"]}">Начать маршрут: {escape(p["name"])} →</a>' for p in available[:3])
+            html += ''.join(f'<a class="action-link" href="/project/{p["id"]}">Начать маршрут: {escape(p["name"])} {icon('arrow')}</a>' for p in available[:3])
             if len(available) > 3:
                 html += '<p>Остальные проекты — в разделе «Мои проекты» ниже.</p>'
             html += '</div>'
@@ -240,21 +241,21 @@ def render_results(result, params, projects):
             step = result['steps'][pid]
             target = step['target']
             step_href = (base + target if target.startswith('#') else target if target.startswith('/') else f'{base}/{target}') if target else base
-            step_link = (f'<a class="action-link" href="{step_href}">{step["action"] or "Открыть сводку проекта"} →</a>'
+            step_link = (f'<a class="action-link" href="{step_href}">{step["action"] or "Открыть сводку проекта"} {icon('arrow')}</a>'
                          if step_href != href else '')
             action = 'Перейти к доработке' if category == 'revision' else 'Открыть результат' if kind != 'grade' else 'Посмотреть критерии и баллы'
             html += f'''<article class="result-item result-{category}" data-result-key="{kind}-{pid}-{item['item_id']}" data-result-state="{category}">
-                <div class="result-heading"><span class="result-state">{label}</span><a href="{base}">{escape(item['project_name'])} ↗</a></div>
+                <div class="result-heading"><span class="result-state">{label}</span><a href="{base}">{escape(item['project_name'])} {icon('arrow')}</a></div>
                 <h3>{escape(title)}</h3><p class="t-muted">{result_date(item)}</p>{teacher}{feedback}
-                <a class="action-link" href="{href}">{action} →</a>
+                <a class="action-link" href="{href}">{action} {icon('arrow')}</a>
                 <div class="result-next"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ ПРОЕКТА</span><strong>{step['title']}</strong><p>{step['text']}</p>{step_link}</div></article>'''
         html += '</div>'
     if result['pages'] > 1:
         html += '<nav class="results-pages" aria-label="Страницы результатов">'
         if result['page'] > 1:
-            html += f'<a class="action-link" href="{escape(result_url(params, result["page"]-1), quote=True)}">← Предыдущая</a>'
+            html += f'<a class="action-link" href="{escape(result_url(params, result["page"]-1), quote=True)}">{icon('arrow-left')} Предыдущая</a>'
         html += f'<span>Страница {result["page"]} из {result["pages"]}</span>'
         if result['page'] < result['pages']:
-            html += f'<a class="action-link" href="{escape(result_url(params, result["page"]+1), quote=True)}">Следующая →</a>'
+            html += f'<a class="action-link" href="{escape(result_url(params, result["page"]+1), quote=True)}">Следующая {icon('arrow')}</a>'
         html += '</nav>'
     return html + '</section>'

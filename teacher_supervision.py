@@ -1,4 +1,5 @@
 """Consent-based teacher onboarding. Membership remains the source of project access."""
+from interface import icon
 import hashlib
 import json
 import re
@@ -265,25 +266,25 @@ def render_hub(conn, user, token, before=None, preview=None, code=None):
     teacher = user['role'] == 'teacher'
     body = '<p>Проект создаёт ученик. Учитель подключается только по согласованию с владельцем конкретного проекта. Существующие связи сохранены.</p>'
     if teacher:
-        body += f'<section class="card"><h2>Пригласить ученика</h2><form method="post">{hidden_token(token)}<button name="action" value="create">Создать одноразовый код</button></form><p>Код действует 24 часа и показывается один раз. Передайте его ученику лично; не публикуйте в общем доступе.</p>'
+        body += f'<section class="card"><h2>Пригласить ученика</h2><form method="post">{hidden_token(token)}<button name="action" value="create" data-ui-icon="plus">Создать одноразовый код</button></form><p>Код действует 24 часа и показывается один раз. Передайте его ученику лично; не публикуйте в общем доступе.</p>'
         if code:
             body += f'<p role="status">Код создан. Скопируйте его сейчас:</p><label>Код приглашения<input readonly autocomplete="off" value="{escape(code, quote=True)}"></label>'
         invitations = conn.execute("SELECT id,expires FROM teacher_invitations WHERE teacher_id=? AND state='pending' AND expires>? ORDER BY id DESC LIMIT 20", (user['id'], now)).fetchall()
         for invitation in invitations:
             expires = datetime.fromtimestamp(invitation['expires'], timezone(timedelta(hours=3))).strftime('%d.%m.%Y %H:%M МСК')
-            body += f'<form method="post" class="team-actions">{hidden_token(token)}<input type="hidden" name="invitation_id" value="{invitation["id"]}"><span>Приглашение №{invitation["id"]} · до {expires}</span><button class="secondary" name="action" value="revoke">Отозвать</button></form>'
+            body += f'<form method="post" class="team-actions">{hidden_token(token)}<input type="hidden" name="invitation_id" value="{invitation["id"]}"><span>Приглашение №{invitation["id"]} · до {expires}</span><button class="secondary" name="action" value="revoke" data-ui-icon="close">Отозвать</button></form>'
         body += '</section>'
     else:
-        body += f'<section class="card"><h2>Приглашение учителя</h2><form method="post" class="team-profile-form">{hidden_token(token)}<label>Код от учителя<input name="code" maxlength="32" autocomplete="off" required></label><button name="action" value="preview">Проверить приглашение</button></form>'
+        body += f'<section class="card"><h2>Приглашение учителя</h2><form method="post" class="team-profile-form">{hidden_token(token)}<label>Код от учителя<input name="code" maxlength="32" autocomplete="off" required></label><button name="action" value="preview" data-ui-icon="review">Проверить приглашение</button></form>'
         if preview:
             projects = conn.execute('SELECT id,name FROM projects WHERE owner_id=? ORDER BY id DESC', (user['id'],)).fetchall()
             options = ''.join(f'<option value="{p["id"]}">{escape(p["name"])}</option>' for p in projects)
             body += f'<h3>Учитель: {escape(preview[0])}</h3><p>Учитель увидит только выбранный проект и ваш логин после подтверждения. Если руководитель уже есть, будет создан запрос на смену, а не добавлен второй.</p><form method="post" class="team-profile-form">{hidden_token(token)}<input type="hidden" name="code" value="{escape(preview[1], quote=True)}">'
             if projects:
-                body += f'<label>Мой проект<select name="project_id">{options}</select></label><button name="action" value="request">Подтвердить проект</button> '
+                body += f'<label>Мой проект<select name="project_id">{options}</select></label><button name="action" value="request" data-ui-icon="check">Подтвердить проект</button> '
             else:
                 body += '<p>Сначала создайте свой проект. Подтверждать подключение в чужую команду может только её владелец.</p>'
-            body += '<button class="secondary" name="action" value="decline">Отказаться</button></form>'
+            body += '<button class="secondary" name="action" value="decline" data-ui-icon="close">Отказаться</button></form>'
         body += '</section>'
     access = "(p.owner_id=? OR r.target_id=?)" if not teacher else "((r.target_id=? AND r.owner_approved=1) OR EXISTS(SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?))"
     rows = conn.execute(f'''SELECT r.*,p.name,owner.username AS owner_name,target.username AS target_name FROM supervision_requests r
@@ -297,7 +298,7 @@ def render_hub(conn, user, token, before=None, preview=None, code=None):
         WHERE owner.role='student' AND EXISTS(SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?) ORDER BY p.id DESC""", (user['id'],)).fetchall()
     if owned:
         options = ''.join(f'<option value="{p["id"]}">{escape(p["name"])}</option>' for p in owned)
-        body += f'<details><summary>Запросить завершение сопровождения</summary><form method="post" class="team-profile-form">{hidden_token(token)}<label>Проект<select name="project_id">{options}</select></label><button class="secondary" name="action" value="end">Создать запрос завершения</button></form><p>Окончание требует всех согласий. Для смены примите код нового учителя вместо завершения.</p></details>'
+        body += f'<details><summary>Запросить завершение сопровождения</summary><form method="post" class="team-profile-form">{hidden_token(token)}<label>Проект<select name="project_id">{options}</select></label><button class="secondary" name="action" value="end" data-ui-icon="plus">Создать запрос завершения</button></form><p>Окончание требует всех согласий. Для смены примите код нового учителя вместо завершения.</p></details>'
     if not rows:
         body += '<p>Ожидающих согласований нет. Для нового подключения передайте или примите код учителя.</p>'
     for row in rows[:30]:
@@ -308,10 +309,10 @@ def render_hub(conn, user, token, before=None, preview=None, code=None):
         body += f'<article class="team-invite"><h3>{label} · {escape(row["name"])}</h3><p>Владелец: {escape(row["owner_name"])} · Новый учитель: {escape(row["target_name"] or "не назначается")}</p><p>Согласие владельца: {"получено" if row["owner_approved"] else "ожидается"}. Согласия учителей: {len(approvals)} из {len(required)}.</p>'
         if approved:
             body += '<p>Ваше согласие получено. Ожидаются остальные участники согласования.</p>'
-        body += f'<form method="post" class="team-actions">{hidden_token(token)}<input type="hidden" name="request_id" value="{row["id"]}"><input type="hidden" name="revision" value="{row["revision"]}"><button name="action" value="approve" {"disabled" if approved else ""}>Подтвердить</button><button class="secondary" name="action" value="reject">Отказаться</button>'
+        body += f'<form method="post" class="team-actions">{hidden_token(token)}<input type="hidden" name="request_id" value="{row["id"]}"><input type="hidden" name="revision" value="{row["revision"]}"><button name="action" value="approve" data-ui-icon="check" {"disabled" if approved else ""}>Подтвердить</button><button class="secondary" name="action" value="reject" data-ui-icon="close">Отказаться</button>'
         if not teacher:
-            body += '<button class="secondary" name="action" value="cancel">Отменить запрос</button>'
+            body += '<button class="secondary" name="action" value="cancel" data-ui-icon="close">Отменить запрос</button>'
         body += '</form></article>'
     if len(rows) > 30:
-        body += f'<a href="/supervision?before={rows[29]["id"]}">Следующие согласования →</a>'
+        body += f'<a href="/supervision?before={rows[29]["id"]}">Следующие согласования {icon('arrow')}</a>'
     return body + '</section>'

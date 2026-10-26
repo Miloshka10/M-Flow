@@ -66,14 +66,14 @@ def create_form(pid, members, token, return_to, values=None, error=''):
     task = dict(title='',description='',deadline='',assignee_id=None,stage_number=None)
     task.update(values or {})
     priority = task.get('priority','normal')
-    return f'''<details class="board-disclosure task-create" id="task-create"><summary>Добавить задачу</summary>
+    return f'''<details class="board-disclosure task-create" id="task-create"><summary data-ui-icon="plus">Добавить задачу</summary>
         <div class="task-detail-content"><h2>Добавить задачу</h2><p>Опишите конкретный результат, назначьте ответственного и срок.</p>
         {f'<p role="alert">{escape(error)}</p>' if error else ''}
         <form action="/project/{pid}/add" method="post" class="add-task-form board-task-form">
         {token}<input type="hidden" name="return_to" value="{escape(return_to,quote=True)}">
         {task_edit_fields(task, members)}
         <label>Приоритет новой задачи<select name="priority">{options(PRIORITIES,priority)}</select></label>
-        <button type="submit">Добавить</button></form></div></details>'''
+        <button type="submit" data-ui-icon="plus">Добавить</button></form></div></details>'''
 
 
 def render_filters(pid, user, members, state):
@@ -98,13 +98,13 @@ def render_filters(pid, user, members, state):
             chips.append(f'<span>{label}{": " + escape(value) if value else ""}</span>')
     advanced = any(state.get(k) for k in ('priority','assignee','stage')) or state['sort'] != 'priority'
     return f'''<form method="get" class="task-filters board-filters" action="{base}#task-board">
-        <div class="board-search"><input type="search" name="q" value="{escape(state['q'],quote=True)}" placeholder="Найти задачу…" aria-label="Поиск по названию задачи"><button type="submit">Найти</button></div>
+        <div class="board-search"><input type="search" name="q" value="{escape(state['q'],quote=True)}" placeholder="Найти задачу…" aria-label="Поиск по названию задачи"><button type="submit" data-ui-icon="search">Найти</button></div>
         {f'<input type="hidden" name="mine" value="{state["mine"]}">' if user['role']=='student' else ''}<input type="hidden" name="column" value="{state['column']}">
-        <details class="board-advanced" {"open" if advanced else ""}><summary>Фильтры</summary><div>
+        <details class="board-advanced" {"open" if advanced else ""}><summary data-ui-icon="filter">Фильтры</summary><div>
         <label>Приоритет<select name="priority" aria-label="Фильтр приоритета">{options({'':'Любой приоритет',**PRIORITIES},state['priority'])}</select></label>
         <label>Срок<select name="due" aria-label="Фильтр срока">{options(DEADLINE_FILTERS,state['due'])}</select></label>
         <label>Исполнитель<select name="assignee" aria-label="Фильтр исполнителя">{options({'':'Все исполнители','none':'Не назначен',**people},state['assignee'])}</select></label>
         <label>Этап<select name="stage" aria-label="Фильтр этапа">{options({'':'Все этапы','none':'Без этапа',**{str(n):f'Этап {n}' for n in range(1,6)}},state['stage'])}</select></label>
-        <label>Порядок<select name="sort" aria-label="Сортировка задач">{options(TASK_SORTS,state['sort'])}</select></label><button>Применить</button></div></details>
+        <label>Порядок<select name="sort" aria-label="Сортировка задач">{options(TASK_SORTS,state['sort'])}</select></label><button data-ui-icon="filter">Применить</button></div></details>
         </form><nav class="board-quick" aria-label="Быстрые фильтры задач">{quick_html}</nav>
         <div class="board-active">{''.join(chips)}{f'<a class="filter-reset" href="{base}#task-board">Сбросить</a>' if chips or state['sort'] != 'priority' else ''}</div>'''

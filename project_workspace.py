@@ -1,4 +1,5 @@
 """Read-only project overview. Presentation never grants mutation permissions."""
+from interface import icon
 from deadlines import business_today, deadline_info, deadline_text, format_timestamp
 from html import escape
 
@@ -79,7 +80,7 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
     base = f'/project/{project_id}'
     target = step['target']
     action_url = target if target and target.startswith(('#', '/')) else f'{base}/{target}' if target else None
-    action = f'<a class="btn" href="{action_url}">{step["action"]} <span aria-hidden="true">↗</span></a>' if action_url else ''
+    action = f'<a class="btn" href="{action_url}">{step["action"]} {icon('arrow')}</a>' if action_url else ''
     member_list = ''.join(f'<li>{escape(m["username"])} <span>{"Учитель" if m["role"] == "teacher" else "Ученик"}</span></li>' for m in members)
     names = ', '.join(m['username'] for m in members[:3]) + (' и другие' if len(members) > 3 else '')
     current_name = f'Этап {current["number"]} / {escape(current["title"])}' if current else 'Все пять этапов приняты'
@@ -90,18 +91,18 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
         updated = f' · Последнее обновление этапа: {format_timestamp(current["updated_at"])}' if current['updated_at'] else ''
         feedback = f'''<aside class="journey-feedback" aria-label="Замечание учителя"><strong>Что исправить · этап {current['number']}</strong>
             <small>{reviewer}{updated}</small><p tabindex="0" aria-label="Замечание учителя; длинный текст можно прокрутить">{escape(current['teacher_comment'] or 'Комментарий не указан. Уточните, что нужно исправить, у учителя проекта.')}</p>
-            <a href="{base}/stages#stage-{current['number']}">{'Перейти к доработке' if user['role'] == 'student' else 'Открыть результат и замечание'} →</a></aside>'''
+            <a href="{base}/stages#stage-{current['number']}">{'Перейти к доработке' if user['role'] == 'student' else 'Открыть результат и замечание'} {icon('arrow')}</a></aside>'''
     else:
         accepted = next((stage for stage in reversed(stages) if stage['state'] == 'done'), None)
         if accepted:
             comment = accepted['teacher_comment'] or 'Принято без комментария. Следующий доступный шаг указан выше.'
             feedback += f'''<aside class="journey-feedback" aria-label="Принятый этап"><strong>Этап {accepted['number']} принят учителем</strong>
-                <p tabindex="0">{escape(comment)}</p><a href="{base}/stages#stage-{accepted['number']}">Посмотреть принятое решение →</a></aside>'''
+                <p tabindex="0">{escape(comment)}</p><a href="{base}/stages#stage-{accepted['number']}">Посмотреть принятое решение {icon('arrow')}</a></aside>'''
     if defense['state'] in ('returned', 'accepted'):
         comment = defense['teacher_comment'] or 'Комментарий не указан. При необходимости уточните решение у учителя проекта.'
         returned = defense['state'] == 'returned'
         feedback += f'''<aside class="journey-feedback" aria-label="Решение по видеозащите"><strong>{'Что исправить · видеозащита' if returned else 'Видеозащита принята учителем'}</strong>
-            <p tabindex="0">{escape(comment)}</p><a href="{base}/defense{'#defense-edit' if returned and user['role'] == 'student' else ''}">{'Перейти к доработке записи' if returned and user['role'] == 'student' else 'Посмотреть решение по защите'} →</a></aside>'''
+            <p tabindex="0">{escape(comment)}</p><a href="{base}/defense{'#defense-edit' if returned and user['role'] == 'student' else ''}">{'Перейти к доработке записи' if returned and user['role'] == 'student' else 'Посмотреть решение по защите'} {icon('arrow')}</a></aside>'''
     route = ''
     for stage in stages:
         locked = bool(current and stage['number'] > current['number'])
@@ -110,7 +111,7 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
         title_html = title if locked else f'<a href="{base}/stages#stage-{stage["number"]}">{title}</a>'
         explanation = f'Откроется после принятия этапа {stage["number"] - 1} учителем.' if locked else STAGE_DESCRIPTIONS[stage['number']]
         css = 'locked' if locked else 'accepted' if stage['state'] == 'done' else 'current'
-        marker = '✓' if css == 'accepted' else str(stage['number'])
+        marker = icon('check') if css == 'accepted' else str(stage['number'])
         route += f'''<li class="route-stage {css}" {'aria-current="step"' if css == 'current' else ''}>
             <span class="route-marker" aria-hidden="true">{marker}</span><div><strong>{title_html}</strong>
             <span class="route-state">{label}</span><p>{explanation}</p></div></li>'''
@@ -135,7 +136,7 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
         <div class="ui-project-overview-grid"><section class="ui-project-next" aria-label="Следующий шаг проекта">
             <div class="journey-action" data-next-step="{step['key']}"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span>
             <p>{current_name} · {current_label}</p><h2>{step['title']}</h2><p>{step['text']}</p>{action}</div>
-            {feedback}<p><a class="action-link" href="{base}/history">История отправок и решений →</a></p>
+            {feedback}<p><a class="action-link" href="{base}/history">История отправок и решений {icon('arrow')}</a></p>
             <p class="ui-project-deadline"><span data-task-deadline>{task_deadline(tasks, today)}</span><br>Срок относится к задаче, не к этапу</p></section>
         <aside class="ui-project-aside"><section class="ui-project-progress" aria-label="Прогресс проекта"><span class="eyebrow">ПУТЬ К ЗАЩИТЕ</span>
             <div class="ui-progress-number">{done:02d} <small>/ 05</small></div><p>Принято {done} из 5 этапов · {done * 20}%</p>
@@ -145,11 +146,11 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
             <div class="project-progress" aria-hidden="true"><div data-project-progress-fill style="width:{progress}%"></div></div></section>
         <section class="project-supervisor" aria-labelledby="supervisor-title"><h2 id="supervisor-title">Руководитель проекта</h2>
             <p>{escape(', '.join(m['username'] for m in members if m['role'] == 'teacher')) if has_teacher else 'Учитель пока не подключён. Черновики можно готовить уже сейчас.'}</p>
-            <a class="action-link" href="/supervision">Приглашения и согласование →</a></section></aside></div>
-        <details class="journey-route" open><summary>Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
+            <a class="action-link" href="/supervision">Приглашения и согласование {icon('arrow')}</a></section></aside></div>
+        <details class="journey-route" open><summary data-ui-icon="stages">Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
             <p class="journey-explanation">Задачи помогают выполнять работу. Этап принимается только после решения учителя; защита и оценки проверяются отдельно.</p><ol>{route}</ol></details>
         <section class="project-finish" aria-labelledby="finish-title"><h2 id="finish-title">Завершение проекта</h2>
             <p>После пяти этапов — видеозащита и итоговая оценка. Открыть эти разделы можно в любое время.</p>
-            <div class="project-finish-links"><a href="{base}/defense"><strong>Видеозащита ↗</strong><span>{defense_label}</span></a>
-            <a href="{base}/assessment"><strong>Оценивание ↗</strong><span>{grading}</span></a></div></section>
+            <div class="project-finish-links"><a href="{base}/defense"><strong>{icon('video')} Видеозащита</strong><span>{defense_label}</span></a>
+            <a href="{base}/assessment"><strong>{icon('assessment')} Оценивание</strong><span>{grading}</span></a></div></section>
     </section>'''
