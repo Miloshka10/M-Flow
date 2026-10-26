@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.documentElement.classList.add('ui-shell-enhanced');
   const drawer = document.querySelector('.ui-mobile-menu');
   const mobile = window.matchMedia('(max-width: 800px)');
+  const initialNav = new Map([...document.querySelectorAll('[data-nav-key]')].map(link => [link, link.getAttribute('aria-current')]));
   let inerted = [], beforeOverflow = '', managingBackground = false;
   function restoreBackground() {
     inerted.forEach(([node, previous]) => { node.inert = previous; });
@@ -28,13 +29,16 @@ document.addEventListener('DOMContentLoaded', () => {
     drawer.querySelector('[data-close-navigation]').focus();
   }
   if (drawer) {
+    const panel = drawer.querySelector('.ui-mobile-panel');
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
     drawer.addEventListener('toggle', syncDrawer);
     drawer.querySelectorAll('[data-close-navigation]').forEach(button => button.addEventListener('click', () => {
       drawer.open = false; restoreBackground(); drawer.querySelector('summary').focus();
     }));
     document.addEventListener('keydown', event => {
       if (!drawer.open || !mobile.matches || event.key !== 'Tab') return;
-      const targets = [...drawer.querySelectorAll('summary,a,button')].filter(el => el.getClientRects().length);
+      const targets = [...drawer.querySelectorAll('.ui-mobile-panel a,.ui-mobile-panel button')].filter(el => el.getClientRects().length);
       const first = targets[0], last = targets[targets.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
@@ -75,8 +79,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (onTasks && target) target.scrollIntoView({block: 'start'});
     } else if (target) target.scrollIntoView({block:'start'});
     const activeKey = id === 'student-results' ? 'results' : id === 'my-projects' || id === 'teacher-projects' ? 'projects' : id === 'review-queue' ? 'review' : null;
-    if (activeKey) document.querySelectorAll('[data-nav-key]').forEach(link => {
-      if (link.dataset.navKey === activeKey) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
+    initialNav.forEach((original, link) => {
+      const current = activeKey ? link.dataset.navKey === activeKey : Boolean(original);
+      if (current) link.setAttribute('aria-current', original || 'page'); else link.removeAttribute('aria-current');
     });
   }
   revealHash(); window.addEventListener('hashchange', revealHash);

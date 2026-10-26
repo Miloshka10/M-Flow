@@ -70,13 +70,19 @@ def shell_header(user, path, bell, logout, query=None):
     home = '/teacher' if teacher else '/'
     current = ('groups' if path.startswith('/groups') else 'team' if path.startswith(('/teams', '/skills'))
                else 'settings' if path == '/settings' else 'profile' if path == '/profile'
-               else 'projects' if path.startswith('/project/') else 'home')
+               else 'projects' if path.startswith('/project/') else 'home' if path in ('/', '/teacher') else '')
+    query = query or {}
+    selected = (query.get('project') or query.get('result_project', '')) if path == '/' else ''
+    if not teacher and path.startswith('/project/'):
+        selected = path.split('/')[2]
+    project_home = (f'/?project={selected}' if isinstance(selected, str) and selected.isascii()
+                    and selected.isdigit() and len(selected) <= 18 and int(selected) > 0 else '/')
     items = ([('home', 'home', 'Кабинет', home), ('projects', 'folder', 'Проекты учеников', '/teacher#teacher-projects'),
               ('groups', 'groups', 'Учебные группы', '/groups'), ('review', 'review', 'Проверка работ', '/teacher#review-queue'),
               ('results', 'results', 'Оценивание', '/teacher#teacher-projects')]
-             if teacher else [('home', 'home', 'Главная', '/'), ('projects', 'folder', 'Мои проекты', '/#my-projects'),
+             if teacher else [('home', 'home', 'Главная', '/'), ('projects', 'folder', 'Мои проекты', project_home + '#my-projects'),
                               ('groups', 'groups', 'Учебные группы', '/groups'), ('team', 'team', 'Команды и люди', '/teams'),
-                              ('results', 'results', 'Мои результаты', '/#student-results')])
+                              ('results', 'results', 'Мои результаты', project_home + '#student-results')])
     def links():
         return ''.join(f'<a href="{url}" class="ui-nav-link" data-nav-key="{key}"'
                        + (' aria-current="page"' if current == key else '')
@@ -86,7 +92,9 @@ def shell_header(user, path, bell, logout, query=None):
     secondary = ''.join(f'<a class="ui-nav-link" href="/{key}"'
                         + (' aria-current="page"' if current == key else '')
                         + f'>{icon(key)}<span>{label}</span></a>' for key, label in [('profile', 'Мой профиль'), ('settings', 'Настройки')])
-    title = next((label for key, _, label, _ in items if key == current), 'Мой профиль' if current == 'profile' else 'Настройки' if current == 'settings' else 'Рабочее пространство')
+    title = next((label for key, _, label, _ in items if key == current),
+                 {'/profile':'Мой профиль', '/settings':'Настройки', '/notifications':'Уведомления',
+                  '/supervision':'Руководитель проекта'}.get(path, 'Рабочее пространство'))
     return f'''<aside class="ui-sidebar" aria-label="Боковая навигация">
         <div class="ui-sidebar-brand">{logo}</div><p class="ui-workspace-label">ПРОСТРАНСТВО {"УЧИТЕЛЯ" if teacher else "УЧЕНИКА"}</p>
         <nav class="ui-primary-nav" aria-label="Основные разделы">{links()}</nav>
@@ -95,7 +103,7 @@ def shell_header(user, path, bell, logout, query=None):
     <header class="main-header simple-header" data-interface-shell="{user['role']}">
         <div class="ui-header-start"><details class="ui-mobile-menu">
             <summary aria-controls="ui-mobile-panel">{icon('menu')}<span>Меню</span></summary>
-            <div class="ui-mobile-panel" id="ui-mobile-panel"><div class="ui-mobile-panel-top"><span class="ui-mobile-wordmark">M-Flow<span>.</span></span><button type="button" class="ui-icon-button" data-close-navigation aria-label="Закрыть меню">{icon('close')}</button></div>
+            <div class="ui-mobile-panel" id="ui-mobile-panel" aria-label="Навигация"><div class="ui-mobile-panel-top"><span class="ui-mobile-wordmark">M-Flow<span>.</span></span><button type="button" class="ui-icon-button" data-close-navigation aria-label="Закрыть меню">{icon('close')}</button></div>
             <p class="ui-workspace-label">{role}</p><nav aria-label="Мобильные разделы">{links()}{secondary}</nav></div>
             <button class="ui-mobile-backdrop" type="button" data-close-navigation aria-label="Закрыть навигацию"></button>
         </details>{logo}<span class="ui-header-context">Моё пространство<span>/</span>{title}</span></div>
