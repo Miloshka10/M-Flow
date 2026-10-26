@@ -178,7 +178,7 @@ def render_profile(profile, token, form=None):
         <label>О себе<textarea name="bio" maxlength="500" rows="3" placeholder="Что интересно делать в проекте">{escape(values.get('bio',''))}</textarea></label>
         <label class="team-checkbox"><input type="checkbox" name="discoverable" value="1" {'checked' if checked else ''}>Показывать мой профиль в каталоге участников</label>
         <p>Если включить каталог, вошедшие пользователи увидят логин, класс, направление, навыки и описание. При отключении профиль исчезнет из каталога; отправленные вам приглашения останутся.</p>
-        <button>Сохранить профиль</button></form></section>'''
+        <button data-ui-icon="save">Сохранить профиль</button></form></section>'''
 
 
 def render_directory(candidates, projects, invitations, token, filters, is_student):
@@ -188,22 +188,22 @@ def render_directory(candidates, projects, invitations, token, filters, is_stude
         for item in invitations:
             body += f'''<article class="team-invite"><h3>{escape(item['project_name'])}</h3><p>От {escape(item['sender_name'])} · Роль: {escape(item['role_text'] or 'Обсудите с командой')}</p>
                 <p class="team-text">{escape(item['message'])}</p><form method="post" action="/teams/invitations/{item['id']}/respond" class="team-actions">{hidden_token(token)}
-                <button name="action" value="accept">Принять приглашение</button><button class="secondary" name="action" value="decline">Отказаться</button></form></article>'''
+                <button name="action" value="accept" data-ui-icon="check">Принять приглашение</button><button class="secondary" name="action" value="decline" data-ui-icon="close">Отказаться</button></form></article>'''
         body += '</section>'
     body += f'''<form method="get" class="team-filters"><input name="q" aria-label="Поиск учеников" placeholder="Логин, навык или интерес" value="{escape(filters['q'], quote=True)}">
         <input name="skill" aria-label="Навык" placeholder="Навык: например Python" value="{escape(filters['skill'], quote=True)}">
         <input name="direction" aria-label="Направление" placeholder="Направление" value="{escape(filters['direction'], quote=True)}">
         <input name="class_name" aria-label="Класс" placeholder="Класс (необязательно)" value="{escape(filters['class_name'], quote=True)}">
-        <button>Найти</button><a class="back" href="/teams">Сбросить</a></form><p>Найдено участников: {len(candidates)}. Участники могут быть из разных классов и направлений.</p><div class="team-directory">'''
+        <button data-ui-icon="search">Найти</button><a class="back" href="/teams">Сбросить</a></form><p>Найдено участников: {len(candidates)}. Участники могут быть из разных классов и направлений.</p><div class="team-directory">'''
     for item in candidates:
         tags = ''.join(f'<span class="team-skill">{escape(skill)}</span>' for skill in item['skills'])
         body += f'''<article class="card team-person"><h2>{escape(item['username'])}</h2><p>{escape(item['class_name'])} · {escape(item['direction'])}</p><div class="team-skills">{tags}</div><p class="team-text">{escape(item['bio'])}</p>'''
         if projects:
             options = ''.join(f'<option value="{project["id"]}">{escape(project["name"])}</option>' for project in projects)
-            body += f'''<details><summary>Пригласить в проект</summary><form method="post" action="/teams/invite" class="team-invite-form">{hidden_token(token)}
+            body += f'''<details><summary data-ui-icon="team">Пригласить в проект</summary><form method="post" action="/teams/invite" class="team-invite-form">{hidden_token(token)}
                 <input type="hidden" name="student_id" value="{item['user_id']}"><label>Проект<select name="project_id">{options}</select></label>
                 <label>Роль в команде<input name="role_text" maxlength="100" placeholder="Например, разработчик"></label>
-                <label>Сообщение<textarea name="message" maxlength="500" rows="2"></textarea></label><button>Отправить приглашение</button></form></details>'''
+                <label>Сообщение<textarea name="message" maxlength="500" rows="2"></textarea></label><button data-ui-icon="send">Отправить приглашение</button></form></details>'''
         body += '</article>'
     body += '</div>'
     if not candidates:
@@ -229,7 +229,7 @@ def render_team(conn, project_id, owner, token):
         body += '<p>Проверяет этапы, видеозащиту и выставляет оценки.</p>' if member['role'] == 'teacher' else f'<p>Роль: {escape(member["role_text"] or "Пока не указана")}</p>'
         if owner and member['role'] == 'student' and member['is_member']:
             body += f'''<form method="post" class="team-invite-form">{hidden_token(token)}<input type="hidden" name="action" value="role"><input type="hidden" name="student_id" value="{member['id']}">
-                <label>Роль в команде<input name="role_text" maxlength="100" value="{escape(member['role_text'] or '',quote=True)}"></label><button class="secondary">Сохранить роль</button></form>'''
+                <label>Роль в команде<input name="role_text" maxlength="100" value="{escape(member['role_text'] or '',quote=True)}"></label><button class="secondary" data-ui-icon="save">Сохранить роль</button></form>'''
         body += '</section>'
     body += '</div>'
     if owner:
@@ -238,7 +238,7 @@ def render_team(conn, project_id, owner, token):
         body += '<section class="card"><h2>Отправленные приглашения</h2>'
         for invitation in pending:
             body += f'''<article class="team-invite"><strong>{escape(invitation['username'])}</strong><p>{escape(invitation['role_text'])} · Ожидается ответ</p><form method="post">{hidden_token(token)}
-                <input type="hidden" name="invitation_id" value="{invitation['id']}"><button class="secondary" name="action" value="cancel">Отменить приглашение</button></form></article>'''
+                <input type="hidden" name="invitation_id" value="{invitation['id']}"><button class="secondary" name="action" value="cancel" data-ui-icon="close">Отменить приглашение</button></form></article>'''
         if not pending:
             body += '<p>Нет приглашений, ожидающих ответа.</p>'
         body += '<p>Добавление и удаление участников доступны в разделе «Управление составом» ниже.</p></section>'

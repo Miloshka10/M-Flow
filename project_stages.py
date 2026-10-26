@@ -1,4 +1,5 @@
 """Пять последовательных этапов проекта, отдельно от задач и итоговых баллов."""
+from interface import icon
 
 from html import escape
 from urllib.parse import urlsplit
@@ -172,7 +173,7 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
         if stage["result"]:
             html += f'<h3>{"Описание проекта" if number == 5 else "Результат этапа"}</h3><p class="stage-text">{escape(stage["result"])}</p>'
         if stage["presentation_url"]:
-            html += f'<p><a class="action-link" href="{escape(stage["presentation_url"], quote=True)}" target="_blank" rel="noopener noreferrer">Открыть презентацию ↗</a></p>'
+            html += f'<p><a class="action-link" href="{escape(stage["presentation_url"], quote=True)}" target="_blank" rel="noopener noreferrer">Открыть презентацию {icon('external')}</a></p>'
         if stage.get("author_name"):
             html += f'<small>Автор результата: {escape(stage["author_name"])} · Обновлено: {format_timestamp(stage["updated_at"])}</small>'
         if stage.get("reviewer_name"):
@@ -183,7 +184,7 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
         elif stage['state'] == 'done' or stage_needs_revision(stage):
             html += '<p>Комментарий не указан. При необходимости уточните решение у учителя проекта.</p>'
         if stage['state'] == 'done':
-            html += f'<p>Этап {number} принят учителем. {"Все пять этапов приняты." if number == 5 else "Можно продолжить маршрут проекта."} <a href="/project/{stage["project_id"]}">Посмотреть следующий шаг →</a></p>'
+            html += f'<p>Этап {number} принят учителем. {"Все пять этапов приняты." if number == 5 else "Можно продолжить маршрут проекта."} <a href="/project/{stage["project_id"]}">Посмотреть следующий шаг {icon('arrow')}</a></p>'
         if number == current_number:
             values = submitted or stage
             prefix = f'<form method="post"><input type="hidden" name="csrf_token" value="{token}"><input type="hidden" name="number" value="{number}"><input type="hidden" name="revision" value="{stage["revision"]}">'
@@ -193,14 +194,14 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
                 html += prefix + f'<label>{result_label}<textarea name="result" rows="5" maxlength="5000">{escape(values.get("result", ""))}</textarea></label>'
                 if number == 5:
                     html += f'<label>Ссылка на презентацию<input type="url" name="presentation_url" maxlength="2000" placeholder="https://…" value="{escape(values.get("presentation_url", ""), quote=True)}"></label><p>Проверьте, что учитель сможет открыть презентацию по ссылке.</p>'
-                html += f'<div class="stage-actions"><button name="action" value="save">Сохранить черновик</button><button name="action" value="submit" {"disabled" if not has_teacher else ""}>Отправить учителю</button></div></form>'
+                html += f'<div class="stage-actions"><button name="action" value="save" data-ui-icon="save">Сохранить черновик</button><button name="action" value="submit" {"disabled" if not has_teacher else ""}>Отправить учителю</button></div></form>'
             elif user["role"] == "teacher" and stage["state"] == "review":
                 comment = submitted.get('teacher_comment', '') if submitted is not None else ''
-                html += prefix + f'<label>Комментарий учителя<textarea name="teacher_comment" rows="3" maxlength="2000">{escape(comment)}</textarea></label><div class="stage-actions"><button name="action" value="accept">{"Согласовать тему" if number == 1 else "Принять этап"}</button><button name="action" value="return">Вернуть на доработку</button></div></form>'
+                html += prefix + f'<label>Комментарий учителя<textarea name="teacher_comment" rows="3" maxlength="2000">{escape(comment)}</textarea></label><div class="stage-actions"><button name="action" value="accept">{"Согласовать тему" if number == 1 else "Принять этап"}</button><button name="action" value="return" data-ui-icon="return">Вернуть на доработку</button></div></form>'
             else:
                 html += f'<p>{"Ожидается проверка учителя. Пока результат менять нельзя." if stage["state"] == "review" else "Ожидается результат от учеников проекта."}</p>'
         pid = stage.get('project_id', project_id)
         if pid is not None:
-            html += f'<p><a class="action-link" href="/project/{pid}/history?work=stage-{number}">История отправок и решений →</a></p>'
+            html += f'<p><a class="action-link" href="/project/{pid}/history?work=stage-{number}">История отправок и решений {icon('arrow')}</a></p>'
         html += '</section>'
     return html + '</div>'

@@ -108,7 +108,7 @@ class TaskBoardCases:
         page=self.client.get('/project/2').text
         self.assertIn('&lt;script&gt;alert(1)&lt;/script&gt;',page)
         self.assertNotIn('<script>alert(1)</script>',page)
-        self.assertIn('Этап 4 →',page)
+        self.assertIn('Этап 4 <svg',page)
         self.assertIn('class="board-disclosure task-details"',page)
         self.assertIn('/static/task-board.js',page)
         self.assertEqual(self.database_snapshot(),before)

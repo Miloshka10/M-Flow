@@ -1,4 +1,5 @@
 """A bounded view of the existing teacher overview, not a new workflow/state store."""
+from interface import icon
 from datetime import datetime, timezone
 from html import escape
 from urllib.parse import urlencode
@@ -111,7 +112,7 @@ def render_queue(result, params):
             data-work-key="{item['key']}"><strong>{label}</strong><h4>{escape(item['title'])}</h4>
             <p>{escape(item['project_name'])}</p><p class="t-muted">Автор: {author}</p>{team}
             <p class="t-muted">{date_html}</p>{body}
-            <a class="action-link" href="{item['href']}">{item['action']} →</a></article>'''
+            <a class="action-link" href="{item['href']}">{item['action']} {icon('arrow')}</a></article>'''
     if not result['items']:
         html += ('<p class="t-muted">Нет работ по выбранным условиям. '
                  '<a class="action-link" href="/teacher#review-queue">Сбросить фильтры</a>. '
@@ -119,9 +120,9 @@ def render_queue(result, params):
     if result['pages'] > 1:
         links = ''
         if result['page'] > 1:
-            links += f'<a class="action-link" href="{escape(queue_url(params, result["page"]-1), quote=True)}">← Предыдущая</a>'
+            links += f'<a class="action-link" href="{escape(queue_url(params, result["page"]-1), quote=True)}">{icon('arrow-left')} Предыдущая</a>'
         links += f'<span>Страница {result["page"]} из {result["pages"]}</span>'
         if result['page'] < result['pages']:
-            links += f'<a class="action-link" href="{escape(queue_url(params, result["page"]+1), quote=True)}">Следующая →</a>'
+            links += f'<a class="action-link" href="{escape(queue_url(params, result["page"]+1), quote=True)}">Следующая {icon('arrow')}</a>'
         html += f'<nav class="teacher-queue-pages" aria-label="Страницы очереди">{links}</nav>'
     return html

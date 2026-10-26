@@ -25,6 +25,49 @@ html body.mf-v2 h2 { font-size:22px; margin:0 0 14px; }
 html body.mf-v2 h3 { font-size:17px; }
 html body.mf-v2 :is(p,h1,h2,h3,h4,dd,a,summary,strong) { overflow-wrap:anywhere; }
 html body.mf-v2 .ui-icon { width:20px; height:20px; flex-shrink:0; vertical-align:middle; }
+html body.mf-v2 a>.ui-icon { width:17px; height:17px; margin-inline:2px; }
+html body.mf-v2 .btn>.ui-icon { width:18px; height:18px; margin:0; }
+html body.mf-v2 :is(button,summary)[data-ui-icon],
+html body.mf-v2 button[name="action"]:not([data-ui-icon]):is([value="save"],[value="submit"],[value="accept"]),
+html body.mf-v2 .drawer-close {
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+}
+html body.mf-v2 :is(button,summary)[data-ui-icon]::before,
+html body.mf-v2 button[name="action"]:not([data-ui-icon]):is([value="save"],[value="submit"],[value="accept"])::before,
+html body.mf-v2 .drawer-close::before {
+  content:""; display:inline-block; width:18px; height:18px; flex:0 0 18px;
+  background:currentColor; -webkit-mask:var(--ui-control-symbol) center/contain no-repeat;
+  mask:var(--ui-control-symbol) center/contain no-repeat;
+}
+html body.mf-v2 button[name="action"][value="save"] { --ui-control-symbol:var(--ui-symbol-save); }
+html body.mf-v2 button[name="action"][value="submit"] { --ui-control-symbol:var(--ui-symbol-send); }
+html body.mf-v2 button[name="action"][value="accept"] { --ui-control-symbol:var(--ui-symbol-check); }
+html body.mf-v2 .drawer-close { --ui-control-symbol:var(--ui-symbol-close); }
+html body.mf-v2 summary[data-ui-icon] { display:flex; list-style:none; justify-content:flex-start; }
+html body.mf-v2 summary[data-ui-icon]::-webkit-details-marker { display:none; }
+html body.mf-v2 summary[data-ui-icon]::after {
+  content:""; width:14px; height:14px; flex:0 0 14px; margin-left:auto;
+  background:currentColor; -webkit-mask:var(--ui-symbol-chevron) center/contain no-repeat;
+  mask:var(--ui-symbol-chevron) center/contain no-repeat;
+}
+html body.mf-v2 details[open]>summary[data-ui-icon]::after { transform:rotate(180deg); }
+html body.mf-v2 .project-create>summary::after { display:none; }
+html body.mf-v2 .account-panel>a { gap:8px; }
+html body.mf-v2 .account-panel>a>.ui-icon { width:18px; height:18px; margin:0; }
+html body.mf-v2 .account-panel .logout { justify-content:flex-start; font-weight:400; }
+html body.mf-v2 .task-drawer .drawer-close { background:var(--mf-panel); color:var(--mf-text); }
+html body.mf-v2 .project-navigation>a { gap:7px; }
+html body.mf-v2 .route-marker>.ui-icon { width:16px; height:16px; }
+@media(max-width:600px) {
+  html body.mf-v2 .project-navigation>a { flex-direction:column; gap:5px; }
+  html body.mf-v2 .project-navigation .ui-project-history { flex-direction:row; }
+}
+@media(forced-colors:active) {
+  html body.mf-v2 :is(button,summary)[data-ui-icon]::before,
+  html body.mf-v2 summary[data-ui-icon]::after,
+  html body.mf-v2 .drawer-close::before,
+  html body.mf-v2 button[name="action"]:not([data-ui-icon]):is([value="save"],[value="submit"],[value="accept"])::before { background:CanvasText; forced-color-adjust:none; }
+}
 html body.mf-v2 .eyebrow { color:var(--mf-muted); font-size:10px; letter-spacing:1.35px; font-weight:600; }
 html body.mf-v2 a:hover { color:var(--mf-accent); }
 html body.mf-v2 :is(button,.btn,input[type="submit"],.teacher-primary-link) {
@@ -81,6 +124,7 @@ html body.mf-v2 .ui-sidebar-brand { padding:0 16px; }
 html body.mf-v2 .ui-workspace-label { color:var(--mf-muted); font-size:9px; letter-spacing:1.3px; margin:38px 16px 15px; line-height:1.8; }
 html body.mf-v2 .ui-primary-nav { display:grid; gap:5px; }
 html body.mf-v2 .ui-nav-link { display:flex; align-items:center; gap:12px; padding:13px 15px; font-size:13px; color:var(--mf-muted); border-radius:9px; min-height:46px; line-height:1.4; transition:none; }
+html body.mf-v2 .ui-nav-link .ui-nav-icon { width:22px; height:22px; flex-basis:22px; }
 html body.mf-v2 .ui-nav-link:hover { color:var(--mf-text); background:var(--mf-panel); }
 html body.mf-v2 .ui-nav-link[aria-current] { background:var(--ui-brand); color:#fff; font-weight:600; }
 html body.mf-v2 .ui-sidebar-bottom { margin-top:auto; padding-top:40px; }

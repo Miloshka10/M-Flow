@@ -1,4 +1,5 @@
 """Voluntary classroom rosters. Group membership never grants project access."""
+from interface import icon
 import hashlib
 import re
 import secrets
@@ -299,15 +300,15 @@ def render_groups(groups, user, token, preview=None):
     if user['role'] == 'teacher':
         body += f'''<section class="group-panel"><h2>Новая учебная группа</h2><form method="post" class="group-form">{hidden_token(token)}
             <input type="hidden" name="action" value="create"><label>Название группы<input name="name" maxlength="120" required placeholder="Например, 10А — индивидуальные проекты"></label>
-            <label>Описание для учеников<textarea name="description" maxlength="600" rows="2"></textarea></label><button>Создать группу</button></form></section>'''
+            <label>Описание для учеников<textarea name="description" maxlength="600" rows="2"></textarea></label><button data-ui-icon="plus">Создать группу</button></form></section>'''
     else:
         body += f'''<section class="group-panel" id="group-code"><h2>Вступить в группу</h2><form method="post" class="group-form">{hidden_token(token)}
-            <input type="hidden" name="action" value="preview"><label>Код группы от учителя<input name="code" autocomplete="off" maxlength="32" required></label><button>Проверить код группы</button></form></section>'''
+            <input type="hidden" name="action" value="preview"><label>Код группы от учителя<input name="code" autocomplete="off" maxlength="32" required></label><button data-ui-icon="review">Проверить код группы</button></form></section>'''
     if preview:
         group, code = preview
         body += f'''<section class="group-panel"><h2>{escape(group['name'])}</h2><p>Учитель: {escape(group['teacher_name'])}</p><p class="group-text">{escape(group['description'])}</p>
             <p>После вступления учитель увидит ваш логин. Вы сами выберете проект; доступ к работам требует отдельного согласования. Другие ученики не увидят ваш проект или оценки через группу.</p>
-            <form method="post">{hidden_token(token)}<input type="hidden" name="action" value="join"><input type="hidden" name="code" value="{escape(code, quote=True)}"><button>Подтвердить вступление</button></form></section>'''
+            <form method="post">{hidden_token(token)}<input type="hidden" name="action" value="join"><input type="hidden" name="code" value="{escape(code, quote=True)}"><button data-ui-icon="check">Подтвердить вступление</button></form></section>'''
     body += '<h2>Мои учебные группы</h2><div class="group-list">'
     for group in groups:
         body += f'''<a class="group-panel group-link" href="/groups/{group['id']}"><span>{'В архиве' if group['archived'] else 'Действующая группа'}</span><h3>{escape(group['name'])}</h3>
@@ -327,9 +328,9 @@ def render_group(conn, user, group, data, token, code=None):
         c = data['counts']
         body += f'''<section class="group-stats" aria-label="Показатели группы"><div><strong>{c['total']}</strong>Учеников</div><div><strong>{c['review']}</strong>Ждут проверки</div>
             <div><strong>{c['unlinked']}</strong>Нужно подключение</div><div><strong>{c['no_project']}</strong>Без проекта</div></section>'''
-        body += f'<details class="group-panel" {"open" if code or not c["total"] else ""}><summary>Приглашение класса</summary><p>Один код можно передать всему классу. Он действует 7 дней, показывается только при создании. Новый код отменяет предыдущий, но сохраняет состав группы.</p><div class="group-actions">'
+        body += f'<details class="group-panel" {"open" if code or not c["total"] else ""}><summary data-ui-icon="link">Приглашение класса</summary><p>Один код можно передать всему классу. Он действует 7 дней, показывается только при создании. Новый код отменяет предыдущий, но сохраняет состав группы.</p><div class="group-actions">'
         if not group['archived']:
-            body += form('invite', '<button>Создать новый код группы</button>') + form('revoke', '<button class="secondary">Отозвать код</button>')
+            body += form('invite', '<button data-ui-icon="plus">Создать новый код группы</button>') + form('revoke', '<button class="secondary" data-ui-icon="close">Отозвать код</button>')
         body += '</div>'
         active = conn.execute('SELECT expires FROM learning_group_invitations WHERE group_id=? AND revoked=0 AND expires>? ORDER BY id DESC LIMIT 1', (gid, int(time.time()))).fetchone()
         if active:
@@ -355,9 +356,9 @@ def render_group(conn, user, group, data, token, code=None):
                 proposal = ''
                 hint = ('Учитель группы уже сопровождает выбранный проект.' if connected else 'Предложение отправлено. Дождитесь согласования в разделе «Руководство».') + ' Чтобы предложить другой проект, сначала сохраните новый выбор.'
             selector = f'''<form method="post" class="group-form">{hidden_token(token)}<label>Мой проект<select name="project_id">{options}</select></label><div class="group-actions">
-                <button name="action" value="select">Сохранить выбор проекта</button>{proposal}</div></form>''' if projects else '<p>У тебя пока нет собственного проекта. Сначала создай его, затем выбери для группы.</p><a href="/#project-create">Создать проект →</a>'
+                <button name="action" value="select" data-ui-icon="save">Сохранить выбор проекта</button>{proposal}</div></form>''' if projects else f'<p>У тебя пока нет собственного проекта. Сначала создай его, затем выбери для группы.</p><a href="/#project-create">Создать проект {icon('arrow')}</a>'
             body += f'''<section class="group-panel"><h2>Мой проект в группе</h2><p>Выберите один собственный проект. Учитель увидит его название. Работы и оценки доступны только действующему руководителю.</p>
-                {selector}<p>{hint}</p><a href="/supervision">Мои согласования руководства →</a></section>'''
+                {selector}<p>{hint}</p><a href="/supervision">Мои согласования руководства {icon('arrow')}</a></section>'''
         if selected in owned_ids:
             states = get_stages(conn, selected)
             defense = defense_for(conn, selected)
@@ -375,10 +376,10 @@ def render_group(conn, user, group, data, token, code=None):
                 target = f'/project/{selected}'
             elif not target.startswith('/'):
                 target = f'/project/{selected}' + (target if target.startswith('#') else '/' + target)
-            body += f'<section class="group-panel" aria-label="Следующий шаг проекта"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>{escape(step["title"])}</h2><p>{escape(step["text"])}</p><a href="{escape(target, quote=True)}">{escape(step["action"] or "Открыть проект")} →</a></section>'
+            body += f'<section class="group-panel" aria-label="Следующий шаг проекта"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>{escape(step["title"])}</h2><p>{escape(step["text"])}</p><a href="{escape(target, quote=True)}">{escape(step["action"] or "Открыть проект")} {icon('arrow')}</a></section>'
     if data['teacher']:
         options = ''.join(f'<option value="{key}" {"selected" if key == data["view"] else ""}>{label}</option>' for key, label in VIEWS.items())
-        body += f'''<form method="get" class="group-filters"><label>Поиск ученика<input name="q" maxlength="100" value="{escape(data['query'], quote=True)}"></label><label>Состояние учеников<select name="view">{options}</select></label><button>Показать</button><a href="/groups/{gid}">Сбросить</a></form>'''
+        body += f'''<form method="get" class="group-filters"><label>Поиск ученика<input name="q" maxlength="100" value="{escape(data['query'], quote=True)}"></label><label>Состояние учеников<select name="view">{options}</select></label><button data-ui-icon="filter">Показать</button><a href="/groups/{gid}">Сбросить</a></form>'''
     body += f'<section aria-label="Проекты учеников"><h2>{"Ученики и проекты" if data["teacher"] else "Мой прогресс"}</h2><p>Показано {len(data["rows"])} из {data["filtered"]}</p><div class="group-table-wrap"><table class="group-table"><thead><tr>'
     columns = ('Ученик', 'Проект', 'Этапы', 'Проверка', 'Моя оценка' if data['teacher'] else 'Оценка учителя группы', 'Последнее изменение', 'Действия')
     body += ''.join(f'<th scope="col">{label}</th>' for label in columns) + '</tr></thead><tbody>'
@@ -391,9 +392,9 @@ def render_group(conn, user, group, data, token, code=None):
             review = f'Ожидают решения: {row["pending"]}' if row['pending'] else 'Нет ожидающих проверок'
             stage_target = f'/project/{pid}/stages' + (f'#stage-{row["current_number"]}' if row['current_number'] else '')
             if row['pending'] and not row['stage_review']:
-                actions = f'<a href="/project/{pid}/defense">Проверить видеозащиту →</a>'
+                actions = f'<a href="/project/{pid}/defense">Проверить видеозащиту {icon('arrow')}</a>'
             else:
-                actions = f'<a href="{stage_target}">{"Проверить этап" if data["teacher"] and row["stage_review"] else "Открыть этапы"} →</a>'
+                actions = f'<a href="{stage_target}">{"Проверить этап" if data["teacher"] and row["stage_review"] else "Открыть этапы"} {icon('arrow')}</a>'
             grade = row['grade'] or 'Не опубликована'
             grade_target = f'/project/{pid}/assessment' + (f'?student_id={row["student_id"]}' if data['teacher'] else '')
             grade = f'<a href="{grade_target}">{grade}</a>'
@@ -403,24 +404,24 @@ def render_group(conn, user, group, data, token, code=None):
         else:
             stages, grade, updated = '—', '—', '—'
             review = 'Нужно выбрать проект' if not row['project_name'] else 'Ожидается согласование' if row['proposed'] else 'Работы пока недоступны'
-            actions = '<a href="/supervision">Рассмотреть подключение →</a>' if row['proposed'] and data['teacher'] else '—'
+            actions = f'<a href="/supervision">Рассмотреть подключение {icon('arrow')}</a>' if row['proposed'] and data['teacher'] else '—'
         if data['teacher']:
-            actions += form('remove', f'<input type="hidden" name="student_id" value="{row["student_id"]}"><button class="secondary">Убрать из группы</button>')
+            actions += form('remove', f'<input type="hidden" name="student_id" value="{row["student_id"]}"><button class="secondary" data-ui-icon="trash">Убрать из группы</button>')
         cells = (escape(row['username']), project, stages, review, grade, updated, actions)
         body += '<tr>' + ''.join(f'<td data-label="{label}"><div class="group-cell">{cell}</div></td>' for label, cell in zip(columns, cells)) + '</tr>'
     body += '</tbody></table></div>'
     if not data['rows']:
         body += '<p>По этим условиям учеников нет. Пригласите класс по коду или сбросьте фильтры.</p>'
     body += '<nav class="group-actions" aria-label="Страницы группы">'
-    for page, label in ((data['page']-1, '← Предыдущая страница'), (data['page']+1, 'Следующая страница →')):
+    for page, label in ((data['page']-1, 'Предыдущая страница'), (data['page']+1, 'Следующая страница')):
         if 1 <= page <= data['pages']:
             query = urlencode(dict(page=page, q=data['query'], view=data['view']))
-            body += f'<a href="/groups/{gid}?{escape(query, quote=True)}">{label}</a>'
+            body += f'<a href="/groups/{gid}?{escape(query, quote=True)}">{icon("arrow-left" if page < data["page"] else "arrow")} {label}</a>'
     body += '</nav></section><p class="groups-intro">Группа показывает выбранные проекты. Членство в группе не открывает работы, личные оценки других учеников или черновики других учителей. Последнее изменение учитывает работы и решения учителя.</p>'
     if data['teacher']:
-        body += f'''<details class="group-panel"><summary>Настройки группы</summary><form method="post" class="group-form">{hidden_token(token)}<input type="hidden" name="revision" value="{revision}"><input type="hidden" name="action" value="edit">
-            <label>Название группы<input name="name" maxlength="120" required value="{escape(group['name'], quote=True)}"></label><label>Описание для учеников<textarea name="description" maxlength="600" rows="3">{escape(group['description'])}</textarea></label><button>Сохранить настройки группы</button></form>
-            {form('restore' if group['archived'] else 'archive', '<button class="secondary">' + ('Восстановить группу' if group['archived'] else 'Отправить группу в архив') + '</button>')}</details>'''
+        body += f'''<details class="group-panel"><summary data-ui-icon="settings">Настройки группы</summary><form method="post" class="group-form">{hidden_token(token)}<input type="hidden" name="revision" value="{revision}"><input type="hidden" name="action" value="edit">
+            <label>Название группы<input name="name" maxlength="120" required value="{escape(group['name'], quote=True)}"></label><label>Описание для учеников<textarea name="description" maxlength="600" rows="3">{escape(group['description'])}</textarea></label><button data-ui-icon="save">Сохранить настройки группы</button></form>
+            {form('restore' if group['archived'] else 'archive', '<button class="secondary" data-ui-icon="archive">' + ('Восстановить группу' if group['archived'] else 'Отправить группу в архив') + '</button>')}</details>'''
     else:
-        body += '<section class="group-panel"><h2>Выход из группы</h2><p>Выход скроет вас из списка класса. Проект, команда, оценки, действующий руководитель и отдельные запросы сопровождения сохранятся. Запрос можно отменить в разделе «Руководство».</p>' + form('leave', '<button class="secondary">Выйти из группы</button>') + '</section>'
+        body += '<section class="group-panel"><h2>Выход из группы</h2><p>Выход скроет вас из списка класса. Проект, команда, оценки, действующий руководитель и отдельные запросы сопровождения сохранятся. Запрос можно отменить в разделе «Руководство».</p>' + form('leave', '<button class="secondary" data-ui-icon="logout">Выйти из группы</button>') + '</section>'
     return body

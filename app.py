@@ -43,7 +43,7 @@ from dashboard_view import student_dashboard
 from graphics import illustration
 from project_workspace import render_workspace, task_deadline
 from navigation import project_navigation
-from interface import shell_header, project_art, document_title
+from interface import shell_header, project_art, document_title, icon
 from student_results import parameters as result_parameters, load_results, render_results, load_focus, load_project_states
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
 from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, change_stage, render_stages, STATE_LABELS
@@ -98,7 +98,7 @@ def csrf_input():
 
 
 def logout_form():
-    return f'<form method="post" action="/logout" class="logout-form">{csrf_input()}<button type="submit" class="logout">Выйти</button></form>'
+    return f'<form method="post" action="/logout" class="logout-form">{csrf_input()}<button type="submit" class="logout" data-ui-icon="logout">Выйти</button></form>'
 
 
 @app.before_request
@@ -158,7 +158,8 @@ def render_page(html):
         '<script src="/static/dashboard.js?v=20261006" defer></script>'
         '<link rel="stylesheet" href="/static/navigation.css?v=20261017-fixes">'
         '<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
-        '<link rel="stylesheet" href="/static/interface.css?v=20261025-polish">'
+        '<link rel="stylesheet" href="/static/icon-symbols.css?v=20261026-icons">'
+        '<link rel="stylesheet" href="/static/interface.css?v=20261026-icons">'
         '<script src="/static/interface.js?v=20261025-polish" defer></script>'
             f'</head><body id="page-content" class="{body_class}"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
@@ -1089,7 +1090,7 @@ def render_auth_page(mode, error=None, role="student"):
                     <form method="post">
                         {csrf_input()}
                         {form_fields}
-                        <button type="submit">{submit_label}</button>
+                        <button type="submit" data-ui-icon="arrow">{submit_label}</button>
                     </form>
                     <p class="auth-footer">{"Приглашайте учеников и проверяйте результаты в одном кабинете." if is_teacher else "Создайте проект и примите приглашение учителя."}<br><a href="/settings">Настройки оформления</a></p>
                     </div>
@@ -1286,7 +1287,7 @@ def profile():
         <div class="container">
             {render_header(user)}
             <main class="profile-card">
-                <a class="back" href="/">← На главную</a>
+                <a class="back" href="/">{icon('arrow-left')} На главную</a>
                 <h1>Профиль</h1>
                 <dl>
                     <dt>Логин</dt>
@@ -1297,7 +1298,7 @@ def profile():
                     <dd>{projects_count}</dd>
                 </dl>
                 {skills_link}
-                <p><a class="back" href="/settings">Настройки оформления и анимаций →</a></p>
+                <p><a class="back" href="/settings">Настройки оформления и анимаций {icon('arrow')}</a></p>
                 <h3>Смена пароля</h3>
                 {message_html}
                 {error_html}
@@ -1309,7 +1310,7 @@ def profile():
                     <input id="new-password" type="password" name="new_password" autocomplete="new-password" minlength="8" maxlength="256" required>
                     <label for="repeat-password">Повторите новый пароль</label>
                     <input id="repeat-password" type="password" name="repeat_password" autocomplete="new-password" minlength="8" maxlength="256" required>
-                    <button type="submit">Сменить пароль</button>
+                    <button type="submit" data-ui-icon="settings">Сменить пароль</button>
                 </form>
             </main>
         </div>
@@ -1659,7 +1660,7 @@ def project(project_id):
                     </div>
                     <p>{update_body}</p>
                     <details class="task-report-history">
-                        <summary>История отчётов ({len(updates)})</summary>
+                        <summary data-ui-icon="history">История отчётов ({len(updates)})</summary>
                         <div>{history_items}</div>
                     </details>
                 </div>
@@ -1669,14 +1670,14 @@ def project(project_id):
         if current_user["role"] == "student" and task["assignee_id"] == current_user["id"]:
             report_form = f"""
                 <details class="task-report-compose">
-                    <summary>Добавить отчёт</summary>
+                    <summary data-ui-icon="plus">Добавить отчёт</summary>
                     <form method="post" action="/project/{project_id}/task/{task_id}/update">
                         {csrf_input()}
                         <input type="hidden" name="return_to" value="{escape(board_location + '#task-' + str(task_id),quote=True)}">
                         <textarea name="body" maxlength="500" rows="3" required
                             aria-label="Отчёт по задаче"
                             placeholder="Что уже сделано? Что мешает двигаться дальше?"></textarea>
-                        <button type="submit">Сохранить отчёт</button>
+                        <button type="submit" data-ui-icon="save">Сохранить отчёт</button>
                     </form>
                 </details>
             """
@@ -1685,7 +1686,7 @@ def project(project_id):
             <form action="/project/{project_id}/delete/{task_id}" method="post">
                 {csrf_input()}
                 <input type="hidden" name="return_to" value="{escape(board_location + '#task-board',quote=True)}">
-                <button type="submit" class="delete-task" title="Удалить задачу">Удалить</button>
+                <button type="submit" class="delete-task" title="Удалить задачу" data-ui-icon="trash">Удалить</button>
             </form>
         """ if owner else ""
 
@@ -1737,12 +1738,12 @@ def project(project_id):
                 <option value="urgent" {urgent_selected}>Срочный</option>
             </select></label>
         """ if owner else ""
-        edit_control = f'''<details class="task-edit"><summary>Редактировать задачу</summary>
+        edit_control = f'''<details class="task-edit"><summary data-ui-icon="edit">Редактировать задачу</summary>
             <form method="post" action="/project/{project_id}/edit/{task_id}" class="board-task-form">
             {csrf_input()}<input type="hidden" name="return_to" value="{escape(board_location + '#task-' + str(task_id),quote=True)}">
-            {task_edit_fields(task, members)}<button>Сохранить задачу</button></form></details>''' if owner else ''
+            {task_edit_fields(task, members)}<button data-ui-icon="save">Сохранить задачу</button></form></details>''' if owner else ''
         description_html = f'<p class="task-description" tabindex="0">{escape(task["description"])}</p>' if task['description'] else '<p class="t-muted">Описание пока не добавлено.</p>'
-        stage_html = f'<a class="task-stage" href="/project/{project_id}/stages#stage-{task["stage_number"]}">Этап {task["stage_number"]} →</a>' if task['stage_number'] else '<span class="task-stage">Без этапа</span>'
+        stage_html = f'<a class="task-stage" href="/project/{project_id}/stages#stage-{task["stage_number"]}">Этап {task["stage_number"]} {icon('arrow')}</a>' if task['stage_number'] else '<span class="task-stage">Без этапа</span>'
 
 
         return f"""
@@ -1884,7 +1885,7 @@ def project(project_id):
     if not all_tasks:
         kanban_html = f'''<section class="board-start"><span class="eyebrow">ОТ ИДЕИ К ПЕРВОМУ ДЕЙСТВИЮ</span><h3>Начните с первой задачи</h3>
             <p>{'Например: «Собрать материалы по теме». Определите результат и того, кто за него отвечает.' if owner else 'Владелец проекта сможет добавить задачи и распределить работу команды.'}</p>
-            {f'<a class="btn" href="#task-create">+ Создать задачу</a>' if owner else ''}</section>'''
+            {f'<a class="btn" href="#task-create">{icon('plus')} Создать задачу</a>' if owner else ''}</section>'''
         mobile_tabs = ''
     elif not tasks:
         kanban_html = ''
@@ -1933,7 +1934,7 @@ def project(project_id):
                 <button
                     type="submit"
                     class="secondary"
-                >
+                 data-ui-icon="trash">
                     Удалить
                 </button>
 
@@ -2019,7 +2020,7 @@ def project(project_id):
                     required
                 >
 
-                <button type="submit">
+                <button type="submit" data-ui-icon="plus">
                     Добавить
                 </button>
 
@@ -2029,7 +2030,7 @@ def project(project_id):
                 Только владелец проекта
                 может добавлять учеников. Руководитель подключается через приглашение.
             </p>
-            <a class="action-link" href="/supervision">Подключение и смена руководителя →</a>
+            <a class="action-link" href="/supervision">Подключение и смена руководителя {icon('arrow')}</a>
             {end_request_form}
 
         </div>
@@ -2068,7 +2069,7 @@ def project(project_id):
         <div class="container">
             {render_header(current_user)}
             <main class="project-workspace" data-project-views>
-                <a href="/" class="back">← Все проекты</a>
+                <a href="/" class="back">{icon('arrow-left')} Все проекты</a>
                 {messages}
                 {workspace_html}
 
@@ -2113,11 +2114,11 @@ def project(project_id):
                             </p>
 
                         </div>
-                        {f'<a class="btn board-add" href="#task-create">+ Задача</a>' if owner else ''}
+                        {f'<a class="btn board-add" href="#task-create">{icon('plus')} Задача</a>' if owner else ''}
                     </div>
 
                     {filters_html}
-                    <details class="board-deadlines"><summary>Ближайшие сроки</summary>{hot_html}</details>
+                    <details class="board-deadlines"><summary data-ui-icon="calendar">Ближайшие сроки</summary>{hot_html}</details>
                     {filter_summary}
 
                     <p id="board-status" role="status" aria-live="polite" hidden></p>
@@ -2723,7 +2724,7 @@ def notifications_page():
     return render_page(PAGE_STYLE + f'''<div class="container">{header}
         <main class="notifications-page"><h1>Уведомления</h1><p>Непрочитанных: {count}</p>
         <form method="post" action="/notifications/read-all">{csrf_input()}
-        <button class="secondary" type="submit">Прочитать все</button></form>
+        <button class="secondary" type="submit" data-ui-icon="check">Прочитать все</button></form>
         {render_items(rows[:30], csrf_input())}{older}</main></div>''')
 
 
@@ -2740,7 +2741,7 @@ def read_notifications(notification_id=None):
 @app.route('/settings')
 def site_settings():
     user = get_current_user()
-    header = render_header(user) if user else '<header class="main-header"><a class="brand" href="/login" aria-label="M-Flow — вход">M-Flow<span class="ui-brand-dot">.</span></a><a class="back" href="/login">← К входу</a></header>'
+    header = render_header(user) if user else f'<header class="main-header"><a class="brand" href="/login" aria-label="M-Flow — вход">M-Flow<span class="ui-brand-dot">.</span></a><a class="back" href="/login">{icon('arrow-left')} К входу</a></header>'
     return render_page(f'''<div class="container">{header}<main class="settings-page">
         <h1>Настройки сайта</h1>
         <p class="settings-intro">Оформление сохраняется в этом браузере и действует на всех страницах. Настройки аккаунта остаются в профиле.</p>
@@ -2754,7 +2755,7 @@ def site_settings():
                 <p class="settings-hint">Системная тема автоматически подстраивается под настройки устройства.</p>
                 <label class="settings-checkbox" for="site-animations"><input id="site-animations" name="animations" type="checkbox" checked>Плавные анимации интерфейса</label>
                 <p class="settings-hint">Если на устройстве включено уменьшение движения, анимации отключены независимо от этого переключателя.</p>
-                <button type="button" class="secondary" id="reset-preferences">Сбросить настройки</button>
+                <button type="button" class="secondary" id="reset-preferences" data-ui-icon="return">Сбросить настройки</button>
                 <p id="preferences-status" role="status" aria-live="polite">Изменения применяются сразу.</p>
                 <noscript><p class="error">Для изменения и сохранения оформления включите JavaScript в браузере.</p></noscript>
             </form>
@@ -2846,7 +2847,7 @@ def learning_group_page(group_id):
             data = roster(conn, user, group, {})
         body = render_group(conn, user, group, data, csrf_token(), code)
     return render_collaboration_page(user, group['name'], body, error=error, status=status,
-                                     back_url='/groups', back_label='← Учебные группы')
+                                     back_url='/groups', back_label='Учебные группы')
 
 
 @app.route('/supervision', methods=['GET', 'POST'])
@@ -2915,15 +2916,15 @@ def render_unsaved_result(form, user, target, defense=False):
     return f'''<aside class="journey-feedback unsaved-result" aria-label="Несохранённый ввод"><strong>Ваш ввод не сохранён</strong>
         <p>Результат уже изменён или недоступен для редактирования. Скопируйте свой текст перед обновлением страницы,
         сравните с актуальной версией и повторите действие только если оно доступно. Этот текст не подставлен в новую форму.</p>
-        <details><summary>Показать текст для копирования</summary>{content}</details>
-        <a href="{target}">Открыть актуальную версию →</a></aside>'''
+        <details><summary data-ui-icon="link">Показать текст для копирования</summary>{content}</details>
+        <a href="{target}">Открыть актуальную версию {icon('arrow')}</a></aside>'''
 
 
 def render_collaboration_page(user, title, body, project_id=None, error="", status=200, back_url=None, back_label=None):
     messages = ''.join(f'<div class="success" role="status">{escape(message)}</div>' for message in get_flashed_messages())
-    back = f'<a class="back" href="/project/{project_id}">← К обзору проекта</a>' if project_id else '<a class="back" href="/">← К моим проектам</a>'
+    back = f'<a class="back" href="/project/{project_id}">{icon('arrow-left')} К обзору проекта</a>' if project_id else f'<a class="back" href="/">{icon('arrow-left')} К моим проектам</a>'
     if back_url:
-        back = f'<a class="back" href="{escape(back_url, quote=True)}">{escape(back_label or "Назад")}</a>'
+        back = f'<a class="back" href="{escape(back_url, quote=True)}">{icon('arrow-left')} {escape(back_label or "Назад")}</a>'
     error_html = f'<div class="error" role="alert">{escape(error)}</div>' if error else ''
     return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/teamwork.css"><div class="container">{render_header(user)}
         <main class="team-page">{back}<h1>{escape(title)}</h1>{project_navigation(project_id, request.path.rsplit('/', 1)[-1]) if project_id else ""}{messages}{error_html}{body}</main></div>'''), status
@@ -2982,7 +2983,7 @@ def send_team_invitation():
         try:
             invite_student(conn,user['id'],request.form)
         except ValueError as exc:
-            return render_collaboration_page(user,'Приглашение не отправлено','<a class="back" href="/teams">← В каталог участников</a>',error=str(exc),status=400)
+            return render_collaboration_page(user,'Приглашение не отправлено',f'<a class="back" href="/teams">{icon('arrow-left')} В каталог участников</a>',error=str(exc),status=400)
     finally:
         conn.close()
     flash('Приглашение отправлено. Ученик получит доступ к проекту после принятия.')
@@ -3002,7 +3003,7 @@ def answer_team_invitation(invitation_id):
         except PermissionError as exc:
             return render_error_page('Нет доступа',str(exc),403)
         except ValueError as exc:
-            return render_collaboration_page(user,'Приглашение не обработано','<a class="back" href="/teams">← К приглашениям</a>',error=str(exc),status=400)
+            return render_collaboration_page(user,'Приглашение не обработано',f'<a class="back" href="/teams">{icon('arrow-left')} К приглашениям</a>',error=str(exc),status=400)
     finally:
         conn.close()
     accepted = request.form.get('action') == 'accept'
@@ -3034,7 +3035,7 @@ def project_team(project_id):
                 error,status = str(exc),400
         body = render_team(conn,project_id,owner,token)
         if owner:
-            body += f'<section class="card"><h2>Управление составом</h2><p>Добавление по логину, удаление участников и управление руководителем.</p><a class="action-link" href="/project/{project_id}#project-members">Открыть управление командой →</a></section>'
+            body += f'<section class="card"><h2>Управление составом</h2><p>Добавление по логину, удаление участников и управление руководителем.</p><a class="action-link" href="/project/{project_id}#project-members">Открыть управление командой {icon('arrow')}</a></section>'
     finally:
         conn.close()
     return render_collaboration_page(user,f'Команда · {name}',body,project_id,error,status)
@@ -3120,7 +3121,7 @@ def project_stage_page(project_id):
     unsaved = render_unsaved_result(request.form, user, f'/project/{project_id}/stages') if error and submitted is None else ''
     return render_page(PAGE_STYLE + f'''
         <link rel="stylesheet" href="/static/project-stages.css"><link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback"><div class="container">{render_header(user)}
-        <main class="stages-page"><a class="back" href="/project/{project_id}">← К обзору проекта</a>
+        <main class="stages-page"><a class="back" href="/project/{project_id}">{icon('arrow-left')} К обзору проекта</a>
         <h1>Пять этапов · {escape(project_name)}</h1>{project_navigation(project_id, "stages")}
         <p>Ученики сохраняют результат и отправляют его учителю. После принятия открывается следующий этап.
         Этапы общие для участников проекта; их прохождение не меняет статусы задач и итоговые баллы.</p>
@@ -3232,7 +3233,7 @@ def project_assessment(project_id):
                 <p id="assessment-total" aria-live="polite">Итого: {total} / {MAX_SCORE} · Оценка: {grade if grade is not None else 'не все критерии заполнены'}</p>
                 <label>Примечание учителя<textarea name="note" maxlength="1000" rows="4">{escape(note)}</textarea></label>
                 <p>Черновик виден только вам. Публикация открывает оценку ученику. Сохранение опубликованной оценки как черновика снова скроет её.</p>
-                <div class="assessment-actions"><button name="action" value="draft" type="submit">Сохранить черновик</button><button name="action" value="published" type="submit">Опубликовать оценку</button></div>
+                <div class="assessment-actions"><button name="action" value="draft" type="submit" data-ui-icon="save">Сохранить черновик</button><button name="action" value="published" type="submit" data-ui-icon="check">Опубликовать оценку</button></div>
             </form></section>"""
     elif is_teacher:
         if request.method == "POST":
@@ -3252,12 +3253,12 @@ def project_assessment(project_id):
                 <div class="assessment-table"><table><thead><tr><th>Критерий</th><th>Баллы</th></tr></thead><tbody>{fields}</tbody></table></div>
                 <h3>Итого: {total} / {MAX_SCORE} · Оценка: {grade}</h3><p class="assessment-note">{escape(row['note'] or 'Учитель опубликовал оценку без примечания.')}</p></section>'''
         if not rows:
-            content = f'<section class="card"><h2>Оценка ещё не опубликована</h2><p>Здесь появятся ваши баллы и примечание учителя. Приём этапов и видеозащиты не выставляет баллы автоматически. Дождитесь публикации учителем; оценки других участников здесь не показываются.</p><a href="/project/{project_id}">Посмотреть следующий шаг →</a></section>'
+            content = f'<section class="card"><h2>Оценка ещё не опубликована</h2><p>Здесь появятся ваши баллы и примечание учителя. Приём этапов и видеозащиты не выставляет баллы автоматически. Дождитесь публикации учителем; оценки других участников здесь не показываются.</p><a href="/project/{project_id}">Посмотреть следующий шаг {icon('arrow')}</a></section>'
     conn.close()
     messages = "".join(f'<p role="status">{escape(message)}</p>' for message in get_flashed_messages())
     return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/assessment.css">
         <div class="app">{render_header(user)}<main class="main-content assessment-page">
-        <a class="back" href="/project/{project_id}">← К обзору проекта</a>
+        <a class="back" href="/project/{project_id}">{icon('arrow-left')} К обзору проекта</a>
         <h1>Оценивание · {escape(project_name)}</h1>{project_navigation(project_id, "assessment")}
         <p>12 критериев · максимум 45 баллов. Шкала: «5» — 39–45, «4» — 30–38, «3» — 21–29, «2» — 0–20.</p>
         {messages}<p role="alert">{escape(error)}</p>{content}</main></div>
@@ -3439,7 +3440,7 @@ def render_attention_task(project_id, item):
         <div class="t-edit">
             <span class="t-title">{escape(task["title"])}</span>
             <span class="t-reason">{escape(" · ".join(item["reasons"]))}</span>
-            <a class="back" href="/project/{project_id}#task-{task['id']}">Открыть задачу →</a>
+            <a class="back" href="/project/{project_id}#task-{task['id']}">Открыть задачу {icon('arrow')}</a>
         </div>'''
 
 
@@ -3456,7 +3457,7 @@ def render_teacher_project(project):
     if project['legacy_owner']:
         options = ''.join(f'<option value="{student["id"]}">{escape(student["name"])}</option>' for student in project['students'])
         access_note += ('<p>Этот старый проект создан учителем. Передайте управление ученику: задания и результаты сохранятся, вы останетесь учителем проекта.</p>'
-                       + f'<form method="post" action="/project/{project["id"]}/transfer">{csrf_input()}<label>Ученик-владелец<select name="student_id"><option value="">Выберите ученика</option>{options}</select></label><label>Или логин ученика<input name="student_username" maxlength="30" placeholder="Если ученика пока нет в проекте"></label><button type="submit">Передать проект ученику</button></form>')
+                       + f'<form method="post" action="/project/{project["id"]}/transfer">{csrf_input()}<label>Ученик-владелец<select name="student_id"><option value="">Выберите ученика</option>{options}</select></label><label>Или логин ученика<input name="student_username" maxlength="30" placeholder="Если ученика пока нет в проекте"></label><button type="submit" data-ui-icon="arrow">Передать проект ученику</button></form>')
     overdue_chip = (
         f'<span class="t-chip bad">Просрочено: {counts["overdue"]}</span>'
         if counts["overdue"] else
@@ -3512,11 +3513,11 @@ def render_teacher_project(project):
         <div class="t-project-head">
             <h2>{escape(project["name"])}</h2>
             <span class="teacher-health {health}">{health_labels[health]}</span>
-            <a href="/project/{project["id"]}" class="teacher-board-link">Открыть проект →</a>
-            <a href="/project/{project["id"]}/assessment" class="teacher-board-link">Оценивание →</a>
-            <a href="/project/{project["id"]}/stages" class="teacher-board-link">Этапы: {project["completed_stages"]}/5 приняты →</a>
-            <a href="/project/{project["id"]}/team" class="teacher-board-link">Команда →</a>
-            <a href="/project/{project["id"]}/defense" class="teacher-board-link">Видеозащита →</a>
+            <a href="/project/{project["id"]}" class="teacher-board-link">Открыть проект {icon('arrow')}</a>
+            <a href="/project/{project["id"]}/assessment" class="teacher-board-link">Оценивание {icon('arrow')}</a>
+            <a href="/project/{project["id"]}/stages" class="teacher-board-link">Этапы: {project["completed_stages"]}/5 приняты {icon('arrow')}</a>
+            <a href="/project/{project["id"]}/team" class="teacher-board-link">Команда {icon('arrow')}</a>
+            <a href="/project/{project["id"]}/defense" class="teacher-board-link">Видеозащита {icon('arrow')}</a>
         </div>
         {access_note}
         <p class="t-muted">{stage_note}</p>
@@ -3662,7 +3663,7 @@ def teacher_cabinet():
                         <h1>Кабинет учителя</h1>
                         <p>{escape(user["username"])}, всё важное — перед вами. На проверке: {review_count}.</p>
                     </div>
-                    <a class="btn" href="/supervision">Подключить проект <span aria-hidden="true">↗</span></a>
+                    <a class="btn" href="/supervision">{icon('link')} Подключить проект</a>
                 </section>
                 {messages}
                 <div class="t-stats">
@@ -3677,7 +3678,7 @@ def teacher_cabinet():
                     <span>Без ответственного: <b>{unassigned_tasks}</b></span>
                     <span>Сроки задач: {TIMEZONE_LABEL}. Ожидание проверки — не просрочка сдачи.</span>
                 </div>
-                <details class="ui-teacher-filters" {'open' if query or focus != 'all' or kind != 'all' or sort != 'oldest' or project_id is not None or queue['page'] > 1 else ''}><summary>Поиск и фильтры работ</summary>
+                <details class="ui-teacher-filters" {'open' if query or focus != 'all' or kind != 'all' or sort != 'oldest' or project_id is not None or queue['page'] > 1 else ''}><summary data-ui-icon="filter">Поиск и фильтры работ</summary>
                 <form class="teacher-filters" method="get">
                     <input type="search" name="q" value="{escape(query)}"
                         aria-label="Поиск проекта, автора или работы" placeholder="Найти проект, автора или работу">
@@ -3685,7 +3686,7 @@ def teacher_cabinet():
                     <select name="project" aria-label="Проект очереди">{project_options}</select>
                     <select name="kind" aria-label="Тип работы">{kind_options}</select>
                     <select name="sort" aria-label="Порядок отправки работ">{sort_options}</select>
-                    <button type="submit">Показать</button>
+                    <button type="submit" data-ui-icon="filter">Показать</button>
                     <a href="/teacher" class="back">Сбросить</a>
                 </form></details>
                 <div class="teacher-dashboard-grid">
@@ -3695,8 +3696,8 @@ def teacher_cabinet():
                 <div class="section-title" id="teacher-projects"><h2>Проекты</h2>
                     <span class="t-muted">Показано {len(visible_projects)} из {len(overview)}</span></div>
                 {projects_html}
-                <section class="teacher-panel"><h2>Как подключиться к проекту</h2><p>Создайте одноразовый код, передайте его ученику. Владелец подтверждает конкретный проект, затем вы берёте его на сопровождение. Другие проекты не открываются автоматически.</p><a class="teacher-primary-link" href="/supervision">Руководитель проекта →</a></section>
-                <footer class="workspace-footer"><span>M-Flow <small>by Minich</small></span><a href="/settings">Настройки оформления ↗</a></footer>
+                <section class="teacher-panel"><h2>Как подключиться к проекту</h2><p>Создайте одноразовый код, передайте его ученику. Владелец подтверждает конкретный проект, затем вы берёте его на сопровождение. Другие проекты не открываются автоматически.</p><a class="teacher-primary-link" href="/supervision">Руководитель проекта {icon('arrow')}</a></section>
+                <footer class="workspace-footer"><span>M-Flow <small>by Minich</small></span><a href="/settings">{icon('settings')} Настройки оформления</a></footer>
             </main>
         </div>
         """
@@ -3813,7 +3814,7 @@ def render_error_page(title, message, status_code):
                 <span class="eyebrow">Ошибка {status_code}</span>
                 <h1>{escape(title)}</h1>
                 <p>{escape(message)}</p>
-                <a href="/" class="back">← Вернуться на главную</a>
+                <a href="/" class="back">{icon('arrow-left')} Вернуться на главную</a>
             </main>
         </div>
         """,
