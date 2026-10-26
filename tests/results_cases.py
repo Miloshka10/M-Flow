@@ -216,7 +216,7 @@ class StudentResultsCases:
                 conn.execute("INSERT INTO project_stages(project_id,number,state,result) VALUES(?,1,'review',?)",(pid,'X'*5000))
             conn.commit()
         self.assertEqual(self.count_page_queries('/'),before)
-        self.assertLessEqual(before,14)  # Focused project plus one bounded read for home groups.
+        self.assertLessEqual(before,15)  # Focus, own groups and one batched read of card states.
         with closing(self.module.get_db()) as conn:
             data = load_results(conn,dict(id=3),dict(project=0,state='all',page=1))
         self.assertEqual(len(data['items']),PAGE_SIZE)

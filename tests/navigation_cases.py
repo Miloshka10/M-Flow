@@ -4,6 +4,58 @@ import re
 
 
 class NavigationCases:
+    def test_home_cards_track_review_and_defense_not_task_percent(self):
+        self.sign_in(3)
+        def state():
+            with closing(self.module.get_db()) as conn:
+                values = self.module.load_project_states(conn, dict(id=3))
+            self.assertNotIn(3, values, 'Foreign projects must not be included in card states')
+            return values[2]
+        self.assertEqual(state()['label'], 'Этап 1 · Выбор темы')
+        with closing(self.module.get_db()) as conn:
+            conn.execute("UPDATE tasks SET status='done' WHERE project_id=2")
+            conn.execute("INSERT INTO project_stages(project_id,number,state) VALUES(2,1,'review')")
+            conn.commit()
+        self.assertEqual(state()['tone'], 'review')
+        with closing(self.module.get_db()) as conn:
+            conn.execute("UPDATE project_stages SET state='progress',reviewed_by=1 WHERE project_id=2")
+            conn.commit()
+        self.assertEqual(state()['label'], 'Этап 1 · Нужна доработка')
+        with closing(self.module.get_db()) as conn:
+            conn.execute("UPDATE project_stages SET state='done' WHERE project_id=2")
+            conn.executemany("INSERT INTO project_stages(project_id,number,state) VALUES(2,?,'done')", [(n,) for n in range(2,6)])
+            conn.execute("INSERT INTO project_defenses(project_id,state) VALUES(2,'draft')")
+            conn.commit()
+        self.assertEqual(state()['label'], 'Готов к защите')
+        for defense, label, tone in [('submitted','Защита на проверке','review'),
+                                     ('returned','Доработать защиту','revision'),
+                                     ('accepted','Защита принята','accepted')]:
+            with closing(self.module.get_db()) as conn:
+                conn.execute('UPDATE project_defenses SET state=? WHERE project_id=2', (defense,))
+                conn.commit()
+            self.assertEqual(state(), dict(label=label, tone=tone, stages_done=5))
+        page = self.client.get('/?project=2').text
+        self.assertIn('href="/?project=2" aria-current="true"', page)
+        self.assertNotIn('href="/?project=1" aria-current="true"', page)
+        self.assertIn('Защита принята', page)
+        # An inconsistent legacy defense must not hide an unfinished stage.
+        with closing(self.module.get_db()) as conn:
+            conn.execute('DELETE FROM project_stages WHERE project_id=2 AND number=3')
+            conn.commit()
+        self.assertEqual(state()['label'], 'Этап 3 · Можно начинать')
+
+    def test_sidebar_preserves_selected_project_and_names_secondary_pages(self):
+        self.sign_in(3)
+        for path in ('/?project=1', '/?result_project=1', '/project/1/stages'):
+            page = self.client.get(path).text
+            for anchor in ('my-projects', 'student-results'):
+                self.assertIn(f'href="/?project=1#{anchor}"', page)
+        for path, title in (('/notifications','Уведомления'), ('/supervision','Руководитель проекта')):
+            page = self.client.get(path).text
+            header = page.split('<header class="main-header')[1].split('</header>')[0]
+            self.assertIn(f'/</span>{title}', header)
+            self.assertNotRegex(page, r'data-nav-key="home"[^>]*aria-current=')
+
     def test_shared_workspace_covers_all_existing_sections_without_get_writes(self):
         paths = ('/', '/project/1', '/project/1/stages', '/project/1/team', '/project/1/defense',
                  '/project/1/assessment', '/project/1/history', '/groups', '/teams', '/supervision',
@@ -136,6 +188,7 @@ class NavigationCases:
         for text in ('Начни свой проект.', '/groups#group-code', 'Ввести код группы', 'Создать проект', '/teams'):
             self.assertIn(text, page)
         self.assertIn('id="student-results"', page)  # The sidebar result link must have a target even before the first project.
+        self.assertIn('id="my-projects"', page)
         self.assertEqual(self.database_snapshot(), before)
         with closing(self.module.get_db()) as conn:
             conn.execute('DELETE FROM project_members WHERE project_id=2 AND user_id=1')

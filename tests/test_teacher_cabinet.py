@@ -540,7 +540,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         conn.commit()
         conn.close()
         self.assertEqual(self.count_page_queries('/'), before)
-        self.assertLessEqual(before, 11)  # Includes one bounded read for the home group cards.
+        self.assertLessEqual(before, 12)  # Includes batched reads for own groups and project card states.
         page = self.client.get('/').text.split('aria-labelledby="upcoming-title"')[1].split('</section>')[0]
         self.assertEqual(page.count('#task-'), 6)
         self.assertIn('Показано 6 из 200', page)

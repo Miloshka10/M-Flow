@@ -44,7 +44,7 @@ from graphics import illustration
 from project_workspace import render_workspace, task_deadline
 from navigation import project_navigation
 from interface import shell_header, project_art, document_title
-from student_results import parameters as result_parameters, load_results, render_results, load_focus
+from student_results import parameters as result_parameters, load_results, render_results, load_focus, load_project_states
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
 from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, change_stage, render_stages, STATE_LABELS
 from teamwork import (initialize_teamwork, profile_for, save_profile, directory, invite_student,
@@ -158,8 +158,8 @@ def render_page(html):
         '<script src="/static/dashboard.js?v=20261006" defer></script>'
         '<link rel="stylesheet" href="/static/navigation.css?v=20261017-fixes">'
         '<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
-        '<link rel="stylesheet" href="/static/interface.css?v=20261024-v2">'
-        '<script src="/static/interface.js?v=20261024-v2" defer></script>'
+        '<link rel="stylesheet" href="/static/interface.css?v=20261025-polish">'
+        '<script src="/static/interface.js?v=20261025-polish" defer></script>'
             f'</head><body id="page-content" class="{body_class}"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
 
@@ -1359,6 +1359,7 @@ def index():
     with closing(get_db()) as conn:
         results = render_results(load_results(conn, user, result_params), result_params, projects)
         groups = own_groups(conn, user)
+        project_states = load_project_states(conn, user) if projects else {}
         try:
             focus = load_focus(conn, user, next(p for p in projects if p['id'] == selected)) if selected else None
         except PermissionError as error:
@@ -1367,7 +1368,8 @@ def index():
                        for category, message in get_flashed_messages(with_categories=True))
     return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/student-results.css?v=20261015">'
                        + student_dashboard(user, projects, csrf_token(), render_header(user), messages, results, focus,
-                                           any(key.startswith("result_") for key in request.args), groups=groups))
+                                           any(key.startswith("result_") for key in request.args), groups=groups,
+                                           project_states=project_states))
 
 
 # =========================================================
@@ -2696,7 +2698,7 @@ def render_header(user, notification_data=None):
     else:
         count, rows = notification_data
     bell = render_bell(count, rows, csrf_input())
-    return shell_header(user, request.path, bell, logout_form())
+    return shell_header(user, request.path, bell, logout_form(), query=request.args)
 
 
 @app.route('/notifications')
@@ -2738,7 +2740,7 @@ def read_notifications(notification_id=None):
 @app.route('/settings')
 def site_settings():
     user = get_current_user()
-    header = render_header(user) if user else '<header class="main-header"><a class="brand" href="/login">M<span>-</span>Flow</a><a class="back" href="/login">← К входу</a></header>'
+    header = render_header(user) if user else '<header class="main-header"><a class="brand" href="/login" aria-label="M-Flow — вход">M-Flow<span class="ui-brand-dot">.</span></a><a class="back" href="/login">← К входу</a></header>'
     return render_page(f'''<div class="container">{header}<main class="settings-page">
         <h1>Настройки сайта</h1>
         <p class="settings-intro">Оформление сохраняется в этом браузере и действует на всех страницах. Настройки аккаунта остаются в профиле.</p>
@@ -3634,7 +3636,7 @@ def teacher_cabinet():
         key=lambda pair: pair[1]["sort"]
     )[:6]
     attention_html = "".join(
-        f'''<a class="teacher-attention-item" href="/project/{project["id"]}#task-{item["task"]["id"]}">
+        f'''<a class="teacher-attention-item" data-urgency="{'overdue' if item['sort'] < 0 else 'upcoming'}" href="/project/{project["id"]}#task-{item["task"]["id"]}">
             <strong>{escape(item["task"]["title"])}</strong>
             <span>{escape(project["name"])} · {escape(" · ".join(item["reasons"]))}</span>
         </a>'''
@@ -3805,14 +3807,14 @@ def render_error_page(title, message, status_code):
     return render_page(
         PAGE_STYLE
         + f"""
-        <div class="login-page">
-            <div class="login-box">
-                <div class="login-logo">M<span>-</span>Flow</div>
-                <span class="eyebrow" style="color:#b7791f">{status_code}</span>
+        <div class="login-page ui-error-page">
+            <main class="login-box">
+                <a class="brand" href="/" aria-label="M-Flow — на главную">M-Flow<span class="ui-brand-dot">.</span></a>
+                <span class="eyebrow">Ошибка {status_code}</span>
                 <h1>{escape(title)}</h1>
                 <p>{escape(message)}</p>
                 <a href="/" class="back">← Вернуться на главную</a>
-            </div>
+            </main>
         </div>
         """,
     ), status_code

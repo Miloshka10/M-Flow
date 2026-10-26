@@ -15,6 +15,36 @@ STATES = {'all': 'Все результаты', 'revision': 'Нужна дора
           'accepted': 'Принято', 'draft': 'Ещё не отправлено', 'grade': 'Личные оценки'}
 
 
+def load_project_states(conn, user):
+    """One read of small state fields; never fetch work text or personal grades for cards."""
+    rows = conn.execute('''SELECT p.id, s.number, s.state, s.reviewed_by, d.state AS defense_state
+        FROM projects p LEFT JOIN project_stages s ON s.project_id=p.id
+        LEFT JOIN project_defenses d ON d.project_id=p.id
+        WHERE p.owner_id=? OR EXISTS
+            (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?)
+        ORDER BY p.id, s.number''', (user['id'], user['id'])).fetchall()
+    grouped = defaultdict(list)
+    for row in rows:
+        grouped[row['id']].append(dict(row))
+    states = {}
+    for pid, project_rows in grouped.items():
+        done, current = stage_summary(stages_from_rows(r for r in project_rows if r['number'] is not None))
+        if current:
+            revision = stage_needs_revision(current)
+            label = ('Нужна доработка' if revision else 'На проверке' if current['state'] == 'review'
+                     else 'Выбор темы' if current['number'] == 1 and current['state'] == 'todo'
+                     else 'В работе' if current['state'] == 'progress' else 'Можно начинать')
+            tone = 'revision' if revision else 'review' if current['state'] == 'review' else 'work'
+            label = f'Этап {current["number"]} · {label}'
+        else:
+            state = project_rows[0]['defense_state'] or 'draft'
+            label, tone = {'accepted': ('Защита принята', 'accepted'),
+                           'submitted': ('Защита на проверке', 'review'),
+                           'returned': ('Доработать защиту', 'revision')}.get(state, ('Готов к защите', 'work'))
+        states[pid] = dict(label=label, tone=tone, stages_done=done)
+    return states
+
+
 def load_focus(conn, user, project):
     """Read one project after rechecking membership, including personal grade visibility."""
     row = conn.execute('''SELECT p.owner_id,

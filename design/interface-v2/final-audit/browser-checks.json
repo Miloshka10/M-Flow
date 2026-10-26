@@ -1,0 +1,1122 @@
+[
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/teacher",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/1",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/2/stages",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/groups/1",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/notifications",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/supervision",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/teacher",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/1",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/2/stages",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/groups/1",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/notifications",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/supervision",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/teacher",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/1",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/2/stages",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/groups/1",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/notifications",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/supervision",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/teacher",
+    "width": 1440
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/1",
+    "width": 1440
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/2/stages",
+    "width": 1440
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 1440
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/groups/1",
+    "width": 1440
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/notifications",
+    "width": 1440
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/supervision",
+    "width": 1440
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/teacher",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/1",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/2/stages",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/groups/1",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/notifications",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/supervision",
+    "width": 320
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/teacher",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/1",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/2/stages",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/groups/1",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/notifications",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/supervision",
+    "width": 390
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/teacher",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/1",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/2/stages",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/groups/1",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/notifications",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/supervision",
+    "width": 768
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/teacher",
+    "width": 1440
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/1",
+    "width": 1440
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/2/stages",
+    "width": 1440
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 1440
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/groups/1",
+    "width": 1440
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/notifications",
+    "width": 1440
+  },
+  {
+    "label": "teacher",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/supervision",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/?project=1",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/?project=3",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/1",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/1/stages",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/notifications",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/supervision",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/?project=1",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/?project=3",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/1",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/1/stages",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/notifications",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/supervision",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/?project=1",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/?project=3",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/1",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/1/stages",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/notifications",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/supervision",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/?project=1",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/?project=3",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/1",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/1/stages",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/notifications",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "light",
+    "url": "http://localhost:5091/supervision",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/?project=1",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/?project=3",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/1",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/1/stages",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/notifications",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/supervision",
+    "width": 320
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/?project=1",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/?project=3",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/1",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/1/stages",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/notifications",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/supervision",
+    "width": 390
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/?project=1",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/?project=3",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/1",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/1/stages",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/notifications",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/supervision",
+    "width": 768
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/?project=1",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/?project=3",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/1",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/1/stages",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/project/3/assessment",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/notifications",
+    "width": 1440
+  },
+  {
+    "label": "student",
+    "brokenImages": [],
+    "main": 1,
+    "missingAnchors": [],
+    "overflow": false,
+    "theme": "dark",
+    "url": "http://localhost:5091/supervision",
+    "width": 1440
+  }
+]
