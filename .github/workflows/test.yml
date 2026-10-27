@@ -51,3 +51,4 @@ jobs:
           node tests/test_interface.cjs
           node tests/test_motion.cjs
           node tests/test_preferences.cjs
+          node tests/test_auth_ui.cjs

@@ -1405,7 +1405,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             page = self.client.get(path).text
             self.assertEqual(page.count('/static/graphics.css'), 1)
             self.assertIn('class="ui-project-art" aria-hidden="true"', page)
-            self.assertIn('by Minich', page)
+            self.assertNotIn('by Minich', page)
             self.assertNotIn('project-kit.svg', page)
         self.sign_in(3)
         page = self.client.get('/').text
@@ -1570,7 +1570,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             self.assertEqual(response.text.count('name="viewport"'), 1)
             self.assertEqual(response.text.count('/static/mflow-theme.css'), 1)
             self.assertLess(response.text.index('class="auth-form-side"'), response.text.index('class="auth-hero"'))
-            self.assertIn('by Minich', response.text)
+            self.assertNotIn('by Minich', response.text)
             self.assertIn('name="username"', response.text)
             self.assertIn('type="password"', response.text)
             self.assertIn('aria-label="Выбор роли"', response.text)
@@ -1608,6 +1608,78 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             self.assertEqual(response.status_code, 200)
             self.assertIn('reduced.matches', response.text)
             self.assertIn("window.addEventListener('pageshow'", response.text)
+
+    def test_auth_entry_links_preserve_role_and_mode_without_writing_data(self):
+        before = self.database_snapshot()
+        for prefix in ('', '/teacher'):
+            for mode, other in (('login', 'register'), ('register', 'login')):
+                with self.subTest(prefix=prefix, mode=mode):
+                    page = self.client.get(f'{prefix}/{mode}').text
+                    footer = page.split('<p class="auth-footer">')[1].split('</p>')[0]
+                    self.assertIn(f'href="{prefix}/{other}"', footer)
+                    self.assertIn(f'href="/{mode}"', page)
+                    self.assertIn(f'href="/teacher/{mode}"', page)
+                    self.assertNotIn('class="auth-tabs"', page)
+                    self.assertNotIn('auth-hero-footer', page)
+                    self.assertNotIn('by Minich', page)
+                    self.assertEqual(page.count('/static/auth.css'), 1)
+                    self.assertEqual(page.count('/static/auth.js'), 1)
+                    self.assertIn('<title>' + ('Вход' if mode == 'login' else 'Регистрация') + ' — M-Flow</title>', page)
+                    self.assertIn('type="button" aria-controls="auth-password"', page)
+                    self.assertIn('aria-pressed="false"', page)
+                    self.assertIn(' hidden>Показать', page)
+                    self.assertEqual(len(FormTokens(page).forms), 1)
+                    self.assertEqual(len(FormTokens(page).forms[0]['tokens']), 1)
+                    self.assertGreater(page.index('class="auth-page-footer"'), page.index('</form>'))
+        self.assertEqual(self.database_snapshot(), before)
+        self.assertNotIn('/static/auth.js', self.client.get('/settings').text)
+
+    def test_auth_entry_validation_describes_field_and_never_returns_password(self):
+        for prefix in ('', '/teacher'):
+            for field, values, message in (
+                ('username', dict(username='ab', password='private-123', repeat_password='private-123'), 'Логин должен'),
+                ('password', dict(username='auth-new', password='secret', repeat_password='secret'), 'Пароль должен'),
+                ('repeat_password', dict(username='auth-new', password='private-123', repeat_password='different-private'), 'Пароли не совпадают'),
+            ):
+                with self.subTest(prefix=prefix, field=field):
+                    values = dict(values)
+                    if field != 'username':
+                        values['username'] = ('teacher-' if prefix else 'student-') + field
+                    # Separate clients avoid exhausting the existing browser attempt budget.
+                    client = self.module.app.test_client()
+                    page = client.get(f'{prefix}/register').text
+                    token = FormTokens(page).forms[0]['tokens'][0]
+                    response = client.post(f'{prefix}/register', data={**values, 'csrf_token': token})
+                    self.assertEqual(response.status_code, 200)
+                    class Fields(HTMLParser):
+                        def __init__(self, html):
+                            super().__init__()
+                            self.inputs = {}
+                            self.feed(html)
+
+                        def handle_starttag(self, tag, attrs):
+                            attrs = dict(attrs)
+                            if tag == 'input':
+                                self.inputs[attrs.get('name')] = attrs
+
+                    inputs = Fields(response.text).inputs
+                    self.assertEqual(inputs[field]['aria-invalid'], 'true')
+                    self.assertIn(f'auth-{field}-error', inputs[field]['aria-describedby'])
+                    self.assertIn(f'id="auth-{field}-error" role="alert"', response.text)
+                    self.assertIn(message, response.text)
+                    self.assertEqual(inputs['username']['value'], values['username'])
+                    self.assertNotIn('value', inputs['password'])
+                    self.assertNotIn('value', inputs['repeat_password'])
+                    self.assertNotIn(values['password'], response.text)
+
+    def test_auth_entry_invalid_credentials_stay_general_and_escape_login(self):
+        for prefix in ('', '/teacher'):
+            response = self.post(f'{prefix}/login', data=dict(username='"<script>bad</script>', password='private-123'))
+            self.assertEqual(response.status_code, 200)
+            self.assertIn('class="error auth-error" role="alert" tabindex="-1"', response.text)
+            self.assertIn('Неверный логин или пароль.', response.text)
+            self.assertNotIn('<script>bad</script>', response.text)
+            self.assertNotIn('private-123', response.text)
 
     def test_site_settings_available_with_and_without_account(self):
         for user_id in (None, 1, 3):
