@@ -18,6 +18,7 @@ from group_cases import LearningGroupCases
 from navigation_cases import NavigationCases
 from history_cases import WorkHistoryCases
 from board_cases import TaskBoardCases
+from workspace_cases import ProjectWorkCases
 
 
 class FormTokens(HTMLParser):
@@ -42,7 +43,7 @@ class FormTokens(HTMLParser):
             self.current = None
 
 
-class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, NavigationCases, WorkHistoryCases, TaskBoardCases, unittest.TestCase):
+class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, NavigationCases, WorkHistoryCases, TaskBoardCases, ProjectWorkCases, unittest.TestCase):
     def test_result_pages_show_moscow_update_time_for_both_roles(self):
         self.stage_post(3)
         self.defense_post()
@@ -440,12 +441,12 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
     def test_board_deadline_order_is_stable_inside_each_status(self):
         self.seed_board_filters()
         page = self.board_page('?sort=deadline')
-        # All todo, then progress, then done: status columns never mix.
-        self.assertEqual(self.board_ids(page), [24,20,34,32,22,28,33,26, 31,21,27,30, 23,29,3])
+        # One ordered list of active tasks, with completed tasks in a disclosure.
+        self.assertEqual(self.board_ids(page), [24,31,20,34,21,32,22,27,28,33,26,30, 23,29,3])
         self.assertIn('data-board-refresh="1"', page)
         priority = self.board_page('?sort=priority')
-        self.assertEqual(self.board_ids(priority)[:8], [34,20,22,28,32,33,24,26])
-        self.assertIn('data-board-refresh="0"', priority)
+        self.assertEqual(self.board_ids(priority)[:8], [34,20,21,22,27,28,30,31])
+        self.assertIn('data-board-refresh="1"', priority)
 
     def test_board_invalid_url_parameters_normalize_without_leaks_or_mutation(self):
         self.seed_board_filters()
@@ -580,7 +581,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertNotIn('<h2>Observed project</h2>', self.client.get('/teacher?focus=review').text)
         self.assertNotIn('<h2>Observed project</h2>', self.client.get('/teacher?focus=overdue').text)
         self.sign_in(3)
-        self.assertNotIn('Просрочено', self.client.get('/project/2/stages').text)
+        self.assertNotIn('class="task-deadline deadline-overdue"', self.client.get('/project/2/stages').text)
 
     def test_deadline_ajax_completion_and_reopening_use_server_calendar(self):
         self.seed_deadline_cases()
@@ -1552,7 +1553,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.sign_in(3)
         response = self.client.get("/project/1/stages")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.text.count('class="stage-number"'), 5)
+        self.assertEqual(response.text.count('class="pw-route-number"'), 5)
         self.assertIn("Выбор темы и согласование", response.text)
         self.assertIn("Подготовка документации", response.text)
         self.assertEqual([row["state"] for row in self.stage_rows()], ["todo"] * 5)

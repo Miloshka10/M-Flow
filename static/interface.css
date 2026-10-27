@@ -610,3 +610,6 @@ html body.mf-v2 .ui-error-page .back { margin-top:18px; }
 @media(forced-colors:active) {
   html body.mf-v2 :is(.ui-nav-link[aria-current],.ui-project-cover,.ui-project-progress,.ui-group-teaser,.ui-hello-empty,.auth-hero) { border:1px solid CanvasText; }
 }
+
+/* Unified project navigation: one work section replaces tasks + stages. */
+@media(max-width:600px){html body.mf-v2 .project-navigation>a:nth-child(2){grid-column:2/4}html body.mf-v2 .project-navigation>a:nth-child(3){grid-column:1}html body.mf-v2 .project-navigation>a:nth-child(4){grid-column:2/4}html body.mf-v2 .project-navigation .ui-project-history{grid-column:1/-1}}

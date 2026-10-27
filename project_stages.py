@@ -158,20 +158,26 @@ def change_stage(conn, project_id, user, form):
         raise
 
 
-def render_stages(stages, user, token, submitted=None, has_teacher=True, project_id=None):
+def render_stages(stages, user, token, submitted=None, has_teacher=True, project_id=None,
+                  only_number=None, compact=False, return_to=None):
     completed, current = stage_summary(stages)
     current_number = current["number"] if current else None
-    html = f'<p class="stage-summary">Принято {completed} из 5 этапов · {completed * 20}%</p><div class="stage-timeline">'
+    html = '' if compact else f'<p class="stage-summary">Принято {completed} из 5 этапов · {completed * 20}%</p><div class="stage-timeline">'
     if user['role'] == 'student' and not has_teacher:
         html += f'<p role="alert">{TEACHER_REQUIRED}</p>'
     for stage in stages:
         number = stage["number"]
+        if only_number is not None and number != only_number:
+            continue
         locked = current_number is not None and number > current_number
         label = stage_label(stage, current_number)
         explanation = f'Откроется после принятия этапа {number - 1} учителем.' if locked else STAGE_DESCRIPTIONS[number]
-        html += f'<section id="stage-{number}" class="stage-card {stage["state"]} {"locked" if locked else ""}"><div class="stage-heading"><span class="stage-number">{number}</span><h2>{escape(stage["title"])}</h2></div><p>{label}</p><p>{explanation}</p>'
+        html += (f'<section class="pw-result-card"><h3>{"Описание проекта" if number == 5 else "Результат этапа"}</h3><p class="pw-state">{label}</p>' if compact else
+                 f'<section id="stage-{number}" class="stage-card {stage["state"]} {"locked" if locked else ""}"><div class="stage-heading"><span class="stage-number">{number}</span><h2>{escape(stage["title"])}</h2></div><p>{label}</p><p>{explanation}</p>')
+        if locked and compact:
+            html += f'<p>{explanation}</p>'
         if stage["result"]:
-            html += f'<h3>{"Описание проекта" if number == 5 else "Результат этапа"}</h3><p class="stage-text">{escape(stage["result"])}</p>'
+            html += ('' if compact else f'<h3>{"Описание проекта" if number == 5 else "Результат этапа"}</h3>') + f'<p class="stage-text">{escape(stage["result"])}</p>'
         if stage["presentation_url"]:
             html += f'<p><a class="action-link" href="{escape(stage["presentation_url"], quote=True)}" target="_blank" rel="noopener noreferrer">Открыть презентацию {icon('external')}</a></p>'
         if stage.get("author_name"):
@@ -187,14 +193,23 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
             html += f'<p>Этап {number} принят учителем. {"Все пять этапов приняты." if number == 5 else "Можно продолжить маршрут проекта."} <a href="/project/{stage["project_id"]}">Посмотреть следующий шаг {icon('arrow')}</a></p>'
         if number == current_number:
             values = submitted or stage
-            prefix = f'<form method="post"><input type="hidden" name="csrf_token" value="{token}"><input type="hidden" name="number" value="{number}"><input type="hidden" name="revision" value="{stage["revision"]}">'
+            pid = stage.get('project_id', project_id)
+            prefix = f'<form method="post" action="/project/{pid}/stages"><input type="hidden" name="csrf_token" value="{token}"><input type="hidden" name="number" value="{number}"><input type="hidden" name="revision" value="{stage["revision"]}">'
+            if return_to:
+                prefix += f'<input type="hidden" name="return_to" value="{escape(return_to, quote=True)}">'
             if user["role"] == "student" and stage["state"] in ("todo", "progress"):
                 html += '<p>Исправьте результат по замечанию и отправьте его снова. Сохранение черновика не отправляет работу учителю.</p>' if stage_needs_revision(stage) else '<p>Ещё не отправлено. Сохраните черновик или отправьте готовый результат учителю.</p>'
+                if compact:
+                    html += f'<details class="pw-editor" {"open" if submitted is not None else ""}><summary data-ui-icon="edit">{"Доработать результат" if stage_needs_revision(stage) else "Редактировать черновик" if stage["result"] else "Добавить результат"}</summary><div class="pw-editor-content"><h2>Результат этапа {number}</h2>'
+                    if stage_needs_revision(stage) and stage['teacher_comment']:
+                        html += f'<p class="stage-comment">Что исправить: {escape(stage["teacher_comment"])}</p>'
                 result_label = "Выбранная тема" if number == 1 else "Описание проекта" if number == 5 else "Что сделано на этом этапе"
                 html += prefix + f'<label>{result_label}<textarea name="result" rows="5" maxlength="5000">{escape(values.get("result", ""))}</textarea></label>'
                 if number == 5:
                     html += f'<label>Ссылка на презентацию<input type="url" name="presentation_url" maxlength="2000" placeholder="https://…" value="{escape(values.get("presentation_url", ""), quote=True)}"></label><p>Проверьте, что учитель сможет открыть презентацию по ссылке.</p>'
                 html += f'<div class="stage-actions"><button name="action" value="save" data-ui-icon="save">Сохранить черновик</button><button name="action" value="submit" {"disabled" if not has_teacher else ""}>Отправить учителю</button></div></form>'
+                if compact:
+                    html += '</div></details>'
             elif user["role"] == "teacher" and stage["state"] == "review":
                 comment = submitted.get('teacher_comment', '') if submitted is not None else ''
                 html += prefix + f'<label>Комментарий учителя<textarea name="teacher_comment" rows="3" maxlength="2000">{escape(comment)}</textarea></label><div class="stage-actions"><button name="action" value="accept">{"Согласовать тему" if number == 1 else "Принять этап"}</button><button name="action" value="return" data-ui-icon="return">Вернуть на доработку</button></div></form>'
@@ -204,4 +219,4 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
         if pid is not None:
             html += f'<p><a class="action-link" href="/project/{pid}/history?work=stage-{number}">История отправок и решений {icon('arrow')}</a></p>'
         html += '</section>'
-    return html + '</div>'
+    return html + ('' if compact else '</div>')

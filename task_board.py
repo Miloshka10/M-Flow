@@ -99,7 +99,7 @@ def render_filters(pid, user, members, state):
     advanced = any(state.get(k) for k in ('priority','assignee','stage')) or state['sort'] != 'priority'
     return f'''<form method="get" class="task-filters board-filters" action="{base}#task-board">
         <div class="board-search"><input type="search" name="q" value="{escape(state['q'],quote=True)}" placeholder="Найти задачу…" aria-label="Поиск по названию задачи"><button type="submit" data-ui-icon="search">Найти</button></div>
-        {f'<input type="hidden" name="mine" value="{state["mine"]}">' if user['role']=='student' else ''}<input type="hidden" name="column" value="{state['column']}">
+        {f'<input type="hidden" name="mine" value="{state["mine"]}">' if user['role']=='student' else ''}<input type="hidden" name="column" value="{state['column']}"><input type="hidden" name="view_stage" value="{escape(state.get('view_stage', ''), quote=True)}">
         <details class="board-advanced" {"open" if advanced else ""}><summary data-ui-icon="filter">Фильтры</summary><div>
         <label>Приоритет<select name="priority" aria-label="Фильтр приоритета">{options({'':'Любой приоритет',**PRIORITIES},state['priority'])}</select></label>
         <label>Срок<select name="due" aria-label="Фильтр срока">{options(DEADLINE_FILTERS,state['due'])}</select></label>

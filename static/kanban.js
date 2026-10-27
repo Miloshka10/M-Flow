@@ -60,6 +60,20 @@ function updateProjectMetrics(metrics, deadlineText) {
   if (deadline && deadlineText) deadline.textContent = deadlineText;
 }
 async function moveTask(card, target) {
+  if (document.querySelector('#task-board')?.dataset.workspace === '1') {
+    const select = card.querySelector('.task-status-select');
+    const previous = card.dataset.taskState;
+    if (previous === target) return;
+    try {
+      await saveTask(card, 'status', target);
+      location.reload();
+    } catch (error) {
+      if (select) select.value = previous;
+      const message = document.querySelector('#board-status');
+      if (message) { message.hidden = false; message.textContent = error.message || 'Не удалось сохранить задачу.'; message.scrollIntoView({block: 'center'}); }
+    }
+    return;
+  }
   const previous = card.closest('.kanban-column').dataset.status;
   const select = card.querySelector('.task-status-select');
   if (previous === target) return;

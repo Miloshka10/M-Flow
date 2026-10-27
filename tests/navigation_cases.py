@@ -222,7 +222,7 @@ class NavigationCases:
             page = self.client.get('/project/2' + suffix)
             self.assertEqual(page.status_code, 200)
             nav = page.text.split('<nav class="project-navigation"')[1].split('</nav>')[0]
-            for label in ('Обзор', 'Задачи', 'Этапы', 'Команда'):
+            for label in ('Обзор', 'Работа над проектом', 'Команда'):
                 self.assertIn(label, nav)
             self.assertEqual(self.client.get('/project/3' + suffix).status_code, 403)
         page = self.client.get('/project/2').text
