@@ -1467,11 +1467,16 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
     # ---------- фильтры (поиск, приоритет, только мои, срок) ----------
 
     board_args = request.args
-    if request.method == 'POST' and request.path.endswith('/add'):
+    if request.method == 'POST' and request.path.endswith(('/add', '/stages')):
         try:
             board_args = dict(parse_qsl(urlsplit(board_return(project_id, request.form.get('return_to'))).query, max_num_fields=20))
         except ValueError:
             board_args = {}
+    if stage_error:
+        # The failed current-stage form stays visible even if an old return URL
+        # points at a different stage. Keep the other validated task filters.
+        _, error_stage = stage_summary(stages)
+        board_args = dict(board_args, view_stage=str(error_stage['number'] if error_stage else 5))
     search_query = board_args.get("q", "").strip()[:100]
     priority_filter = board_args.get("priority", "")
     if priority_filter not in ("low", "normal", "high", "urgent"):

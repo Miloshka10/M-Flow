@@ -48,6 +48,8 @@ class ProjectWorkCases:
         self.assertIn('data-work-default="1"', page.text)
         self.assertIn('class="pw-editor" open', page.text)
         self.assertIn('Для проверки заполните результат', page.text)
+        self.assertIn('name="mine" value="1"', page.text)
+        self.assertIn('name="view_stage" value="1"', page.text)
 
     def test_work_submission_return_urls_remain_project_scoped(self):
         self.sign_in(3)
