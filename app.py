@@ -52,6 +52,7 @@ from teamwork import (initialize_teamwork, profile_for, save_profile, directory,
                       respond_to_invitation, change_team, render_profile as render_skill_profile,
                       render_directory, render_team)
 from video_defense import initialize_defenses, defense_for, change_defense, render_defense, DEFENSE_STATES
+from defense_preparation import initialize_preparation, plan_for, save_plan, render_preparation
 from work_history import initialize_history, history_parameters, load_history, render_history
 from task_board import initialize_task_board, task_fields, board_return, render_filters, create_form, task_edit_fields
 from database import (DatabaseSettings, DatabaseUnavailable, INTEGRITY_ERRORS,
@@ -163,7 +164,7 @@ def render_page(html, title=None):
         '<link rel="stylesheet" href="/static/navigation.css?v=20261017-fixes">'
         '<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
         '<link rel="stylesheet" href="/static/icon-symbols.css?v=20261026-icons">'
-        '<link rel="stylesheet" href="/static/interface.css?v=20261027-work">'
+        '<link rel="stylesheet" href="/static/interface.css?v=20261027-prep">'
         '<script src="/static/interface.js?v=20261027-work" defer></script>'
             + auth_assets +
             f'</head><body id="page-content" class="{body_class}"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
@@ -294,6 +295,7 @@ def _prepare_database(conn):
     initialize_stages(conn)
     initialize_teamwork(conn)
     initialize_defenses(conn)
+    initialize_preparation(conn)
     initialize_history(conn)
     initialize_notifications(conn)
     initialize_auth(conn)
@@ -2947,6 +2949,31 @@ def project_work_history(project_id):
     finally:
         conn.close()
     return render_collaboration_page(user, f'История работ · {name}', body, project_id)
+
+
+@app.route('/project/<int:project_id>/preparation', methods=['GET', 'POST'])
+@login_required
+def project_defense_preparation(project_id):
+    user = get_current_user()
+    name = get_project_name(project_id)
+    if name is None:
+        return render_error_page('Нет доступа', 'Вы не участвуете в этом проекте.', 403)
+    if request.method == 'POST' and user['role'] != 'student':
+        return render_error_page('Нет доступа', 'План выступления заполняют ученики проекта.', 403)
+    error, status, submitted = '', 200, None
+    with closing(get_db()) as conn:
+        if request.method == 'POST':
+            try:
+                save_plan(conn, project_id, user, request.form)
+                flash('План выступления сохранён. Он доступен команде и руководителю.')
+                return redirect(f'/project/{project_id}/preparation')
+            except ValueError as exc:
+                if not participant(conn, project_id, user['id']):
+                    return render_error_page('Нет доступа', 'Вы больше не участвуете в этом проекте.', 403)
+                error, status, submitted = str(exc), 400, request.form
+        body = render_preparation(project_id, user, plan_for(conn, project_id), get_stages(conn, project_id),
+                                  defense_for(conn, project_id), csrf_token(), submitted)
+    return render_collaboration_page(user, f'Подготовка к защите · {name}', body, project_id, error, status)
 
 
 @app.route('/project/<int:project_id>/defense',methods=['GET','POST'])

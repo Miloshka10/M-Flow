@@ -42,6 +42,13 @@ def main():
             conn.executemany("INSERT INTO project_stages(project_id,number,state,result,submitted_by,reviewed_by,revision) VALUES(3,?,'done',?,2,1,2)",
                              [(n,f'Принятый результат этапа {n}') for n in range(1,6)])
             conn.execute("UPDATE project_stages SET presentation_url='https://example.com/presentation' WHERE project_id=3 AND number=5")
+            conn.execute('''INSERT INTO project_defense_plans(project_id,problem,goal,process,outcome,conclusion,updated_by)
+                VALUES(3,?,?,?,?,?,2)''', (
+                'В школе не было удобной информации о раздельном сборе отходов. Ученики не знали, какие материалы можно сдавать.',
+                'Сделать понятный экогид с картой пунктов сбора и проверить его на учениках нашего класса.',
+                'Собрали информацию, проверили адреса и подготовили интерактивную карту. Я отвечал за опрос, участники команды — за карту и тексты.',
+                'Гид протестировали 18 учеников. После знакомства с ним 15 участников смогли правильно выбрать пункт приёма.',
+                'Короткие инструкции помогают перейти от интереса к действию. Дальше хотим добавить другие районы и регулярно проверять адреса.'))
             conn.execute("INSERT INTO project_defenses(project_id,state,video_url,description,author_id,reviewer_id,teacher_comment,revision) VALUES(3,'accepted','https://example.com/video','Запись защиты школьного экогида.',2,1,'Защита принята.',2)")
             today = module.business_today()
             for title, offset, status, assignee, stage, priority in [

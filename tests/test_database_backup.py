@@ -46,6 +46,8 @@ class DatabaseBackupTests(unittest.TestCase):
                              [(1, "Робот — тест"), (2, "Исследование — тест")])
             conn.executemany("INSERT INTO project_members(project_id,user_id) VALUES(?,?)",
                              [(1, 1), (1, 2), (2, 1), (2, 2)])
+            conn.execute("""INSERT INTO project_defense_plans(project_id,problem,goal,updated_by,revision)
+                VALUES(1,'Опорный тезис — тест','Сохранить план после восстановления',2,3)""")
             conn.execute("INSERT INTO teacher_invitations(teacher_id,code_hash,state,expires) VALUES(1,?,'pending',2000000000)", ('0' * 64,))
             conn.execute("""INSERT INTO supervision_requests(project_id,owner_id,kind,state,previous_json,owner_approved,expires)
                 VALUES(1,2,'end','pending','[1]',1,2000000000)""")
