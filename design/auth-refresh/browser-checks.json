@@ -1,0 +1,914 @@
+[
+  {
+    "theme": "light",
+    "width": 320,
+    "route": "/login",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 320,
+    "route": "/register",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 320,
+    "route": "/teacher/login",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 320,
+    "route": "/teacher/register",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 390,
+    "route": "/login",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 390,
+    "route": "/register",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 390,
+    "route": "/teacher/login",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 390,
+    "route": "/teacher/register",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 768,
+    "route": "/login",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 768,
+    "route": "/register",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 768,
+    "route": "/teacher/login",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 768,
+    "route": "/teacher/register",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 1440,
+    "route": "/login",
+    "cs": true,
+    "hero": "flex",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 1440,
+    "route": "/register",
+    "cs": true,
+    "hero": "flex",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 1440,
+    "route": "/teacher/login",
+    "cs": true,
+    "hero": "flex",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "light",
+    "width": 1440,
+    "route": "/teacher/register",
+    "cs": true,
+    "hero": "flex",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 320,
+    "route": "/login",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 320,
+    "route": "/register",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 320,
+    "route": "/teacher/login",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 320,
+    "route": "/teacher/register",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 390,
+    "route": "/login",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 390,
+    "route": "/register",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 390,
+    "route": "/teacher/login",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 390,
+    "route": "/teacher/register",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 768,
+    "route": "/login",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 768,
+    "route": "/register",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 768,
+    "route": "/teacher/login",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 768,
+    "route": "/teacher/register",
+    "cs": true,
+    "hero": "none",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 1440,
+    "route": "/login",
+    "cs": true,
+    "hero": "flex",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 1440,
+    "route": "/register",
+    "cs": true,
+    "hero": "flex",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 1440,
+    "route": "/teacher/login",
+    "cs": true,
+    "hero": "flex",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44
+    ]
+  },
+  {
+    "theme": "dark",
+    "width": 1440,
+    "route": "/teacher/register",
+    "cs": true,
+    "hero": "flex",
+    "inputs": [
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "13px",
+        "type": "text"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      },
+      {
+        "font": "16px",
+        "height": 48,
+        "pad": "104px",
+        "type": "password"
+      }
+    ],
+    "overflow": false,
+    "toggles": [
+      44,
+      44
+    ]
+  }
+]

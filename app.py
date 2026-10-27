@@ -133,7 +133,7 @@ def protect_private_page_cache(response):
     return response
 
 
-def render_page(html):
+def render_page(html, title=None):
     # Страницы собираются f-строками с экранированием через escape().
     # Отдаём их как есть: пропускать через Jinja нельзя, иначе
     # {{ ... }} из пользовательских данных будет выполнен как код.
@@ -141,9 +141,12 @@ def render_page(html):
         html = html.replace('<main', '<main id="main-content"', 1)
     skip_target = 'main-content' if '<main' in html else 'page-content'
     body_class = 'mf-v2 ui-authenticated' if 'data-interface-shell=' in html else 'mf-v2'
+    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261027">'
+                   '<script src="/static/auth.js?v=20261027" defer></script>'
+                   if 'class="auth-page ' in html else '')
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
-            f'<title>{document_title(html)}</title>'
+            f'<title>{escape(title) if title is not None else document_title(html)}</title>'
             f'<meta name="csrf-token" content="{escape(csrf_token(), quote=True)}">'
         '<link rel="stylesheet" href="/static/mflow-theme.css?v=20261005-mobile">'
         '<link rel="stylesheet" href="/static/mobile.css?v=20261006-scrollbar">'
@@ -162,6 +165,7 @@ def render_page(html):
         '<link rel="stylesheet" href="/static/icon-symbols.css?v=20261026-icons">'
         '<link rel="stylesheet" href="/static/interface.css?v=20261027-work">'
         '<script src="/static/interface.js?v=20261027-work" defer></script>'
+            + auth_assets +
             f'</head><body id="page-content" class="{body_class}"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
 
@@ -1021,96 +1025,98 @@ PAGE_STYLE = '<script src="/static/kanban.js?v=20261027-work" defer></script>'
 # LOGIN
 # =========================================================
 
-def render_auth_page(mode, error=None, role="student"):
+def render_auth_page(mode, error=None, role="student", field=None):
     is_login = mode == "login"
     is_teacher = role == "teacher"
     prefix = "/teacher" if is_teacher else ""
-    role_title = "Для учителей" if is_teacher else "Для учеников"
     student_url = f'/{mode}'
     teacher_url = f'/teacher/{mode}'
     username = escape(request.form.get("username", "")[:30])
 
-    error_html = (
-        f'<div class="error" role="alert">{escape(error)}</div>'
-        if error
-        else ""
-    )
+    def field_attributes(name, hint=None):
+        described = [hint] if hint else []
+        invalid = bool(error and field == name)
+        if invalid:
+            described.append(f'auth-{name}-error')
+        return ((' aria-invalid="true"' if invalid else '')
+                + (f' aria-describedby="{" ".join(described)}"' if described else ''))
+
+    def field_error(name):
+        return (f'<p class="auth-field-error" id="auth-{name}-error" role="alert">{escape(error)}</p>'
+                if error and field == name else '')
+
+    def password_control(name, autocomplete, repeat=False):
+        input_id = 'auth-repeat-password' if repeat else 'auth-password'
+        label = 'Повторите пароль' if repeat else 'Пароль'
+        limits = ' minlength="8" maxlength="256"' if not is_login else ''
+        hint = 'auth-password-hint' if not is_login and not repeat else None
+        return f'''
+            <label for="{input_id}">{label}</label>
+            <div class="auth-password-control">
+                <input id="{input_id}" name="{name}" type="password" autocomplete="{autocomplete}"{limits}{field_attributes(name, hint)} required>
+                <button class="auth-password-toggle" type="button" aria-controls="{input_id}" aria-pressed="false" aria-label="Показать {"повтор пароля" if repeat else "пароль"}" hidden>Показать</button>
+            </div>
+            {field_error(name)}
+        '''
+
+    error_html = (f'<div class="error auth-error" role="alert" tabindex="-1">{escape(error)}</div>'
+                  if error and not field else '')
 
     if is_login:
         form_fields = f"""
             <label for="auth-username">Логин</label>
-            <input id="auth-username" name="username" value="{username}" autocomplete="username" maxlength="30" required>
-            <label for="auth-password">Пароль</label>
-            <input id="auth-password" name="password" type="password" autocomplete="current-password" required>
+            <input id="auth-username" name="username" value="{username}" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30"{field_attributes('username')} required>
+            {field_error('username')}
+            {password_control('password', 'current-password')}
         """
         submit_label = "Войти"
-        hero_title = "Проекты класса под контролем" if is_teacher else "Твои проекты и задачи"
-        hero_text = (
-            "Следите за прогрессом учеников, проверяйте этапы и читайте отчёты."
-            if is_teacher else "Работай над задачами, следи за дедлайнами и рассказывай о прогрессе."
-        )
     else:
         form_fields = f"""
             <label for="auth-username">Придумайте логин</label>
-            <input id="auth-username" name="username" value="{username}" minlength="3" maxlength="30" autocomplete="username" required>
-            <label for="auth-password">Пароль</label>
-            <input id="auth-password" name="password" type="password" minlength="8" maxlength="256" autocomplete="new-password" required>
-            <small class="auth-hint">Минимум 8 символов</small>
-            <label for="auth-repeat-password">Повторите пароль</label>
-            <input id="auth-repeat-password" name="repeat_password" type="password" minlength="8" maxlength="256" autocomplete="new-password" required>
+            <input id="auth-username" name="username" value="{username}" minlength="3" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false"{field_attributes('username', 'auth-username-hint')} required>
+            <small class="auth-hint" id="auth-username-hint">От 3 до 30 символов</small>
+            {field_error('username')}
+            {password_control('password', 'new-password')}
+            <small class="auth-hint" id="auth-password-hint">От 8 до 256 символов</small>
+            {password_control('repeat_password', 'new-password', repeat=True)}
         """
-        submit_label = "Зарегистрироваться"
-        hero_title = "Ваш кабинет учителя" if is_teacher else "Начни работу с M-Flow"
-        hero_text = (
-            "Создайте аккаунт учителя и пригласите ученика одноразовым кодом в разделе руководства."
-            if is_teacher else "Создай аккаунт ученика, начни проект и прими приглашение учителя для его сопровождения."
-        )
-
-    login_active = "active" if is_login else ""
-    register_active = "" if is_login else "active"
+        submit_label = "Создать аккаунт"
+    intro = ('Проекты учеников и обратная связь в одном месте.' if is_teacher
+             else 'Твои идеи, команда и результаты — в одном месте.')
+    switch_text = 'Нет аккаунта?' if is_login else 'Уже есть аккаунт?'
+    switch_mode = 'register' if is_login else 'login'
+    switch_label = 'Зарегистрироваться' if is_login else 'Войти'
 
     return render_page(
-        PAGE_STYLE
-        + f"""
+        f"""
         <div class="auth-page auth-role-{role}">
             <div class="auth-card">
                 <main class="auth-form-side">
                     <div class="auth-form-inner">
                     <a href="{prefix}/login" class="brand auth-form-brand" aria-label="M-Flow — вход">M-Flow<span class="ui-brand-dot">.</span></a>
-                    <h1>{"С возвращением" if is_login else "Создать аккаунт"}</h1>
-                    <p class="auth-intro">{role_title} · {"Продолжите работу над проектами." if is_login else "Всё для работы над школьным проектом."}</p>
+                    <h1>{"Войти в M-Flow" if is_login else "Создать аккаунт"}</h1>
+                    <p class="auth-intro">{intro}</p>
                     <nav class="auth-role-switch" aria-label="Выбор роли">
                         <a href="{student_url}" class="{"active" if not is_teacher else ""}" {"aria-current='page'" if not is_teacher else ""}>Я ученик</a>
                         <a href="{teacher_url}" class="{"active" if is_teacher else ""}" {"aria-current='page'" if is_teacher else ""}>Я учитель</a>
                     </nav>
-                    <div class="auth-tabs">
-                        <a href="{prefix}/login" class="auth-tab {login_active}" {"aria-current='page'" if is_login else ""}>Вход</a>
-                        <a href="{prefix}/register" class="auth-tab {register_active}" {"aria-current='page'" if not is_login else ""}>Регистрация</a>
-                    </div>
                     {error_html}
                     <form method="post">
                         {csrf_input()}
                         {form_fields}
                         <button type="submit" data-ui-icon="arrow">{submit_label}</button>
                     </form>
-                    <p class="auth-footer">{"Приглашайте учеников и проверяйте результаты в одном кабинете." if is_teacher else "Создайте проект и примите приглашение учителя."}<br><a href="/settings">Настройки оформления</a></p>
+                    <p class="auth-footer">{switch_text} <a href="{prefix}/{switch_mode}">{switch_label}</a></p>
                     </div>
                 </main>
                 <aside class="auth-hero" aria-label="О проекте M-Flow">
-                    <div class="auth-hero-top">Рабочее пространство школьных проектов</div>
-                    <div class="auth-hero-content">
-                        <span class="auth-product-tag">ДЛЯ БОЛЬШИХ ИДЕЙ</span>
-                        <h2 class="auth-logo">От идеи<br>к результату.</h2>
-                        <div class="auth-byline auth-shimmer">by Minich</div>
-                        {project_art()}
-                        <h3>{hero_title}</h3>
-                        <p>{hero_text}</p>
-                    </div>
-                    <div class="auth-hero-footer"><span>01 / Тема</span><span>02–04 / Работа</span><span>05 / Документы</span></div>
+                    <h2 class="auth-logo">Большие идеи<br>начинаются<br>с первого проекта.</h2>
+                    {project_art()}
                 </aside>
             </div>
+            <footer class="auth-page-footer"><a href="/settings">Настройки оформления</a></footer>
         </div>
-        """
+        """, title="Вход — M-Flow" if is_login else "Регистрация — M-Flow"
     )
 
 
@@ -1184,13 +1190,13 @@ def register_for_role(role):
             return render_auth_page("register", error="Заполните все поля.", role=role)
 
         if len(username) < 3 or len(username) > 30:
-            return render_auth_page("register", error="Логин должен быть от 3 до 30 символов.", role=role)
+            return render_auth_page("register", error="Логин должен быть от 3 до 30 символов.", role=role, field="username")
 
         if not 8 <= len(password) <= 256:
-            return render_auth_page("register", error="Пароль должен быть от 8 до 256 символов.", role=role)
+            return render_auth_page("register", error="Пароль должен быть от 8 до 256 символов.", role=role, field="password")
 
         if password != repeat_password:
-            return render_auth_page("register", error="Пароли не совпадают.", role=role)
+            return render_auth_page("register", error="Пароли не совпадают.", role=role, field="repeat_password")
 
         password_hash = generate_password_hash(password)
         with closing(get_db()) as conn:
@@ -1198,7 +1204,7 @@ def register_for_role(role):
                 begin_auth_write(conn)
                 existing = conn.execute('SELECT id FROM users WHERE username=?', (username,)).fetchone()
                 if existing is not None:
-                    return render_auth_page("register", error="Такой логин уже занят. Выберите другой или войдите в существующий аккаунт.", role=role)
+                    return render_auth_page("register", error="Такой логин уже занят. Выберите другой или войдите в существующий аккаунт.", role=role, field="username")
                 new_user_id = insert_id(conn,
                     'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
                     (username, password_hash, role))
@@ -1206,7 +1212,7 @@ def register_for_role(role):
                 conn.commit()
             except INTEGRITY_ERRORS:
                 conn.rollback()
-                return render_auth_page('register', error='Такой логин уже занят.', role=role)
+                return render_auth_page('register', error='Такой логин уже занят.', role=role, field='username')
             except DATABASE_ERRORS:
                 conn.rollback()
                 raise DatabaseUnavailable('Регистрация временно недоступна. Повторите попытку позже.') from None
