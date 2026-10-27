@@ -1,0 +1,602 @@
+[
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "part": "preparation",
+    "links": [
+      {
+        "left": 14,
+        "right": 108.65625,
+        "top": 467.65625
+      },
+      {
+        "left": 112.65625,
+        "right": 207.328125,
+        "top": 467.65625
+      },
+      {
+        "left": 211.328125,
+        "right": 305.984375,
+        "top": 467.65625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "part": "defense",
+    "links": [
+      {
+        "left": 14,
+        "right": 108.65625,
+        "top": 428.625
+      },
+      {
+        "left": 112.65625,
+        "right": 207.328125,
+        "top": 428.625
+      },
+      {
+        "left": 211.328125,
+        "right": 305.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "part": "assessment",
+    "links": [
+      {
+        "left": 14,
+        "right": 108.65625,
+        "top": 428.625
+      },
+      {
+        "left": 112.65625,
+        "right": 207.328125,
+        "top": 428.625
+      },
+      {
+        "left": 211.328125,
+        "right": 305.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 390,
+    "part": "preparation",
+    "links": [
+      {
+        "left": 19,
+        "right": 133.65625,
+        "top": 428.625
+      },
+      {
+        "left": 137.65625,
+        "right": 252.328125,
+        "top": 428.625
+      },
+      {
+        "left": 256.328125,
+        "right": 370.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 390,
+    "part": "defense",
+    "links": [
+      {
+        "left": 19,
+        "right": 133.65625,
+        "top": 428.625
+      },
+      {
+        "left": 137.65625,
+        "right": 252.328125,
+        "top": 428.625
+      },
+      {
+        "left": 256.328125,
+        "right": 370.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 390,
+    "part": "assessment",
+    "links": [
+      {
+        "left": 19,
+        "right": 133.65625,
+        "top": 428.625
+      },
+      {
+        "left": 137.65625,
+        "right": 252.328125,
+        "top": 428.625
+      },
+      {
+        "left": 256.328125,
+        "right": 370.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "part": "preparation",
+    "links": [
+      {
+        "left": 14,
+        "right": 108.65625,
+        "top": 467.65625
+      },
+      {
+        "left": 112.65625,
+        "right": 207.328125,
+        "top": 467.65625
+      },
+      {
+        "left": 211.328125,
+        "right": 305.984375,
+        "top": 467.65625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "part": "defense",
+    "links": [
+      {
+        "left": 14,
+        "right": 108.65625,
+        "top": 428.625
+      },
+      {
+        "left": 112.65625,
+        "right": 207.328125,
+        "top": 428.625
+      },
+      {
+        "left": 211.328125,
+        "right": 305.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "part": "assessment",
+    "links": [
+      {
+        "left": 14,
+        "right": 108.65625,
+        "top": 428.625
+      },
+      {
+        "left": 112.65625,
+        "right": 207.328125,
+        "top": 428.625
+      },
+      {
+        "left": 211.328125,
+        "right": 305.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 390,
+    "part": "preparation",
+    "links": [
+      {
+        "left": 19,
+        "right": 133.65625,
+        "top": 428.625
+      },
+      {
+        "left": 137.65625,
+        "right": 252.328125,
+        "top": 428.625
+      },
+      {
+        "left": 256.328125,
+        "right": 370.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 390,
+    "part": "defense",
+    "links": [
+      {
+        "left": 19,
+        "right": 133.65625,
+        "top": 428.625
+      },
+      {
+        "left": 137.65625,
+        "right": 252.328125,
+        "top": 428.625
+      },
+      {
+        "left": 256.328125,
+        "right": 370.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 390,
+    "part": "assessment",
+    "links": [
+      {
+        "left": 19,
+        "right": 133.65625,
+        "top": 428.625
+      },
+      {
+        "left": 137.65625,
+        "right": 252.328125,
+        "top": 428.625
+      },
+      {
+        "left": 256.328125,
+        "right": 370.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "part": "preparation",
+    "links": [
+      {
+        "left": 14,
+        "right": 108.65625,
+        "top": 467.65625
+      },
+      {
+        "left": 112.65625,
+        "right": 207.328125,
+        "top": 467.65625
+      },
+      {
+        "left": 211.328125,
+        "right": 305.984375,
+        "top": 467.65625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "part": "defense",
+    "links": [
+      {
+        "left": 14,
+        "right": 108.65625,
+        "top": 428.625
+      },
+      {
+        "left": 112.65625,
+        "right": 207.328125,
+        "top": 428.625
+      },
+      {
+        "left": 211.328125,
+        "right": 305.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "part": "assessment",
+    "links": [
+      {
+        "left": 14,
+        "right": 108.65625,
+        "top": 428.625
+      },
+      {
+        "left": 112.65625,
+        "right": 207.328125,
+        "top": 428.625
+      },
+      {
+        "left": 211.328125,
+        "right": 305.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 390,
+    "part": "preparation",
+    "links": [
+      {
+        "left": 19,
+        "right": 133.65625,
+        "top": 428.625
+      },
+      {
+        "left": 137.65625,
+        "right": 252.328125,
+        "top": 428.625
+      },
+      {
+        "left": 256.328125,
+        "right": 370.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 390,
+    "part": "defense",
+    "links": [
+      {
+        "left": 19,
+        "right": 133.65625,
+        "top": 428.625
+      },
+      {
+        "left": 137.65625,
+        "right": 252.328125,
+        "top": 428.625
+      },
+      {
+        "left": 256.328125,
+        "right": 370.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 390,
+    "part": "assessment",
+    "links": [
+      {
+        "left": 19,
+        "right": 133.65625,
+        "top": 428.625
+      },
+      {
+        "left": 137.65625,
+        "right": 252.328125,
+        "top": 428.625
+      },
+      {
+        "left": 256.328125,
+        "right": 370.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "part": "preparation",
+    "links": [
+      {
+        "left": 14,
+        "right": 108.65625,
+        "top": 467.65625
+      },
+      {
+        "left": 112.65625,
+        "right": 207.328125,
+        "top": 467.65625
+      },
+      {
+        "left": 211.328125,
+        "right": 305.984375,
+        "top": 467.65625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "part": "defense",
+    "links": [
+      {
+        "left": 14,
+        "right": 108.65625,
+        "top": 428.625
+      },
+      {
+        "left": 112.65625,
+        "right": 207.328125,
+        "top": 428.625
+      },
+      {
+        "left": 211.328125,
+        "right": 305.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "part": "assessment",
+    "links": [
+      {
+        "left": 14,
+        "right": 108.65625,
+        "top": 428.625
+      },
+      {
+        "left": 112.65625,
+        "right": 207.328125,
+        "top": 428.625
+      },
+      {
+        "left": 211.328125,
+        "right": 305.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 390,
+    "part": "preparation",
+    "links": [
+      {
+        "left": 19,
+        "right": 133.65625,
+        "top": 428.625
+      },
+      {
+        "left": 137.65625,
+        "right": 252.328125,
+        "top": 428.625
+      },
+      {
+        "left": 256.328125,
+        "right": 370.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 390,
+    "part": "defense",
+    "links": [
+      {
+        "left": 19,
+        "right": 133.65625,
+        "top": 428.625
+      },
+      {
+        "left": 137.65625,
+        "right": 252.328125,
+        "top": 428.625
+      },
+      {
+        "left": 256.328125,
+        "right": 370.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 390,
+    "part": "assessment",
+    "links": [
+      {
+        "left": 19,
+        "right": 133.65625,
+        "top": 428.625
+      },
+      {
+        "left": 137.65625,
+        "right": 252.328125,
+        "top": 428.625
+      },
+      {
+        "left": 256.328125,
+        "right": 370.984375,
+        "top": 428.625
+      }
+    ],
+    "navHeight": 53.59375,
+    "overflow": false
+  }
+]

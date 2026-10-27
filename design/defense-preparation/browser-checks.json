@@ -1,0 +1,866 @@
+[
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "project": 4,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 390,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 390,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 390,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 390,
+    "project": 4,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 768,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 768,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 768,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 768,
+    "project": 4,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "project": 4,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "project": 4,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 390,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 390,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 390,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 390,
+    "project": 4,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 768,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 768,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 768,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 768,
+    "project": 4,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "project": 4,
+    "count": "0 / 3материалов добавлено",
+    "fields": 5,
+    "fonts": [
+      "16px",
+      "16px",
+      "16px",
+      "16px",
+      "16px"
+    ],
+    "forms": 1,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 390,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 390,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 390,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 768,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 768,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 768,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 390,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 390,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 390,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 768,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 768,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 768,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "project": 1,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "project": 2,
+    "count": "0 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "project": 3,
+    "count": "3 / 3материалов добавлено",
+    "fields": 0,
+    "fonts": [],
+    "forms": 0,
+    "nav": "Подготовка",
+    "overflow": false
+  }
+]

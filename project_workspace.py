@@ -150,7 +150,8 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
         <details class="journey-route" open><summary data-ui-icon="stages">Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
             <p class="journey-explanation">Задачи помогают выполнять работу. Этап принимается только после решения учителя; защита и оценки проверяются отдельно.</p><ol>{route}</ol></details>
         <section class="project-finish" aria-labelledby="finish-title"><h2 id="finish-title">Завершение проекта</h2>
-            <p>После пяти этапов — видеозащита и итоговая оценка. Открыть эти разделы можно в любое время.</p>
-            <div class="project-finish-links"><a href="{base}/defense"><strong>{icon('video')} Видеозащита</strong><span>{defense_label}</span></a>
+            <p>Подготовьте выступление, отправьте видеозащиту и посмотрите итоговую оценку. Открыть эти разделы можно в любое время.</p>
+            <div class="project-finish-links"><a href="{base}/preparation"><strong>{icon('tasks')} Подготовка к защите</strong><span>Материалы и план выступления</span></a>
+            <a href="{base}/defense"><strong>{icon('video')} Видеозащита</strong><span>{defense_label}</span></a>
             <a href="{base}/assessment"><strong>{icon('assessment')} Оценивание</strong><span>{grading}</span></a></div></section>
     </section>'''
