@@ -1,6 +1,8 @@
 /* Existing M-Flow tokens and icons; all task/stage forms retain their server paths. */
 html body.mf-v2 .project-workspace .project-metrics{display:none}
 html body.mf-v2 #task-board.project-work{margin:24px 0}
+html body.mf-v2 #task-board.board-enhanced .task-create>summary{display:none}
+html body.mf-v2 #task-board.board-enhanced .task-create{margin:0}
 html body.mf-v2 .pw-route-caption{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:12px}
 html body.mf-v2 .pw-route-caption h2{font-size:16px;margin:0}
 html body.mf-v2 .pw-route-caption>span{font-size:12px;color:var(--mf-muted)}
