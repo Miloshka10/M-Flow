@@ -1972,7 +1972,7 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
         PAGE_STYLE
         + f"""
         <link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">
-        <link rel="stylesheet" href="/static/task-board.css?v=20261019"><link rel="stylesheet" href="/static/project-work.css?v=20261027"><script src="/static/project-work.js?v=20261027" defer></script><script src="/static/task-board.js?v=20261027" defer></script>
+        <link rel="stylesheet" href="/static/task-board.css?v=20261019"><link rel="stylesheet" href="/static/project-work.css?v=20261027-finish"><script src="/static/project-work.js?v=20261027" defer></script><script src="/static/task-board.js?v=20261027" defer></script>
         <div class="container">
             {render_header(current_user)}
             <main class="project-workspace" data-project-views data-work-default="{int(work_mode)}">
