@@ -3,18 +3,20 @@ function setupTaskBoard() {
   const board = document.querySelector('#task-board');
   if (!board || typeof HTMLDialogElement === 'undefined') return;
   board.classList.add('board-enhanced');
+  const listMode = board.dataset.workspace === '1';
   const media = window.matchMedia('(max-width: 800px)');
   const tabs = Array.from(board.querySelectorAll('.board-columns [data-column]'));
   const drawers = new Map();
   const projectPath = board.dataset.projectUrl || window.location.pathname;
   if (window.location.pathname !== projectPath) {
     const canonical = new URL(board.dataset.boardLocation || projectPath, window.location.href);
-    canonical.hash = window.location.hash;
+    canonical.hash = window.location.hash || (listMode ? 'stage-' + board.dataset.selectedStage : 'task-board');
     history.replaceState(null, '', canonical);
   }
   let active = null;
   let column = board.dataset.column || 'todo';
   function selectColumn(value, updateURL = true) {
+    if (listMode) return;
     column = value;
     board.dataset.column = value;
     board.querySelectorAll('.kanban-column').forEach(el => el.hidden = media.matches && el.dataset.status !== value);
@@ -40,7 +42,7 @@ function setupTaskBoard() {
     event.preventDefault(); selectColumn(tab.dataset.column);
   }));
   media.addEventListener('change', () => {
-    const card = media.matches && active ? active.closest('.task-card') : null;
+    const card = !listMode && media.matches && active ? active.closest('.task-card') : null;
     selectColumn(card ? card.closest('.kanban-column').dataset.status : column, !!card);
   });
   selectColumn(column, false);
@@ -71,7 +73,7 @@ function setupTaskBoard() {
     const open = () => {
       if (active === dialog) return;
       if (active) active.close();
-      if (card && media.matches) selectColumn(card.closest('.kanban-column').dataset.status);
+      if (!listMode && card && media.matches) selectColumn(card.closest('.kanban-column').dataset.status);
       active = dialog; dialog.showModal(); summary.setAttribute('aria-expanded','true');
       document.documentElement.classList.add('board-dialog-open'); setHash(id);
       dialog.scrollTop = 0;
@@ -89,6 +91,13 @@ function setupTaskBoard() {
       setHash('task-board');
       const trigger = card ? summary : board.querySelector('.board-add') || summary;
       trigger.focus({preventScroll:true});
+    });
+    dialog.addEventListener('keydown', event => {
+      if (event.key !== 'Tab') return;
+      const targets = [...dialog.querySelectorAll('a[href],button:not(:disabled),input:not([type="hidden"]):not(:disabled),select:not(:disabled),textarea:not(:disabled),summary')].filter(el => el.getClientRects().length);
+      const first = targets[0], last = targets[targets.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     });
     drawers.set(id, {open, dialog, card});
   });

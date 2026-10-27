@@ -42,6 +42,7 @@ from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, r
 from dashboard_view import student_dashboard
 from graphics import illustration
 from project_workspace import render_workspace, task_deadline
+from project_work import render_project_work
 from navigation import project_navigation
 from interface import shell_header, project_art, document_title, icon
 from student_results import parameters as result_parameters, load_results, render_results, load_focus, load_project_states
@@ -159,8 +160,8 @@ def render_page(html):
         '<link rel="stylesheet" href="/static/navigation.css?v=20261017-fixes">'
         '<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
         '<link rel="stylesheet" href="/static/icon-symbols.css?v=20261026-icons">'
-        '<link rel="stylesheet" href="/static/interface.css?v=20261026-icons">'
-        '<script src="/static/interface.js?v=20261025-polish" defer></script>'
+        '<link rel="stylesheet" href="/static/interface.css?v=20261027-work">'
+        '<script src="/static/interface.js?v=20261027-work" defer></script>'
             f'</head><body id="page-content" class="{body_class}"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
 
@@ -1013,7 +1014,7 @@ def get_student_progress(project_id):
 # STYLE + JAVASCRIPT
 # =========================================================
 
-PAGE_STYLE = '<script src="/static/kanban.js?v=20261019-board" defer></script>'
+PAGE_STYLE = '<script src="/static/kanban.js?v=20261027-work" defer></script>'
 
 
 # =========================================================
@@ -1429,7 +1430,7 @@ def create_project():
     "/project/<int:project_id>"
 )
 @login_required
-def project(project_id):
+def project(project_id, stage_submitted=None, stage_error="", work_mode=False, unsaved=""):
 
     details = get_project_details(project_id)
     if details is None:
@@ -1466,11 +1467,16 @@ def project(project_id):
     # ---------- фильтры (поиск, приоритет, только мои, срок) ----------
 
     board_args = request.args
-    if request.method == 'POST' and request.path.endswith('/add'):
+    if request.method == 'POST' and request.path.endswith(('/add', '/stages')):
         try:
             board_args = dict(parse_qsl(urlsplit(board_return(project_id, request.form.get('return_to'))).query, max_num_fields=20))
         except ValueError:
             board_args = {}
+    if stage_error:
+        # The failed current-stage form stays visible even if an old return URL
+        # points at a different stage. Keep the other validated task filters.
+        _, error_stage = stage_summary(stages)
+        board_args = dict(board_args, view_stage=str(error_stage['number'] if error_stage else 5))
     search_query = board_args.get("q", "").strip()[:100]
     priority_filter = board_args.get("priority", "")
     if priority_filter not in ("low", "normal", "high", "urgent"):
@@ -1538,7 +1544,7 @@ def project(project_id):
     if filters_active and not tasks:
         filter_summary += '<div class="board-filter-empty" role="status">Нет задач по выбранным условиям. Измените фильтры или нажмите «Сбросить».</div>'
     board_state = dict(q=search_query, priority=priority_filter, mine='1' if only_mine else '',
-                       due=deadline_filter, sort=sort_mode, assignee=assignee_filter, stage=stage_filter, column=column)
+                       due=deadline_filter, sort=sort_mode, assignee=assignee_filter, stage=stage_filter, column=column, view_stage=board_args.get('view_stage', '') if board_args.get('view_stage') in ('1','2','3','4','5') else '')
     filters_html = render_filters(project_id, current_user, members, board_state)
     canonical_filters = {k:v for k,v in board_state.items() if v and not (k == 'sort' and v == 'priority') and not (k == 'column' and v == 'todo')}
     board_location = f'/project/{project_id}' + ('?' + urlencode(canonical_filters) if canonical_filters else '')
@@ -1630,7 +1636,7 @@ def project(project_id):
         # Access to this project has already been checked; use loaded card data.
         # Mutation routes still perform their own database permission checks.
         can_update = current_user['role'] == 'student' and (owner or task["assignee_id"] == current_user["id"])
-        draggable = "true" if can_update else "false"
+        draggable = "false"
         assignee_name = escape(task["assignee_name"] or "Не назначен")
 
         updates = task_update_history.get(task_id, [])
@@ -1688,7 +1694,7 @@ def project(project_id):
                 <input type="hidden" name="return_to" value="{escape(board_location + '#task-board',quote=True)}">
                 <button type="submit" class="delete-task" title="Удалить задачу" data-ui-icon="trash">Удалить</button>
             </form>
-        """ if owner else ""
+        """ if owner and not updates else ""
 
         task_title = escape(
             task["title"]
@@ -1754,6 +1760,8 @@ def project(project_id):
             data-task-id="{task_id}"
             data-deadline="{escape(task['deadline'] or '', quote=True)}"
             data-priority="{escape(priority, quote=True)}"
+            data-task-state="{task['status']}"
+            data-task-stage="{task['stage_number'] or 'none'}"
         >
 
             <details class="board-disclosure task-details" id="task-details-{task_id}">
@@ -1761,9 +1769,10 @@ def project(project_id):
                 <div class="task-detail-content"><h2>{task_title}</h2>{description_html}
                     <div class="task-detail-meta"><span>Ответственный: {assignee_name}</span><span class="task-detail-deadline {deadline_class}">{safe_deadline}</span></div>
                     <p>{stage_html}</p><p class="t-muted">Выполнение задачи не означает принятие этапа учителем.</p>
-                    {status_control}{priority_control}{edit_control}{latest_update_html}{report_form}{delete_control}
+                    {priority_control}{edit_control}{latest_update_html}{report_form}{delete_control}
                 </div>
             </details>
+            <div class="pw-row-state">{status_control if can_update else "<span>" + {"todo":"К выполнению", "progress":"В работе", "done":"Готово"}[task["status"]] + "</span>"}</div>
             <div class="task-priority priority-{escape(priority)}">
                 {priority_name}
             </div>
@@ -1782,114 +1791,6 @@ def project(project_id):
 
         </div>
         """
-
-
-    # =====================================================
-    # KANBAN COLUMN
-    # =====================================================
-
-    def render_column(
-        title,
-        status,
-        dot_class,
-        task_list
-    ):
-
-        cards = ""
-
-        for task in task_list:
-
-            cards += render_task_card(
-                task
-            )
-
-
-        if not cards:
-
-            cards = f"""
-            <div class="kanban-empty">
-                {"Нет задач по фильтрам" if filters_active else {"todo":"Новые задачи появятся здесь.","progress":"Перенесите сюда задачу, которую начали.","done":"Здесь будут выполненные задачи."}[status]}
-            </div>
-            """
-
-
-        task_count = len(task_list)
-
-
-        return f"""
-        <div
-            class="kanban-column"
-            id="column-{status}"
-            data-status="{status}"
-        >
-
-            <div class="kanban-header">
-
-                <div class="kanban-title">
-
-                    <span
-                        class="kanban-dot {dot_class}"
-                    ></span>
-
-                    {title}
-
-                </div>
-
-                <span class="kanban-count">
-                    {task_count}
-                </span>
-
-            </div>
-
-            <div class="kanban-cards">
-
-                {cards}
-
-            </div>
-
-        </div>
-        """
-
-
-    kanban_html = f"""
-
-    <div class="kanban">
-
-        {render_column(
-            "Новые",
-            "todo",
-            "dot-todo",
-            todo_tasks
-        )}
-
-        {render_column(
-            "В работе",
-            "progress",
-            "dot-progress",
-            progress_tasks
-        )}
-
-        {render_column(
-            "Готово",
-            "done",
-            "dot-done",
-            done_tasks
-        )}
-
-    </div>
-
-    """
-    mobile_tabs = '<nav class="board-columns" aria-label="Колонки доски">' + ''.join(
-        f'<a href="/project/{project_id}?{escape(urlencode(dict(board_state,column=key)),quote=True)}#task-board" data-column="{key}" aria-controls="column-{key}">{label} <span data-column-count="{key}">{len(rows)}</span></a>'
-        for key,label,rows in (('todo','Новые',todo_tasks),('progress','В работе',progress_tasks),('done','Готово',done_tasks))) + '</nav>'
-    if not all_tasks:
-        kanban_html = f'''<section class="board-start"><span class="eyebrow">ОТ ИДЕИ К ПЕРВОМУ ДЕЙСТВИЮ</span><h3>Начните с первой задачи</h3>
-            <p>{'Например: «Собрать материалы по теме». Определите результат и того, кто за него отвечает.' if owner else 'Владелец проекта сможет добавить задачи и распределить работу команды.'}</p>
-            {f'<a class="btn" href="#task-create">{icon('plus')} Создать задачу</a>' if owner else ''}</section>'''
-        mobile_tabs = ''
-    elif not tasks:
-        kanban_html = ''
-        mobile_tabs = ''
 
 
     # =====================================================
@@ -1987,7 +1888,9 @@ def project(project_id):
 
     create_values = request.form.to_dict() if request.method == 'POST' and request.path.endswith('/add') else None
     create_error = ' '.join(text for category,text in session.get('_flashes',[]) if category == 'error') if create_values is not None else ''
-    add_task_section = create_form(project_id, members, csrf_input(), board_location + '#task-board', create_values, create_error) if owner else ''
+    default_task_stage = board_state.get('view_stage') or (board_state.get('stage') if board_state.get('stage') in ('1','2','3','4','5') else str(stage_summary(stages)[1]['number'] if stage_summary(stages)[1] else 5))
+    add_task_section = create_form(project_id, members, csrf_input(), board_location + '#task-board',
+                                   create_values if create_values is not None else {'stage_number': default_task_stage}, create_error) if owner else ''
 
 
     # =====================================================
@@ -2060,15 +1963,19 @@ def project(project_id):
 
     workspace_html = render_workspace(project_id, project_name, current_user, owner, members,
                                       stages, defense, published_assessments, all_tasks,
-                                      completed_tasks, progress, overdue_count, today=deadline_today)
+                                      completed_tasks, progress, overdue_count, today=deadline_today,
+                                      active='tasks' if work_mode else 'overview')
+    work_html, selected_stage = render_project_work(project_id, current_user, owner, members,
+        stages, defense, published_assessments, tasks, all_tasks, render_task_card,
+        filters_html + '<details class="board-deadlines"><summary data-ui-icon="calendar">Ближайшие сроки</summary>' + hot_html + '</details>', add_task_section, board_state, csrf_token(), stage_submitted, stage_error, unsaved)
     return render_page(
         PAGE_STYLE
         + f"""
         <link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">
-        <link rel="stylesheet" href="/static/task-board.css?v=20261019"><script src="/static/task-board.js?v=20261019" defer></script>
+        <link rel="stylesheet" href="/static/task-board.css?v=20261019"><link rel="stylesheet" href="/static/project-work.css?v=20261027"><script src="/static/project-work.js?v=20261027" defer></script><script src="/static/task-board.js?v=20261027" defer></script>
         <div class="container">
             {render_header(current_user)}
-            <main class="project-workspace" data-project-views>
+            <main class="project-workspace" data-project-views data-work-default="{int(work_mode)}">
                 <a href="/" class="back">{icon('arrow-left')} Все проекты</a>
                 {messages}
                 {workspace_html}
@@ -2099,32 +2006,8 @@ def project(project_id):
                 </section>
 
 
-                <div class="kanban-wrapper" id="task-board" data-project-url="/project/{project_id}" data-board-location="{escape(board_location,quote=True)}" data-board-refresh="{int(refresh_board)}" data-column="{column}" data-open-create="{int(create_values is not None)}">
-
-                    <div class="section-title">
-
-                        <div>
-
-                            <h2>
-                                Доска задач <span class="board-total">{total_tasks}</span>
-                            </h2>
-
-                            <p>
-                                {"Здесь показаны задачи учеников. Учитель проверяет этапы, видеозащиту и оценки." if current_user['role'] == 'teacher' else "От конкретного действия — к готовому результату. Открой задачу или перенеси её в другую колонку."}
-                            </p>
-
-                        </div>
-                        {f'<a class="btn board-add" href="#task-create">{icon('plus')} Задача</a>' if owner else ''}
-                    </div>
-
-                    {filters_html}
-                    <details class="board-deadlines"><summary data-ui-icon="calendar">Ближайшие сроки</summary>{hot_html}</details>
-                    {filter_summary}
-
-                    <p id="board-status" role="status" aria-live="polite" hidden></p>
-
-                    {add_task_section}{mobile_tabs}{kanban_html}
-
+                <div class="project-work" id="task-board" data-workspace="1" data-work-active="{int(bool(filters_active or board_state['view_stage'] or sort_mode != 'priority'))}" data-selected-stage="{selected_stage}" data-project-url="/project/{project_id}" data-board-location="{escape(board_location,quote=True)}" data-board-refresh="1" data-column="{column}" data-open-create="{int(create_values is not None)}">
+                    {work_html}
                 </div>
 
                 <div class="ui-project-teacher-details">{teacher_dashboard}</div>
@@ -3105,7 +2988,7 @@ def project_stage_page(project_id):
             try:
                 message = change_stage(conn, project_id, user, request.form)
                 flash(message)
-                return redirect(f"/project/{project_id}/stages")
+                return redirect(board_return(project_id, request.form.get("return_to"), default=f"/project/{project_id}/stages"))
             except ValueError as exc:
                 error, status, submitted = str(exc), 400, request.form
         stages = get_stages(conn, project_id)
@@ -3117,15 +3000,9 @@ def project_stage_page(project_id):
             submitted = None
     finally:
         conn.close()
-    messages = "".join(f'<p role="status">{escape(message)}</p>' for message in get_flashed_messages())
     unsaved = render_unsaved_result(request.form, user, f'/project/{project_id}/stages') if error and submitted is None else ''
-    return render_page(PAGE_STYLE + f'''
-        <link rel="stylesheet" href="/static/project-stages.css"><link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback"><div class="container">{render_header(user)}
-        <main class="stages-page"><a class="back" href="/project/{project_id}">{icon('arrow-left')} К обзору проекта</a>
-        <h1>Пять этапов · {escape(project_name)}</h1>{project_navigation(project_id, "stages")}
-        <p>Ученики сохраняют результат и отправляют его учителю. После принятия открывается следующий этап.
-        Этапы общие для участников проекта; их прохождение не меняет статусы задач и итоговые баллы.</p>
-        {messages}<p role="alert">{escape(error)}</p>{unsaved}{render_stages(stages, user, token, submitted, has_teacher=has_teacher, project_id=project_id)}</main></div>'''), status
+    return project(project_id, stage_submitted=submitted, stage_error=error,
+                   work_mode=True, unsaved=unsaved), status
 
 
 @app.route("/project/<int:project_id>/assessment", methods=["GET", "POST"])

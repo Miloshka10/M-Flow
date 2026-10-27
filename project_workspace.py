@@ -73,7 +73,7 @@ def next_step(stages, role, owner, has_teacher, defense, has_published=False):
                 'Опубликованной оценки пока нет. Дождись решения учителя; баллы не выставляются автоматически.', 'assessment', 'Посмотреть свои оценки')
 
 
-def render_workspace(project_id, name, user, owner, members, stages, defense, assessments, tasks, completed_tasks, progress, overdue, today=None):
+def render_workspace(project_id, name, user, owner, members, stages, defense, assessments, tasks, completed_tasks, progress, overdue, today=None, active='overview'):
     done, current = stage_summary(stages)
     has_teacher = any(member['role'] == 'teacher' for member in members)
     step = next_step(stages, user['role'], owner, has_teacher, defense, bool(assessments))
@@ -132,7 +132,7 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
     defense_label = DEFENSE_STATES[defense['state']] if defense['revision'] else 'Запись ещё не добавлена'
     return f'''<div class="journey-heading"><div><span class="eyebrow">ПРОЕКТ / ОТ ТЕМЫ ДО ЗАЩИТЫ</span><h1>{escape(name)}</h1>
             <details class="journey-members"><summary>Участники: {len(members)} · {escape(names) or 'Команда пока не сформирована'}</summary><ul>{member_list}</ul></details></div></div>
-        {project_navigation(project_id)}<section class="project-overview" aria-label="Маршрут проекта">
+        {project_navigation(project_id, active)}<section class="project-overview" aria-label="Маршрут проекта">
         <div class="ui-project-overview-grid"><section class="ui-project-next" aria-label="Следующий шаг проекта">
             <div class="journey-action" data-next-step="{step['key']}"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span>
             <p>{current_name} · {current_label}</p><h2>{step['title']}</h2><p>{step['text']}</p>{action}</div>

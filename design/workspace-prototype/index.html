@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Работа над проектом — макет M-Flow</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../../static/icon-symbols.css">
+  <link rel="stylesheet" href="workspace.css">
+  <script src="model.js" defer></script>
+  <script src="workspace.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Перейти к работе над проектом</a>
+  <section class="preview" aria-label="Управление макетом">
+    <div class="preview-label"><strong>МАКЕТ</strong><span>Изменения только в этом окне</span></div>
+    <label>Роль<select id="demo-role"><option value="student">Ученик · владелец</option><option value="teacher">Учитель</option></select></label>
+    <label>Пример<select id="demo-state"><option value="returned">Доработка</option><option value="empty">Пустой проект</option><option value="progress">В работе</option><option value="review">На проверке</option><option value="resubmitted">Повторная сдача</option><option value="accepted">Этап принят</option><option value="completed">Проект завершён</option><option value="no-teacher">Без руководителя</option></select></label>
+    <label>Тема<select id="demo-theme"><option value="light">Светлая</option><option value="dark">Тёмная</option></select></label>
+    <button class="quiet" id="demo-reset" title="Сбросить изменения примера">Сбросить</button>
+  </section>
+  <aside class="sidebar" aria-label="Боковая навигация" id="sidebar"></aside>
+  <div class="page">
+    <header class="topbar">
+      <button class="mobile-menu quiet" data-action="menu" aria-haspopup="dialog" aria-controls="dialog" aria-expanded="false"><span class="ico" data-ui-icon="menu" aria-hidden="true"></span>Меню</button>
+      <span class="crumb">Мои проекты <span>/</span> Умная теплица</span>
+      <a class="mobile-brand" href="#work">M-Flow<span>.</span></a>
+      <div class="header-end">
+        <button class="icon-button" aria-label="Уведомления" data-action="notifications"><span class="ico" data-ui-icon="bell" aria-hidden="true"></span></button>
+        <details class="account"><summary aria-controls="account-panel" aria-expanded="false">Мой аккаунт</summary><div id="account-panel"></div></details>
+      </div>
+    </header>
+    <main id="main">
+      <div class="project-heading"><div><p class="eyebrow">ПРОЕКТ / 10 «А»</p><h1>Умная теплица</h1><p class="muted">Автоматический полив для школьного сада</p></div><button class="quiet supervisor" data-action="supervisor"><span class="ico" data-ui-icon="profile" aria-hidden="true"></span><span>Руководитель<strong id="teacher-name">Мария Сергеевна</strong></span></button></div>
+      <nav class="project-nav" aria-label="Разделы проекта">
+        <button class="quiet" data-action="overview"><span class="ico" data-ui-icon="overview" aria-hidden="true"></span>Обзор</button>
+        <a href="#work" aria-current="page"><span class="ico" data-ui-icon="stages" aria-hidden="true"></span>Работа над проектом</a>
+        <button class="quiet" data-action="team"><span class="ico" data-ui-icon="team" aria-hidden="true"></span>Команда</button>
+        <button class="quiet" data-action="finish"><span class="ico" data-ui-icon="video" aria-hidden="true"></span>Защита и результат</button>
+        <button class="quiet history-nav" data-action="history"><span class="ico" data-ui-icon="history" aria-hidden="true"></span>История</button>
+      </nav>
+      <section id="work" aria-label="Работа над проектом">
+        <div class="route-caption"><h2>Путь проекта</h2><span id="route-count"></span></div>
+        <nav id="stage-path" class="stage-path" aria-label="Пять этапов проекта"></nav>
+        <div id="workspace"></div>
+      </section>
+      <footer class="page-footer"><span>Задачи помогают работать. Этап принимает учитель.</span><span>Демонстрационные данные · 26 октября 2026</span></footer>
+    </main>
+  </div>
+  <dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-top"><p class="eyebrow">M-FLOW / ПРОЕКТ</p><button class="icon-button" data-action="close" aria-label="Закрыть панель"><span class="ico" data-ui-icon="close" aria-hidden="true"></span></button></div><h2 id="dialog-title"></h2><div id="dialog-content"></div></dialog>
+  <p class="toast" id="announcement" role="status" aria-live="polite"></p>
+</body>
+</html>

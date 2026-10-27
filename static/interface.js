@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const workspace = document.querySelector('[data-project-views]');
     if (workspace) {
       const board = workspace.querySelector('#task-board');
-      const onTasks = /^task-|^task-board$/.test(id) || Boolean(board && (board.dataset.openCreate === '1' || board.dataset.boardRefresh === '1'));
+      const onTasks = /^task-|^task-board$|^stage-[1-5](?:-|$)|^tasks-without-stage$/.test(id) || workspace.dataset.workDefault === '1' || Boolean(board && (board.dataset.openCreate === '1' || (board.dataset.workspace === '1' ? board.dataset.workActive === '1' : board.dataset.boardRefresh === '1')));
       const onTeam = id === 'project-members';
       workspace.classList.add('ui-project-views');
       workspace.dataset.projectView = onTeam ? 'team' : onTasks ? 'tasks' : 'overview';

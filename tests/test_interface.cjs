@@ -38,7 +38,7 @@ function setup({hash='', board={}, withDrawer=false, withWorkspace=true, overflo
     querySelectorAll:()=>nav,getElementById:()=>location.hash?target:null};
   const media={matches:true,addEventListener:(name,fn)=>{mediaHandlers[name]=fn;}};
   const window={matchMedia:()=>media,addEventListener:(key,fn)=>{handlers['window:'+key]=fn;}};
-  vm.runInNewContext(source,{document,window,location,Boolean,decodeURIComponent});
+  vm.runInNewContext(source,{document,window,location,Boolean,decodeURIComponent,URLSearchParams});
   handlers.DOMContentLoaded();
   return {document,body,main,outside,drawer,panel,summary,close,backdrop,link,target,disclosure,tabs,media,mediaHandlers,handlers,location,desktopLink,nav};
 }
@@ -52,6 +52,11 @@ const board=setup({hash:'#task-4'});
 assert.equal(board.main.dataset.projectView,'tasks');
 assert.equal(board.disclosure.open,true,'The linked result must not remain inside a closed disclosure');
 assert.equal(board.target.scrolled,true);
+for(const hash of ['#stage-1','#stage-3-result','#tasks-without-stage']) {
+  assert.equal(setup({hash,board:{workspace:'1'}}).main.dataset.projectView,'tasks','Old and new stage links must expose the unified workspace');
+}
+assert.equal(setup({board:{workspace:'1',boardRefresh:'1'}}).main.dataset.projectView,'overview','The overview stays the default even though task saves use server refresh');
+assert.equal(setup({board:{workspace:'1',workActive:'1'}}).main.dataset.projectView,'tasks','Server-normalized filters expose the unified workspace');
 board.location.hash='#project-members';board.handlers['window:hashchange']();
 assert.equal(board.main.dataset.projectView,'team','Legacy team controls must remain reachable');
 assert.equal(board.tabs[2].attrs['aria-current'],'page');
