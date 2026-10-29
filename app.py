@@ -25,7 +25,7 @@ import time
 from urllib.parse import urlencode, urlsplit, parse_qsl
 from datetime import timedelta
 from auth_security import (initialize_auth, reserve_attempt, client_source, proxy_networks,
-                           new_session, revoke_session, fingerprint, SESSION_SECONDS, begin_auth_write)
+                           new_session, revoke_session, replace_password, fingerprint, SESSION_SECONDS, begin_auth_write)
 from collections import defaultdict
 from deadlines import business_today, deadline_info, deadline_text, parse_deadline, urgent_tasks, TIMEZONE_LABEL, format_timestamp
 from deadlines import DEADLINE_FILTERS, TASK_SORTS, matches_deadline, task_sort_key
@@ -46,7 +46,7 @@ from project_work import render_project_work
 from navigation import project_navigation
 from interface import shell_header, project_art, document_title, icon
 from student_results import parameters as result_parameters, load_results, render_results, load_focus, load_project_states
-from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores
+from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores, assessment_version
 from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, change_stage, render_stages, STATE_LABELS
 from teamwork import (initialize_teamwork, profile_for, save_profile, directory, invite_student,
                       respond_to_invitation, change_team, render_profile as render_skill_profile,
@@ -164,8 +164,9 @@ def render_page(html, title=None):
         '<link rel="stylesheet" href="/static/navigation.css?v=20261017-fixes">'
         '<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
         '<link rel="stylesheet" href="/static/icon-symbols.css?v=20261026-icons">'
-        '<link rel="stylesheet" href="/static/interface.css?v=20261027-prep">'
+        '<link rel="stylesheet" href="/static/interface.css?v=20261029-review">'
         '<script src="/static/interface.js?v=20261027-work" defer></script>'
+        '<script src="/static/form-guard.js?v=20261029" defer></script>'
             + auth_assets +
             f'</head><body id="page-content" class="{body_class}"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
@@ -1172,7 +1173,9 @@ def login_for_role(role):
                 "login", error=f'Это аккаунт {role_name}. Выберите «{switch_name}» для входа.', role=role
             )
 
-        token = new_session(get_db, SECRET_KEY, user['id'], session.get('auth_token'))
+        token = new_session(get_db, SECRET_KEY, user['id'], session.get('auth_token'), expected_password=user['password'])
+        if token is None:
+            return render_auth_page('login', error='Неверный логин или пароль.', role=role)
         establish_session(user['id'], token)
         return redirect("/teacher" if user["role"] == "teacher" else "/")
 
@@ -1257,31 +1260,12 @@ def profile():
         new_password = request.form.get("new_password", "")
         repeat_password = request.form.get("repeat_password", "")
 
-        conn = get_db()
-        row = conn.execute(
-            "SELECT password FROM users WHERE id = ?",
-            (user["id"],)
-        ).fetchone()
-        conn.close()
-
-        if row is None or not check_password_hash(row["password"], old_password):
-            error = "Старый пароль введён неверно."
-        elif len(new_password) < 8:
-            error = "Новый пароль слишком короткий (минимум 8 символов)."
-        elif len(new_password) > 256:
-            error = "Новый пароль должен быть не длиннее 256 символов."
-        elif new_password != repeat_password:
-            error = "Новые пароли не совпадают."
-        else:
-            conn = get_db()
-            conn.execute(
-                "UPDATE users SET password = ? WHERE id = ?",
-                (generate_password_hash(new_password), user["id"])
-            )
-            conn.commit()
-            conn.close()
-            message = "Пароль изменён."
-            session.pop("csrf_token", None)
+        try:
+            token = replace_password(get_db, SECRET_KEY, user['id'], old_password, new_password, repeat_password)
+            establish_session(user['id'], token)
+            message = 'Пароль изменён. Другие сеансы этого аккаунта завершены.'
+        except ValueError as exc:
+            error = str(exc)
 
     role_name = "Учитель" if user["role"] == "teacher" else "Ученик"
     projects_count = len(get_projects())
@@ -2918,9 +2902,11 @@ def project_team(project_id):
     try:
         if request.method == 'POST':
             try:
-                change_team(conn,project_id,request.form)
+                change_team(conn,project_id,user['id'],request.form)
                 flash('Команда обновлена.')
                 return redirect(f'/project/{project_id}/team')
+            except PermissionError as exc:
+                return render_error_page('Нет доступа', str(exc), 403)
             except ValueError as exc:
                 conn.rollback()
                 error,status = str(exc),400
@@ -3069,6 +3055,8 @@ def project_assessment(project_id):
         scores = load_scores(row)
         student_name = row["student_name"] if row else selected["username"]
         note = row["note"] if row else ""
+        version = request.form.get('assessment_version', '') if request.method == 'POST' else assessment_version(row)
+        stale_assessment = False
         if request.method == "POST":
             student_name = request.form.get("student_name", "").strip()
             note = request.form.get("note", "").strip()
@@ -3081,6 +3069,9 @@ def project_assessment(project_id):
                 if len(note) > 1000:
                     raise ValueError("Примечание должно содержать не больше 1000 символов.")
                 scores = parse_scores(request.form, publish=action == "published")
+                if len(version) != 64 or any(c not in '0123456789abcdef' for c in version):
+                    stale_assessment = True
+                    raise ValueError('Форма оценивания устарела. Откройте сохранённую оценку перед повторным сохранением; ваш ввод остался ниже.')
                 begin_project_write(conn, project_id)
                 if not participant(conn, project_id, user['id']):
                     conn.rollback()
@@ -3094,15 +3085,19 @@ def project_assessment(project_id):
                 changed = (previous is None or previous['state'] != action or previous['note'] != note
                            or previous['student_name'] != student_name or load_scores(previous) != scores
                            or previous['rubric_version'] != RUBRIC_VERSION)
-                conn.execute("""INSERT INTO project_assessments
-                    (project_id, student_id, teacher_id, student_name, rubric_version, scores_json, note, state)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(project_id, student_id, teacher_id) DO UPDATE SET
-                    student_name=excluded.student_name, rubric_version=excluded.rubric_version,
-                    scores_json=excluded.scores_json, note=excluded.note, state=excluded.state,
-                    updated_at=CAST(CURRENT_TIMESTAMP AS TEXT)""",
-                    (project_id, selected["id"], user["id"], student_name, RUBRIC_VERSION,
-                     json.dumps(scores), note, action))
+                if changed and version != assessment_version(previous):
+                    row, stale_assessment = previous, True
+                    raise ValueError('Оценка уже изменена в другой вкладке. Ваши баллы и примечание не сохранены и остались ниже для сравнения.')
+                if changed:
+                    conn.execute("""INSERT INTO project_assessments
+                        (project_id, student_id, teacher_id, student_name, rubric_version, scores_json, note, state)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(project_id, student_id, teacher_id) DO UPDATE SET
+                        student_name=excluded.student_name, rubric_version=excluded.rubric_version,
+                        scores_json=excluded.scores_json, note=excluded.note, state=excluded.state,
+                        updated_at=CAST(CURRENT_TIMESTAMP AS TEXT)""",
+                        (project_id, selected["id"], user["id"], student_name, RUBRIC_VERSION,
+                         json.dumps(scores), note, action))
                 if action == 'published' and changed:
                     total, grade = summarize(scores)
                     notify(conn, project_id, 'assessment:' + secrets.token_hex(16),
@@ -3132,18 +3127,21 @@ def project_assessment(project_id):
             fields += f'<tr><td data-label="Критерий">{key}. {escape(label)}</td><td data-label="Максимум">{maximum}</td><td data-label="Баллы"><select name="criterion_{key}" aria-label="{escape(label)}">{options}</select></td></tr>'
         total, grade = summarize(scores)
         state = ("Опубликована" if row["state"] == "published" else "Черновик") if row else "Ещё не сохранена"
-        saved = f'{state} · {escape(row["updated_at"])}' if row else state
+        saved = f'{state} · {format_timestamp(row["updated_at"])}' if row else state
+        conflict = (f'<p class="assessment-conflict"><a class="action-link" href="/project/{project_id}/assessment?student_id={selected["id"]}" target="_blank" rel="noopener noreferrer">Открыть сохранённую оценку {icon("external")}</a> Сравните версии в двух вкладках и перенесите нужные изменения.</p>' if stale_assessment else '')
+        blocked = 'disabled' if stale_assessment else ''
         content = f"""<nav class="assessment-people">{links}</nav><section class="card">
-            <h2>Оценивание: {escape(selected['username'])}</h2><p>{saved}</p>
-            <form method="post" id="assessment-form">
+            <h2>Оценивание: {escape(selected['username'])}</h2><p>{saved}</p>{conflict}
+            <form method="post" id="assessment-form" data-guard-draft data-draft-unsaved="{int(request.method == 'POST')}">
                 <input type="hidden" name="student_id" value="{selected['id']}">
                 <input type="hidden" name="csrf_token" value="{token}">
+                <input type="hidden" name="assessment_version" value="{escape(version, quote=True)}">
                 <label>ФИО ученика<input name="student_name" maxlength="100" required value="{escape(student_name, quote=True)}"></label>
                 <div class="assessment-table"><table><thead><tr><th>Критерий</th><th>Максимум</th><th>Баллы</th></tr></thead><tbody>{fields}</tbody></table></div>
                 <p id="assessment-total" aria-live="polite">Итого: {total} / {MAX_SCORE} · Оценка: {grade if grade is not None else 'не все критерии заполнены'}</p>
                 <label>Примечание учителя<textarea name="note" maxlength="1000" rows="4">{escape(note)}</textarea></label>
                 <p>Черновик виден только вам. Публикация открывает оценку ученику. Сохранение опубликованной оценки как черновика снова скроет её.</p>
-                <div class="assessment-actions"><button name="action" value="draft" type="submit" data-ui-icon="save">Сохранить черновик</button><button name="action" value="published" type="submit" data-ui-icon="check">Опубликовать оценку</button></div>
+                <div class="assessment-actions"><button name="action" value="draft" type="submit" data-ui-icon="save" {blocked}>Сохранить черновик</button><button name="action" value="published" type="submit" data-ui-icon="check" {blocked}>Опубликовать оценку</button></div>
             </form></section>"""
     elif is_teacher:
         if request.method == "POST":
@@ -3159,7 +3157,7 @@ def project_assessment(project_id):
             total, grade = summarize(scores)
             fields = "".join(f'<tr><td data-label="Критерий">{escape(label)}</td><td data-label="Баллы">{scores.get(key)} / {maximum}</td></tr>' for key, label, maximum in CRITERIA)
             content += f'''<section class="card"><h2>{escape(row['student_name'])}</h2>
-                <p>Учитель: {escape(row['teacher_name'])} · {escape(row['updated_at'])}</p>
+                <p>Учитель: {escape(row['teacher_name'])} · {format_timestamp(row['updated_at'])}</p>
                 <div class="assessment-table"><table><thead><tr><th>Критерий</th><th>Баллы</th></tr></thead><tbody>{fields}</tbody></table></div>
                 <h3>Итого: {total} / {MAX_SCORE} · Оценка: {grade}</h3><p class="assessment-note">{escape(row['note'] or 'Учитель опубликовал оценку без примечания.')}</p></section>'''
         if not rows:

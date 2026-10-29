@@ -1,6 +1,7 @@
 """Критерии из ведомости оценивания проектов 10–11 классов."""
 
 import json
+import hashlib
 
 RUBRIC_VERSION = "school-project-45-v1"
 CRITERIA = (
@@ -46,3 +47,10 @@ def summarize(scores):
 
 def load_scores(row):
     return json.loads(row["scores_json"]) if row else {}
+
+
+def assessment_version(row):
+    """Content version for lost-update detection, including same-second saves."""
+    values = ([row[key] for key in ('project_id', 'student_id', 'teacher_id', 'student_name',
+               'rubric_version', 'scores_json', 'note', 'state', 'updated_at')] if row else None)
+    return hashlib.sha256(json.dumps(values, ensure_ascii=True, separators=(',', ':')).encode()).hexdigest()

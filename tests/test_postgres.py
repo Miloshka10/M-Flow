@@ -196,7 +196,11 @@ class PostgresCabinetTests(fixtures.TeacherCabinetTests):
                 session['user_id'] = 1
                 session['auth_token'] = token
                 session['csrf_token'] = 'test-form-token'
-            return client.post('/project/2/assessment', data=self.assessment_data()).status_code
+            data = self.assessment_data()
+            page = client.get('/project/2/assessment?student_id=3').text
+            import re
+            data['assessment_version'] = re.search(r'name="assessment_version" value="([^"]+)"', page).group(1)
+            return client.post('/project/2/assessment', data=data).status_code
         with ThreadPoolExecutor(max_workers=2) as pool:
             self.assertEqual(list(pool.map(publish, range(2))), [302, 302])
         self.assertEqual([row['recipient_id'] for row in self.notification_rows()], [3])

@@ -160,6 +160,11 @@ def phase(mode):
         return client.get(path, base_url='https://localhost')
 
     def post(client, path, data):
+        data = dict(data)
+        if path.endswith('/assessment') and 'assessment_version' not in data:
+            page = get(client, path + '?student_id=' + str(data.get('student_id', ''))).text
+            version = re.search(r'name="assessment_version" value="([^"]+)"', page)
+            data['assessment_version'] = version.group(1) if version else ''
         with client.session_transaction(base_url='https://localhost') as session:
             token = session.get('csrf_token')
         if not token:

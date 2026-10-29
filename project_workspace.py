@@ -26,7 +26,7 @@ def next_step(stages, role, owner, has_teacher, defense, has_published=False):
     _, current = stage_summary(stages)
     def step(key, title, text, target=None, action=None):
         return dict(key=key, title=title, text=text, target=target, action=action)
-    if role == 'student' and not has_teacher:
+    if role == 'student' and not has_teacher and (current is not None or defense['state'] != 'accepted' or not has_published):
         editable = bool(current and current['state'] in ('todo', 'progress'))
         return step('teacher-missing', 'В проекте пока нет учителя',
                     'Прими одноразовое приглашение учителя для этого проекта в разделе «Руководитель проекта». После подтверждения учителем станет доступна отправка на проверку; черновики доступны уже сейчас.' if owner else

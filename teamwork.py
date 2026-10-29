@@ -142,24 +142,31 @@ def respond_to_invitation(conn, invitation_id, user_id, action):
         raise
 
 
-def change_team(conn, project_id, form):
-    action = form.get("action")
-    if action == "cancel":
-        cur = conn.execute("UPDATE team_invitations SET state='cancelled',updated_at=CAST(CURRENT_TIMESTAMP AS TEXT) WHERE id=? AND project_id=? AND state='pending'",
-                           (form_database_id(form.get("invitation_id")), project_id))
-        if not cur.rowcount:
-            raise ValueError("Приглашение уже обработано или не относится к проекту.")
-    elif action == "role":
-        uid, role = form_database_id(form.get("student_id")), form.get("role_text", "").strip()
-        member = conn.execute("""SELECT 1 FROM project_members m JOIN users u ON u.id=m.user_id
-            WHERE m.project_id=? AND m.user_id=? AND u.role='student'""", (project_id, uid)).fetchone()
-        if not member or len(role) > 100:
-            raise ValueError("Выберите ученика команды и укажите роль до 100 символов.")
-        conn.execute("""INSERT INTO team_member_roles(project_id,user_id,role_text) VALUES (?,?,?)
-            ON CONFLICT(project_id,user_id) DO UPDATE SET role_text=excluded.role_text""", (project_id, uid, role))
-    else:
-        raise ValueError("Неизвестное действие с командой.")
-    conn.commit()
+def change_team(conn, project_id, owner_id, form):
+    begin_project_write(conn, project_id)
+    try:
+        if conn.execute('SELECT 1 FROM projects WHERE id=? AND owner_id=?', (project_id, owner_id)).fetchone() is None:
+            raise PermissionError('Владелец проекта изменился. Обновите страницу перед управлением командой.')
+        action = form.get("action")
+        if action == "cancel":
+            cur = conn.execute("UPDATE team_invitations SET state='cancelled',updated_at=CAST(CURRENT_TIMESTAMP AS TEXT) WHERE id=? AND project_id=? AND state='pending'",
+                               (form_database_id(form.get("invitation_id")), project_id))
+            if not cur.rowcount:
+                raise ValueError("Приглашение уже обработано или не относится к проекту.")
+        elif action == "role":
+            uid, role = form_database_id(form.get("student_id")), form.get("role_text", "").strip()
+            member = conn.execute("""SELECT 1 FROM project_members m JOIN users u ON u.id=m.user_id
+                WHERE m.project_id=? AND m.user_id=? AND u.role='student'""", (project_id, uid)).fetchone()
+            if not member or len(role) > 100:
+                raise ValueError("Выберите ученика команды и укажите роль до 100 символов.")
+            conn.execute("""INSERT INTO team_member_roles(project_id,user_id,role_text) VALUES (?,?,?)
+                ON CONFLICT(project_id,user_id) DO UPDATE SET role_text=excluded.role_text""", (project_id, uid, role))
+        else:
+            raise ValueError("Неизвестное действие с командой.")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def hidden_token(token):

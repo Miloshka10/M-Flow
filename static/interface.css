@@ -385,6 +385,8 @@ html body.mf-v2 .settings-page { max-width:900px; margin-inline:0; }
 html body.mf-v2 .settings-card { max-width:760px; }
 html body.mf-v2 :is(.results-help,.journey-members)>summary { min-height:44px; padding-block:10px; }
 /* Public entry follows the same type, palette and fields as the workspace. */
+html body.mf-v2 .form-unsaved-note { font-size:12px; line-height:1.5; color:var(--mf-warning); margin:14px 0; }
+html body.mf-v2 .form-unsaved-note[hidden] { display:none; }
 html body.mf-v2 .auth-page { background:var(--mf-bg); padding:36px; min-height:100dvh; display:grid; place-items:center; }
 html body.mf-v2 .auth-card { width:min(1180px,100%); grid-template-columns:1fr 1fr; border:1px solid var(--mf-line); border-radius:22px; background:var(--mf-card); box-shadow:none; min-height:720px; overflow:hidden; }
 html body.mf-v2 .auth-form-side { padding:38px 50px; background:var(--mf-card); }
