@@ -2,7 +2,7 @@
 from interface import icon
 
 from html import escape
-from urllib.parse import urlsplit
+from material_links import safe_web_url
 from project_rules import has_project_teacher, TEACHER_REQUIRED
 from database import execute_schema, begin_project_write
 from notifications import notify_project
@@ -106,13 +106,8 @@ def change_stage(conn, project_id, user, form):
             if len(result) > 5000 or len(url) > 2000:
                 raise ValueError("Описание — до 5000 символов, ссылка — до 2000 символов.")
             if url:
-                try:
-                    parsed = urlsplit(url)
-                    valid_url = parsed.scheme in ("http", "https") and bool(parsed.hostname) and not any(c.isspace() for c in url)
-                except ValueError:
-                    valid_url = False
-                if not valid_url:
-                    raise ValueError("Укажите полную ссылку на презентацию, начинающуюся с https:// или http://.")
+                if not safe_web_url(url):
+                    raise ValueError("Укажите полную ссылку на презентацию с https:// или http://, без логина и пароля в адресе.")
             if action == "submit" and (not result or (current["number"] == 5 and not url)):
                 raise ValueError("Для проверки заполните результат этапа; на пятом этапе нужны описание и ссылка на презентацию.")
             if action == "submit" and not has_project_teacher(conn, project_id):
@@ -178,8 +173,10 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
             html += f'<p>{explanation}</p>'
         if stage["result"]:
             html += ('' if compact else f'<h3>{"Описание проекта" if number == 5 else "Результат этапа"}</h3>') + f'<p class="stage-text">{escape(stage["result"])}</p>'
-        if stage["presentation_url"]:
+        if safe_web_url(stage["presentation_url"]):
             html += f'<p><a class="action-link" href="{escape(stage["presentation_url"], quote=True)}" target="_blank" rel="noopener noreferrer">Открыть презентацию {icon('external')}</a></p>'
+        elif stage['presentation_url']:
+            html += '<p>Формат сохранённой ссылки на презентацию не поддерживается.</p>'
         if stage.get("author_name"):
             html += f'<small>Автор результата: {escape(stage["author_name"])} · Обновлено: {format_timestamp(stage["updated_at"])}</small>'
         if stage.get("reviewer_name"):
@@ -194,7 +191,7 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
         if number == current_number:
             values = submitted or stage
             pid = stage.get('project_id', project_id)
-            prefix = f'<form method="post" action="/project/{pid}/stages"><input type="hidden" name="csrf_token" value="{token}"><input type="hidden" name="number" value="{number}"><input type="hidden" name="revision" value="{stage["revision"]}">'
+            prefix = f'<form method="post" action="/project/{pid}/stages" data-guard-draft data-draft-unsaved="{int(submitted is not None)}"><input type="hidden" name="csrf_token" value="{token}"><input type="hidden" name="number" value="{number}"><input type="hidden" name="revision" value="{stage["revision"]}">'
             if return_to:
                 prefix += f'<input type="hidden" name="return_to" value="{escape(return_to, quote=True)}">'
             if user["role"] == "student" and stage["state"] in ("todo", "progress"):

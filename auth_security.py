@@ -7,6 +7,7 @@ import json
 import secrets
 import time
 from functools import wraps
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import PostgresConnection, execute_schema, DatabaseUnavailable, DATABASE_ERRORS
 
@@ -174,12 +175,17 @@ def reserve_supervision_attempt(get_db, secret, user_id, source, purpose='superv
 
 
 @private_database_error
-def new_session(get_db, secret, user_id, previous=None, connection=None):
+def new_session(get_db, secret, user_id, previous=None, connection=None, expected_password=None):
     token = secrets.token_urlsafe(32)
     now = int(time.time())
     with (closing(get_db()) if connection is None else nullcontext(connection)) as conn:
         if connection is None:
             begin_auth_write(conn)
+        if expected_password is not None:
+            current = conn.execute('SELECT password FROM users WHERE id=?', (user_id,)).fetchone()
+            if current is None or not hmac.compare_digest(current['password'], expected_password):
+                conn.rollback()
+                return None
         _cleanup(conn, 'auth_sessions', now)
         if previous:
             conn.execute('DELETE FROM auth_sessions WHERE token_hash=?', (fingerprint(secret, 'session', previous),))
@@ -190,6 +196,36 @@ def new_session(get_db, secret, user_id, previous=None, connection=None):
         if connection is None:
             conn.commit()
     return token
+
+
+@private_database_error
+def replace_password(get_db, secret, user_id, old_password, new_password, repeat_password):
+    """Revoke old sessions and replace credentials atomically with session creation."""
+    with closing(get_db()) as conn:
+        try:
+            row = conn.execute('SELECT password FROM users WHERE id=?', (user_id,)).fetchone()
+            if row is None or len(old_password) > 256 or not check_password_hash(row['password'], old_password):
+                raise ValueError('Старый пароль введён неверно.')
+            if len(new_password) < 8:
+                raise ValueError('Новый пароль слишком короткий (минимум 8 символов).')
+            if len(new_password) > 256:
+                raise ValueError('Новый пароль должен быть не длиннее 256 символов.')
+            if new_password != repeat_password:
+                raise ValueError('Новые пароли не совпадают.')
+            # Expensive hashing stays outside the lock shared with other logins.
+            password_hash = generate_password_hash(new_password)
+            begin_auth_write(conn)
+            current = conn.execute('SELECT password FROM users WHERE id=?', (user_id,)).fetchone()
+            if current is None or not hmac.compare_digest(current['password'], row['password']):
+                raise ValueError('Пароль уже изменён. Войдите в аккаунт заново.')
+            conn.execute('UPDATE users SET password=? WHERE id=?', (password_hash, user_id))
+            conn.execute('DELETE FROM auth_sessions WHERE user_id=?', (user_id,))
+            token = new_session(get_db, secret, user_id, connection=conn)
+            conn.commit()
+            return token
+        except Exception:
+            conn.rollback()
+            raise
 
 
 @private_database_error

@@ -4,7 +4,8 @@ No initialization backfill or writes on GET. Legacy state is labelled explicitly
 it cannot establish the content or timestamp of an already overwritten attempt.
 """
 from html import escape
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlencode
+from material_links import safe_web_url
 
 from database import execute_schema
 from deadlines import format_timestamp
@@ -134,11 +135,7 @@ def load_history(conn, pid, work, page):
 
 
 def _safe_url(value):
-    try:
-        parsed = urlsplit(value)
-        return parsed.scheme in ('https','http') and bool(parsed.hostname) and not parsed.username and not parsed.password and not any(c.isspace() for c in value)
-    except ValueError:
-        return False
+    return safe_web_url(value)
 
 
 def _render_event(row):

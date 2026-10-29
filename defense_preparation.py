@@ -1,6 +1,6 @@
 """Shared speaking notes and a read-only view of existing project materials."""
 from html import escape
-from urllib.parse import urlsplit
+from material_links import safe_web_url
 
 from database import execute_schema, begin_project_write
 from deadlines import format_timestamp
@@ -77,14 +77,7 @@ def save_plan(conn, project_id, user, form):
 
 def material_url(value):
     """Never fetch external URLs; reject unsafe legacy links in this view too."""
-    try:
-        parsed = urlsplit(value)
-        if (parsed.scheme in ('http', 'https') and parsed.hostname and not parsed.username
-                and not parsed.password and len(value) <= 2000 and not any(c.isspace() for c in value)):
-            return value
-    except ValueError:
-        pass
-    return ''
+    return value if safe_web_url(value) else ''
 
 
 def render_preparation(project_id, user, plan, stages, defense, token, form=None):
@@ -114,7 +107,7 @@ def render_preparation(project_id, user, plan, stages, defense, token, form=None
             conflict = (f'<details class="prep-conflict"><summary>Актуальный сохранённый план</summary>{current}</details>'
                         f'<p><a class="action-link" href="{base}/preparation" target="_blank" rel="noopener noreferrer">'
                         f'Открыть актуальный план в новой вкладке {icon("external")}</a></p>')
-        fields = (f'<form method="post" class="prep-form">{hidden_token(token)}'
+        fields = (f'<form method="post" class="prep-form" data-guard-draft data-draft-unsaved="{int(form is not None)}">{hidden_token(token)}'
                   f'<input type="hidden" name="revision" value="{escape(str(values.get("revision", plan["revision"])), quote=True)}">'
                   + fields + f'<div class="prep-save"><button name="action" value="save" data-ui-icon="save"'
                   + (' disabled' if stale else '') + '>Сохранить план</button>'

@@ -1,0 +1,1442 @@
+[
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Привет, preview-student. — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1/team",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команда · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1/preparation",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Подготовка к защите · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1/defense",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Видеозащита · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1/history",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "История работ · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1/assessment",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Оценивание · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/groups",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Учебные группы — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/groups/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "10 «А» — проектная работа — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/teams",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команды и участники — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/supervision",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Руководитель проекта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/notifications",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Уведомления — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/profile",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Профиль — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/settings",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Настройки сайта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/skills",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Мои навыки и направление — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/3/preparation",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Подготовка к защите · Школьный экогид — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/3/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Школьный экогид — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Привет, preview-student. — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1/team",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команда · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1/preparation",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Подготовка к защите · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1/defense",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Видеозащита · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1/history",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "История работ · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1/assessment",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Оценивание · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/groups",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Учебные группы — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/groups/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "10 «А» — проектная работа — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/teams",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команды и участники — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/supervision",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Руководитель проекта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/notifications",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Уведомления — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/profile",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Профиль — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/settings",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Настройки сайта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/skills",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Мои навыки и направление — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/3/preparation",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Подготовка к защите · Школьный экогид — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/3/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Школьный экогид — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Привет, preview-student. — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1/team",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команда · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1/preparation",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Подготовка к защите · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1/defense",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Видеозащита · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1/history",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "История работ · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1/assessment",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Оценивание · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/groups",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Учебные группы — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/groups/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "10 «А» — проектная работа — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/teams",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команды и участники — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/supervision",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Руководитель проекта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/notifications",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Уведомления — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/profile",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Профиль — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/settings",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Настройки сайта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/skills",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Мои навыки и направление — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/3/preparation",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Подготовка к защите · Школьный экогид — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/3/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Школьный экогид — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Привет, preview-student. — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1/team",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команда · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1/preparation",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Подготовка к защите · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1/defense",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Видеозащита · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1/history",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "История работ · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1/assessment",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Оценивание · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/groups",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Учебные группы — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/groups/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "10 «А» — проектная работа — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/teams",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команды и участники — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/supervision",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Руководитель проекта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/notifications",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Уведомления — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/profile",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Профиль — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/settings",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Настройки сайта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/skills",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Мои навыки и направление — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/3/preparation",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Подготовка к защите · Школьный экогид — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "student",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/3/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Школьный экогид — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/teacher",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Кабинет учителя — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1/team",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команда · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1/preparation",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Подготовка к защите · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1/defense",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Видеозащита · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1/history",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "История работ · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/1/assessment?student_id=2",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Оценивание · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/groups",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Учебные группы — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/groups/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "10 «А» — проектная работа — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/teams",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команды и участники — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/supervision",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Руководитель проекта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/notifications",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Уведомления — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/profile",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Профиль — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/settings",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Настройки сайта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 320,
+    "path": "/project/2/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Карта тихих мест — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/teacher",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Кабинет учителя — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1/team",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команда · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1/preparation",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Подготовка к защите · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1/defense",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Видеозащита · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1/history",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "История работ · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/1/assessment?student_id=2",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Оценивание · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/groups",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Учебные группы — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/groups/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "10 «А» — проектная работа — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/teams",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команды и участники — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/supervision",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Руководитель проекта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/notifications",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Уведомления — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/profile",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Профиль — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/settings",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Настройки сайта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "light",
+    "width": 1440,
+    "path": "/project/2/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Карта тихих мест — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/teacher",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Кабинет учителя — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1/team",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команда · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1/preparation",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Подготовка к защите · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1/defense",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Видеозащита · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1/history",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "История работ · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/1/assessment?student_id=2",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Оценивание · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/groups",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Учебные группы — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/groups/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "10 «А» — проектная работа — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/teams",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команды и участники — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/supervision",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Руководитель проекта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/notifications",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Уведомления — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/profile",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Профиль — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/settings",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Настройки сайта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 320,
+    "path": "/project/2/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Карта тихих мест — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/teacher",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Кабинет учителя — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1/team",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команда · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1/preparation",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Подготовка к защите · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1/defense",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Видеозащита · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1/history",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "История работ · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/1/assessment?student_id=2",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Оценивание · Умная теплица — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/groups",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Учебные группы — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/groups/1",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "10 «А» — проектная работа — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/teams",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Команды и участники — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/supervision",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Руководитель проекта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/notifications",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Уведомления — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/profile",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Профиль — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/settings",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Настройки сайта — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "role": "teacher",
+    "theme": "dark",
+    "width": 1440,
+    "path": "/project/2/stages",
+    "missingImages": 0,
+    "overflow": false,
+    "title": "Карта тихих мест — M-Flow",
+    "unexpectedDirty": false
+  },
+  {
+    "missingImages": 0,
+    "overflow": false,
+    "path": "/project/2/stages",
+    "role": "student",
+    "theme": "light",
+    "title": "Карта тихих мест — M-Flow",
+    "unexpectedDirty": false,
+    "width": 390
+  },
+  {
+    "missingImages": 0,
+    "overflow": false,
+    "path": "/project/1/preparation",
+    "role": "student",
+    "theme": "light",
+    "title": "Подготовка к защите · Умная теплица — M-Flow",
+    "unexpectedDirty": false,
+    "width": 390
+  },
+  {
+    "missingImages": 0,
+    "overflow": false,
+    "path": "/project/2/stages",
+    "role": "student",
+    "theme": "light",
+    "title": "Карта тихих мест — M-Flow",
+    "unexpectedDirty": false,
+    "width": 768
+  },
+  {
+    "missingImages": 0,
+    "overflow": false,
+    "path": "/project/1/preparation",
+    "role": "student",
+    "theme": "light",
+    "title": "Подготовка к защите · Умная теплица — M-Flow",
+    "unexpectedDirty": false,
+    "width": 768
+  },
+  {
+    "missingImages": 0,
+    "overflow": false,
+    "path": "/project/2/stages",
+    "role": "student",
+    "theme": "dark",
+    "title": "Карта тихих мест — M-Flow",
+    "unexpectedDirty": false,
+    "width": 390
+  },
+  {
+    "missingImages": 0,
+    "overflow": false,
+    "path": "/project/1/preparation",
+    "role": "student",
+    "theme": "dark",
+    "title": "Подготовка к защите · Умная теплица — M-Flow",
+    "unexpectedDirty": false,
+    "width": 390
+  },
+  {
+    "missingImages": 0,
+    "overflow": false,
+    "path": "/project/2/stages",
+    "role": "student",
+    "theme": "dark",
+    "title": "Карта тихих мест — M-Flow",
+    "unexpectedDirty": false,
+    "width": 768
+  },
+  {
+    "missingImages": 0,
+    "overflow": false,
+    "path": "/project/1/preparation",
+    "role": "student",
+    "theme": "dark",
+    "title": "Подготовка к защите · Умная теплица — M-Flow",
+    "unexpectedDirty": false,
+    "width": 768
+  }
+]

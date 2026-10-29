@@ -2,7 +2,7 @@
 from interface import icon
 
 from html import escape
-from urllib.parse import urlsplit
+from material_links import safe_web_url
 from teamwork import hidden_token
 from project_rules import has_project_teacher, TEACHER_REQUIRED
 from database import execute_schema, begin_project_write
@@ -54,12 +54,7 @@ def change_defense(conn, project_id, user, form):
             if len(url) > 2000 or len(description) > 2000:
                 raise ValueError("Ссылка и описание должны быть не длиннее 2000 символов каждое.")
             if url:
-                try:
-                    parsed = urlsplit(url)
-                    valid = parsed.scheme in ("http", "https") and bool(parsed.hostname) and not parsed.username and not parsed.password and not any(c.isspace() for c in url)
-                except ValueError:
-                    valid = False
-                if not valid:
+                if not safe_web_url(url):
                     raise ValueError("Укажите полную ссылку на видео с https:// или http://, без логина и пароля в адресе.")
             if action == "submit" and not url:
                 raise ValueError("Добавьте ссылку на запись перед отправкой учителю.")
@@ -101,8 +96,10 @@ def change_defense(conn, project_id, user, form):
 def render_defense(record, user, token, form=None, has_teacher=True):
     values = form or record
     body = f'<section class="card"><h2>{DEFENSE_STATES[record["state"]]}</h2><p>Одна запись защиты на проект. Черновик и проверка доступны только участникам проекта, включая учителя.</p>'
-    if record['video_url']:
+    if safe_web_url(record['video_url']):
         body += f'<p><a class="teacher-primary-link" href="{escape(record["video_url"],quote=True)}" target="_blank" rel="noopener noreferrer">Открыть запись защиты {icon('external')}</a></p>'
+    elif record['video_url']:
+        body += '<p>Формат сохранённой ссылки на видео не поддерживается.</p>'
     if record['description']:
         body += f'<p class="team-text">{escape(record["description"])}</p>'
     if record['author_name']:
@@ -116,7 +113,7 @@ def render_defense(record, user, token, form=None, has_teacher=True):
         body += '<p>Комментарий не указан. При необходимости уточните решение у учителя проекта.</p>'
     if record['state'] == 'accepted':
         body += f'<p>Видеозащита принята учителем. Баллы публикуются отдельно. <a href="/project/{record["project_id"]}">Посмотреть следующий шаг {icon('arrow')}</a></p>'
-    prefix = f'<form id="defense-edit" method="post" class="team-profile-form">{hidden_token(token)}<input type="hidden" name="revision" value="{record["revision"]}">'
+    prefix = f'<form id="defense-edit" method="post" class="team-profile-form" data-guard-draft data-draft-unsaved="{int(form is not None)}">{hidden_token(token)}<input type="hidden" name="revision" value="{record["revision"]}">'
     if user['role'] == 'student' and record['state'] in ('draft','returned'):
         body += '<p>Нужна доработка. Исправьте запись по замечанию учителя и отправьте её снова.</p>' if record['state'] == 'returned' else '<p>Ещё не отправлено. Добавьте запись; сохранение черновика не отправляет её на проверку.</p>'
         body += prefix + f'''<label>Ссылка на запись видео<input name="video_url" type="url" maxlength="2000" placeholder="https://…" value="{escape(values.get('video_url',''),quote=True)}"></label>

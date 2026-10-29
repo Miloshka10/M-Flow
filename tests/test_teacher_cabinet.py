@@ -20,6 +20,7 @@ from history_cases import WorkHistoryCases
 from board_cases import TaskBoardCases
 from workspace_cases import ProjectWorkCases
 from preparation_cases import DefensePreparationCases
+from review_cases import QualityReviewCases
 
 
 class FormTokens(HTMLParser):
@@ -44,7 +45,7 @@ class FormTokens(HTMLParser):
             self.current = None
 
 
-class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, NavigationCases, WorkHistoryCases, TaskBoardCases, ProjectWorkCases, DefensePreparationCases, unittest.TestCase):
+class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, NavigationCases, WorkHistoryCases, TaskBoardCases, ProjectWorkCases, DefensePreparationCases, QualityReviewCases, unittest.TestCase):
     def test_result_pages_show_moscow_update_time_for_both_roles(self):
         self.stage_post(3)
         self.defense_post()
@@ -950,7 +951,13 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         if 'json' in kwargs:
             kwargs.setdefault('headers', {})['X-CSRF-Token'] = token
         else:
-            kwargs.setdefault('data', {}).setdefault('csrf_token', token)
+            kwargs['data'] = dict(kwargs.get('data', {}))
+            kwargs['data'].setdefault('csrf_token', token)
+            if path.split('?', 1)[0].endswith('/assessment') and 'assessment_version' not in kwargs['data']:
+                # Read the current form as a browser would; explicit stale versions remain untouched.
+                page = self.client.get(path.split('?', 1)[0] + '?student_id=' + str(kwargs['data'].get('student_id', ''))).text
+                version = re.search(r'name="assessment_version" value="([^"]+)"', page)
+                kwargs['data']['assessment_version'] = version.group(1) if version else ''
         return self.client.post(path, **kwargs)
 
     def count_page_queries(self, path):
