@@ -1347,7 +1347,9 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
             page = self.client.get(path).text
             self.assertEqual(page.count('/static/product-design.css'), 1)
-            self.assertIn('class="ui-project-art" aria-hidden="true"', page)
+            self.assertIn('class="auth-example" aria-label="Пример проекта:', page)
+            self.assertIn('Школьная медиастудия', page)
+            self.assertIn('Этап 3 из 5', page)
             self.assertEqual(page.count('/static/interface.css'), 1)
             self.assertIn('К содержимому', page)
         self.sign_in(3)
@@ -1412,7 +1414,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
             page = self.client.get(path).text
             self.assertEqual(page.count('/static/graphics.css'), 1)
-            self.assertIn('class="ui-project-art" aria-hidden="true"', page)
+            self.assertIn('class="auth-example" aria-label="Пример проекта:', page)
+            self.assertIn('Школьная медиастудия', page)
             self.assertNotIn('by Minich', page)
             self.assertNotIn('project-kit.svg', page)
         self.sign_in(3)
