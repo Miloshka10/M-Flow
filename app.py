@@ -44,7 +44,7 @@ from graphics import illustration
 from project_workspace import render_workspace, task_deadline
 from project_work import render_project_work
 from navigation import project_navigation
-from interface import shell_header, project_art, document_title, icon
+from interface import shell_header, document_title, icon
 from student_results import parameters as result_parameters, load_results, render_results, load_focus, load_project_states
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores, assessment_version
 from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, change_stage, render_stages, STATE_LABELS
@@ -142,8 +142,8 @@ def render_page(html, title=None):
         html = html.replace('<main', '<main id="main-content"', 1)
     skip_target = 'main-content' if '<main' in html else 'page-content'
     body_class = 'mf-v2 ui-authenticated' if 'data-interface-shell=' in html else 'mf-v2'
-    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261027">'
-                   '<script src="/static/auth.js?v=20261027" defer></script>'
+    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261030">'
+                   '<script src="/static/auth.js?v=20261030" defer></script>'
                    if 'class="auth-page ' in html else '')
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -1050,33 +1050,36 @@ def render_auth_page(mode, error=None, role="student", field=None):
 
     def password_control(name, autocomplete, repeat=False):
         input_id = 'auth-repeat-password' if repeat else 'auth-password'
-        label = 'Повторите пароль' if repeat else 'Пароль'
+        label = 'Повторите пароль' if repeat else ('Пароль' if is_login else 'Придумайте пароль')
+        placeholder = ('Повторите пароль' if repeat else
+                       ('Введите пароль' if is_login else 'Не менее 8 символов'))
         limits = ' minlength="8" maxlength="256"' if not is_login else ''
         hint = 'auth-password-hint' if not is_login and not repeat else None
         return f'''
             <label for="{input_id}">{label}</label>
             <div class="auth-password-control">
-                <input id="{input_id}" name="{name}" type="password" autocomplete="{autocomplete}"{limits}{field_attributes(name, hint)} required>
+                <input id="{input_id}" name="{name}" type="password" placeholder="{placeholder}" autocomplete="{autocomplete}"{limits}{field_attributes(name, hint)} required>
                 <button class="auth-password-toggle" type="button" aria-controls="{input_id}" aria-pressed="false" aria-label="Показать {"повтор пароля" if repeat else "пароль"}" hidden>Показать</button>
             </div>
             {field_error(name)}
         '''
 
-    error_html = (f'<div class="error auth-error" role="alert" tabindex="-1">{escape(error)}</div>'
+    error_title = 'Не удалось войти' if is_login else 'Не удалось создать аккаунт'
+    error_html = (f'<div class="error auth-error" role="alert" tabindex="-1"><strong>{error_title}</strong><p>{escape(error)}</p></div>'
                   if error and not field else '')
 
     if is_login:
         form_fields = f"""
             <label for="auth-username">Логин</label>
-            <input id="auth-username" name="username" value="{username}" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30"{field_attributes('username')} required>
+            <input id="auth-username" name="username" value="{username}" placeholder="Ваш логин" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30"{field_attributes('username')} required>
             {field_error('username')}
             {password_control('password', 'current-password')}
         """
-        submit_label = "Войти"
+        submit_label = "Попробовать снова" if error else "Войти"
     else:
         form_fields = f"""
             <label for="auth-username">Придумайте логин</label>
-            <input id="auth-username" name="username" value="{username}" minlength="3" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false"{field_attributes('username', 'auth-username-hint')} required>
+            <input id="auth-username" name="username" value="{username}" placeholder="Ваш логин" minlength="3" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false"{field_attributes('username', 'auth-username-hint')} required>
             <small class="auth-hint" id="auth-username-hint">От 3 до 30 символов</small>
             {field_error('username')}
             {password_control('password', 'new-password')}
@@ -1085,18 +1088,21 @@ def render_auth_page(mode, error=None, role="student", field=None):
         """
         submit_label = "Создать аккаунт"
     intro = ('Проекты учеников и обратная связь в одном месте.' if is_teacher
-             else 'Твои идеи, команда и результаты — в одном месте.')
+             else 'От идеи до защиты — всё для вашего проекта.')
+    pending_label = 'Входим…' if is_login else 'Создаём аккаунт…'
+    eyebrow = '<p class="auth-eyebrow">ВАШ СЛЕДУЮЩИЙ ШАГ</p>' if is_login else ''
     switch_text = 'Нет аккаунта?' if is_login else 'Уже есть аккаунт?'
     switch_mode = 'register' if is_login else 'login'
     switch_label = 'Зарегистрироваться' if is_login else 'Войти'
 
     return render_page(
         f"""
-        <div class="auth-page auth-role-{role}">
+        <div class="auth-page auth-role-{role} auth-mode-{mode}">
             <div class="auth-card">
                 <main class="auth-form-side">
                     <div class="auth-form-inner">
                     <a href="{prefix}/login" class="brand auth-form-brand" aria-label="M-Flow — вход">M-Flow<span class="ui-brand-dot">.</span></a>
+                    {eyebrow}
                     <h1>{"Войти в M-Flow" if is_login else "Создать аккаунт"}</h1>
                     <p class="auth-intro">{intro}</p>
                     <nav class="auth-role-switch" aria-label="Выбор роли">
@@ -1107,14 +1113,26 @@ def render_auth_page(mode, error=None, role="student", field=None):
                     <form method="post">
                         {csrf_input()}
                         {form_fields}
-                        <button type="submit" data-ui-icon="arrow">{submit_label}</button>
+                        <button type="submit" class="auth-submit" data-ui-icon="arrow" data-pending-label="{pending_label}">{submit_label}</button>
                     </form>
+                    <p class="auth-submit-status" role="status" aria-live="polite"></p>
                     <p class="auth-footer">{switch_text} <a href="{prefix}/{switch_mode}">{switch_label}</a></p>
                     </div>
                 </main>
                 <aside class="auth-hero" aria-label="О проекте M-Flow">
-                    <h2 class="auth-logo">Большие идеи<br>начинаются<br>с первого проекта.</h2>
-                    {project_art()}
+                    <div class="auth-story">
+                        <p class="auth-product-tag">ПРОЕКТНАЯ РАБОТА БЕЗ ХАОСА</p>
+                        <h2 class="auth-logo">Большие идеи<br>начинаются<br>с первого шага.</h2>
+                        <p class="auth-story-copy">Планируйте задачи, следите за этапами и двигайтесь к результату.</p>
+                    </div>
+                    <div class="auth-example" aria-label="Пример проекта: школьная медиастудия, этап 3 из 5">
+                        <p class="auth-example-tag">ПРИМЕР ПРОЕКТА</p>
+                        <h3>Школьная медиастудия</h3>
+                        <p class="auth-example-copy">От замысла — к первому выпуску</p>
+                        <div class="auth-example-progress" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+                        <div class="auth-example-meta"><span>Этап 3 из 5</span><span>Работа над проектом</span></div>
+                    </div>
+                    <p class="auth-story-note">Ученик и учитель — в одном пространстве</p>
                 </aside>
             </div>
             <footer class="auth-page-footer"><a href="/settings">Настройки оформления</a></footer>
