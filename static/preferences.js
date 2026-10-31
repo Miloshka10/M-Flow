@@ -31,6 +31,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('site-preferences');
     if (!form) return;
+    form.addEventListener('submit', event => event.preventDefault());
     const theme = document.getElementById('site-theme');
     const animations = document.getElementById('site-animations');
     const status = document.getElementById('preferences-status');

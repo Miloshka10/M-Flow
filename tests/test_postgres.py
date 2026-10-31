@@ -18,7 +18,7 @@ import database
 
 
 TEST_URL = os.environ.get("M_FLOW_TEST_POSTGRES_URL", "")
-TABLES = ("project_defense_plans", "work_history", "work_history_sources", "learning_group_invitations", "learning_group_members", "learning_groups", "supervision_requests", "teacher_invitations", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles",
+TABLES = ("account_email_tokens", "account_emails", "project_defense_plans", "work_history", "work_history_sources", "learning_group_invitations", "learning_group_members", "learning_groups", "supervision_requests", "teacher_invitations", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles",
           "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users")
 
 

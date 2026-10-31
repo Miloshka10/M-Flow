@@ -1,4 +1,5 @@
 /* Shared public entry. Only presentation; server roles and form actions stay authoritative. */
+html body.mf-v2 .auth-page .auth-recovery-card { display:block; max-width:580px; min-height:0; }
 html body.mf-v2 .auth-page {
   min-height:100dvh; display:flex; flex-direction:column; justify-content:center;
   align-items:center; gap:16px; padding:32px; background:var(--mf-bg);
