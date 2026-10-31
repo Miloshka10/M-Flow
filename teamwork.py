@@ -2,6 +2,7 @@
 
 import json
 from html import escape
+from design_suite import initials
 from database import execute_schema_script, begin_project_write, begin_invitation_write, form_database_id
 
 
@@ -228,15 +229,15 @@ def render_team(conn, project_id, owner, token):
         WHERE u.id IN (SELECT user_id FROM project_members WHERE project_id=?)
         OR u.id=(SELECT owner_id FROM projects WHERE id=?) ORDER BY u.role,u.username""", (project_id, project_id, project_id, project_id)).fetchall()
     directory_label = 'Подобрать участников по навыкам' if owner else 'Каталог учеников'
-    body = f'<p>Команда общая для проекта: классы и направления не ограничивают участие.</p><a class="teacher-primary-link" href="/teams">{directory_label}</a><div class="team-directory">'
+    body = f'<details class="ds-guide"><summary>Об участии в проекте</summary><p>Команда общая для проекта: классы и направления не ограничивают участие.</p></details><a class="teacher-primary-link" href="/teams">{directory_label}</a><div class="team-directory">'
     for member in members:
-        body += f'<section class="card team-person"><h2>{escape(member["username"])}</h2><p>{"Учитель" if member["role"] == "teacher" else "Ученик"}</p>'
+        body += f'<section class="card team-person"><span class="ds-avatar ds-avatar-{member["role"]}" aria-hidden="true">{escape(initials(member["username"]))}</span><h2>{escape(member["username"])}</h2><p>{"Учитель" if member["role"] == "teacher" else "Ученик"}</p>'
         if member['discoverable']:
             body += f'<p>{escape(member["class_name"])} · {escape(member["direction"])}</p><div class="team-skills">' + ''.join(f'<span class="team-skill">{escape(s)}</span>' for s in json.loads(member['skills_json'])) + '</div>'
         body += '<p>Проверяет этапы, видеозащиту и выставляет оценки.</p>' if member['role'] == 'teacher' else f'<p>Роль: {escape(member["role_text"] or "Пока не указана")}</p>'
         if owner and member['role'] == 'student' and member['is_member']:
-            body += f'''<form method="post" class="team-invite-form">{hidden_token(token)}<input type="hidden" name="action" value="role"><input type="hidden" name="student_id" value="{member['id']}">
-                <label>Роль в команде<input name="role_text" maxlength="100" value="{escape(member['role_text'] or '',quote=True)}"></label><button class="secondary" data-ui-icon="save">Сохранить роль</button></form>'''
+            body += f'''<details class="ds-role-editor"><summary>Роль в команде</summary><form method="post" class="team-invite-form">{hidden_token(token)}<input type="hidden" name="action" value="role"><input type="hidden" name="student_id" value="{member['id']}">
+                <label>Роль в команде<input name="role_text" maxlength="100" value="{escape(member['role_text'] or '',quote=True)}"></label><button class="secondary" data-ui-icon="save">Сохранить роль</button></form></details>'''
         body += '</section>'
     body += '</div>'
     if owner:

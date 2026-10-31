@@ -110,8 +110,8 @@ def render_queue(result, params):
         body = f'<p class="teacher-queue-body">{escape(item["body"])}</p>' if item['body'] else ''
         html += f'''<article class="teacher-attention-item teacher-queue-item" data-work-kind="{item['kind']}"
             data-work-key="{item['key']}"><strong>{label}</strong><h4>{escape(item['title'])}</h4>
-            <p>{escape(item['project_name'])}</p><p class="t-muted">Автор: {author}</p>{team}
-            <p class="t-muted">{date_html}</p>{body}
+            <p>{escape(item['project_name'])}</p><p class="t-muted">Автор: {author}</p>
+            <p class="t-muted">{date_html}</p><details class="ds-queue-material"><summary>Материал и команда</summary>{team}{body}</details>
             <a class="action-link" href="{item['href']}">{item['action']} {icon('arrow')}</a></article>'''
     if not result['items']:
         html += ('<p class="t-muted">Нет работ по выбранным условиям. '

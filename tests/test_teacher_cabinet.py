@@ -1420,9 +1420,9 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             self.assertNotIn('project-kit.svg', page)
         self.sign_in(3)
         page = self.client.get('/').text
-        self.assertIn('class="ui-project-art" aria-hidden="true"', page)
-        self.assertIn('viewBox="0 0 320 230"', page)
-        self.assertIn('Найти команду', page)
+        self.assertIn('class="ds-cover ds-', page)
+        self.assertIn('aria-hidden="true"', page)
+        self.assertIn('href="/teams"', page)
         self.assertNotIn('blank-study.svg', page)  # Existing projects, not an empty state.
         self.assertIn('data-home-step=', page)
         self.assertIn('100%', page)
@@ -1434,12 +1434,12 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertNotIn('project-kit.svg', page)
         self.assertEqual(self.database_snapshot(), before)
 
-    def test_empty_graphic_is_lazy_and_all_art_assets_have_static_only_routes(self):
+    def test_empty_dashboard_and_art_assets_keep_static_only_routes(self):
         self.add_candidate()
         self.sign_in(4)
         page = self.client.get('/').text
         self.assertIn('Начни свой проект.', page)
-        self.assertIn('class="ui-project-art" aria-hidden="true"', page)
+        self.assertIn('data-suite-dashboard', page)
         self.assertIn('data-open-project', page)
         for name in ('blank-study.svg', 'team-study.svg'):
             with self.client.get('/static/illustrations/' + name) as response:

@@ -95,7 +95,7 @@ def change_defense(conn, project_id, user, form):
 
 def render_defense(record, user, token, form=None, has_teacher=True):
     values = form or record
-    body = f'<section class="card"><h2>{DEFENSE_STATES[record["state"]]}</h2><p>Одна запись защиты на проект. Черновик и проверка доступны только участникам проекта, включая учителя.</p>'
+    body = f'<section class="card ds-defense"><h2>{DEFENSE_STATES[record["state"]]}</h2><details class="ds-guide"><summary>О видеозащите</summary><p>Одна запись защиты на проект. Черновик и проверка доступны только участникам проекта, включая учителя.</p></details>'
     if safe_web_url(record['video_url']):
         body += f'<p><a class="teacher-primary-link" href="{escape(record["video_url"],quote=True)}" target="_blank" rel="noopener noreferrer">Открыть запись защиты {icon('external')}</a></p>'
     elif record['video_url']:
@@ -118,7 +118,7 @@ def render_defense(record, user, token, form=None, has_teacher=True):
         body += '<p>Нужна доработка. Исправьте запись по замечанию учителя и отправьте её снова.</p>' if record['state'] == 'returned' else '<p>Ещё не отправлено. Добавьте запись; сохранение черновика не отправляет её на проверку.</p>'
         body += prefix + f'''<label>Ссылка на запись видео<input name="video_url" type="url" maxlength="2000" placeholder="https://…" value="{escape(values.get('video_url',''),quote=True)}"></label>
             <label>Описание выступления<textarea name="description" rows="4" maxlength="2000">{escape(values.get('description',''))}</textarea></label>
-            <p>Подойдёт ссылка на видео или облачный диск. Проверьте права просмотра: учитель должен иметь доступ. M-Flow не загружает видео и не проверяет его доступность автоматически.</p>
+            <details class="ds-guide"><summary>Доступ к видео</summary><p>Подойдёт ссылка на видео или облачный диск. Проверьте права просмотра: учитель должен иметь доступ. M-Flow не загружает видео и не проверяет его доступность автоматически.</p></details>
             <div class="team-actions"><button class="secondary" name="action" value="save" data-ui-icon="save">Сохранить черновик</button><button name="action" value="submit" {"disabled" if not has_teacher else ""}>Отправить защиту учителю</button></div></form>'''
     elif user['role'] == 'teacher' and record['state'] == 'submitted':
         comment = form.get('teacher_comment', '') if form is not None else ''

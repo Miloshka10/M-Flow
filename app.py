@@ -142,6 +142,7 @@ def render_page(html, title=None):
         html = html.replace('<main', '<main id="main-content"', 1)
     skip_target = 'main-content' if '<main' in html else 'page-content'
     body_class = 'mf-v2 ui-authenticated' if 'data-interface-shell=' in html else 'mf-v2'
+    suite_attribute = ' data-design-suite' if 'data-interface-shell=' in html else ''
     auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261030">'
                    '<script src="/static/auth.js?v=20261030" defer></script>'
                    if 'class="auth-page ' in html else '')
@@ -167,8 +168,10 @@ def render_page(html, title=None):
         '<link rel="stylesheet" href="/static/interface.css?v=20261029-review">'
         '<script src="/static/interface.js?v=20261027-work" defer></script>'
         '<script src="/static/form-guard.js?v=20261029" defer></script>'
+        '<link rel="stylesheet" href="/static/design-suite.css?v=20261031-final">'
+        '<script src="/static/design-suite.js?v=20261031-final" defer></script>'
             + auth_assets +
-            f'</head><body id="page-content" class="{body_class}"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
+            f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-design-page="{escape(request.endpoint or "", quote=True)}"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
 
 DATABASE_SETTINGS = DatabaseSettings.from_environment(app.root_path)
@@ -3570,7 +3573,7 @@ def teacher_cabinet():
                 <section class="teacher-hero workspace-hero">
                     <div class="hero-copy"><span class="hero-kicker">РАБОЧЕЕ ПРОСТРАНСТВО УЧИТЕЛЯ</span>
                         <h1>Кабинет учителя</h1>
-                        <p>{escape(user["username"])}, всё важное — перед вами. На проверке: {review_count}.</p>
+                        <p class="ds-teacher-count">На проверке: {review_count}</p>
                     </div>
                     <a class="btn" href="/supervision">{icon('link')} Подключить проект</a>
                 </section>
@@ -3581,12 +3584,12 @@ def teacher_cabinet():
                     <div class="t-stat"><strong>{len(student_ids)}</strong><span>Учеников</span></div>
                     <div class="t-stat {overdue_class}"><strong>{overdue_tasks}</strong><span>Просрочено</span></div>
                 </div>
-                <div class="teacher-signal-strip">
+                <details class="teacher-signal-strip"><summary>Сводка задач</summary>
                     <span>Выполнено задач: <b>{done_tasks} из {total_tasks}</b> · {percent(done_tasks, total_tasks)}%</span>
                     <span>В ближайшие 3 дня: <b>{soon_tasks}</b></span>
                     <span>Без ответственного: <b>{unassigned_tasks}</b></span>
                     <span>Сроки задач: {TIMEZONE_LABEL}. Ожидание проверки — не просрочка сдачи.</span>
-                </div>
+                </details>
                 <details class="ui-teacher-filters" {'open' if query or focus != 'all' or kind != 'all' or sort != 'oldest' or project_id is not None or queue['page'] > 1 else ''}><summary data-ui-icon="filter">Поиск и фильтры работ</summary>
                 <form class="teacher-filters" method="get">
                     <input type="search" name="q" value="{escape(query)}"
@@ -3602,10 +3605,10 @@ def teacher_cabinet():
                     <section class="teacher-panel review-panel" id="review-queue"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>Очередь работ</h2>{queue_html}</section>
                     <section class="teacher-panel" id="task-attention"><h2>{attention_title}</h2><p class="t-muted">Дедлайны учеников отдельно от ожидания проверки учителем.</p>{attention_html}</section>
                 </div>
-                <div class="section-title" id="teacher-projects"><h2>Проекты</h2>
+                <details class="ds-teacher-projects" id="teacher-projects"><summary>Проекты учеников</summary><div class="section-title"><h2>Проекты</h2>
                     <span class="t-muted">Показано {len(visible_projects)} из {len(overview)}</span></div>
-                {projects_html}
-                <section class="teacher-panel"><h2>Как подключиться к проекту</h2><p>Создайте одноразовый код, передайте его ученику. Владелец подтверждает конкретный проект, затем вы берёте его на сопровождение. Другие проекты не открываются автоматически.</p><a class="teacher-primary-link" href="/supervision">Руководитель проекта {icon('arrow')}</a></section>
+                {projects_html}</details>
+                <details class="teacher-panel ds-guide"><summary>Как подключиться к проекту</summary><h2>Как подключиться к проекту</h2><p>Создайте одноразовый код, передайте его ученику. Владелец подтверждает конкретный проект, затем вы берёте его на сопровождение. Другие проекты не открываются автоматически.</p><a class="teacher-primary-link" href="/supervision">Руководитель проекта {icon('arrow')}</a></details>
                 <footer class="workspace-footer"><span>M-Flow <small>by Minich</small></span><a href="/settings">{icon('settings')} Настройки оформления</a></footer>
             </main>
         </div>

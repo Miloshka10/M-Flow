@@ -35,8 +35,8 @@ class NavigationCases:
                 conn.commit()
             self.assertEqual(state(), dict(label=label, tone=tone, stages_done=5))
         page = self.client.get('/?project=2').text
-        self.assertIn('href="/?project=2" aria-current="true"', page)
-        self.assertNotIn('href="/?project=1" aria-current="true"', page)
+        self.assertIn('href="/project/2" aria-current="true"', page)
+        self.assertNotIn('href="/project/1" aria-current="true"', page)
         self.assertIn('Защита принята', page)
         # An inconsistent legacy defense must not hide an unfinished stage.
         with closing(self.module.get_db()) as conn:
@@ -96,7 +96,8 @@ class NavigationCases:
         self.sign_in(3)
         page = self.client.get(f'/?project={project}')
         self.assertEqual(page.status_code, 200)
-        return page.text.split('<section class="home-focus"')[1].split('</section>')[0]
+        start = re.search(r'<section class="home-focus\b', page.text).start()
+        return page.text[start:].split('<section class="workspace-projects"')[0]
 
     def test_navigation_roles_and_post_logout_remain_accessible(self):
         for uid, label, home in ((3, 'Мои проекты', '/'), (1, 'Кабинет', '/teacher')):
