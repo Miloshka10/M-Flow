@@ -46,7 +46,7 @@ class PostgresCabinetTests(fixtures.TeacherCabinetTests):
             spec = importlib.util.spec_from_file_location("postgres_test_app", Path(__file__).resolve().parents[1] / "app.py")
             cls.module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(cls.module)
-            cls.module.app.config.update(TESTING=True)
+            cls.module.app.config.update(TESTING=True, TEACHER_REGISTRATION_CODE='isolated-teacher-enrollment-code')
             cls.password = generate_password_hash("test-password")
         except Exception:
             cls.tearDownClass()

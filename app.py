@@ -83,6 +83,7 @@ app.config.update(
     SESSION_COOKIE_SECURE=not DEBUG_MODE,
     PERMANENT_SESSION_LIFETIME=timedelta(seconds=SESSION_SECONDS),
     MAX_CONTENT_LENGTH=1024 * 1024,
+    TEACHER_REGISTRATION_CODE=os.environ.get('M_FLOW_TEACHER_CODE', ''),
 )
 TRUSTED_AUTH_PROXIES = proxy_networks(os.environ.get('M_FLOW_TRUSTED_PROXY_CIDRS', ''))
 # Unknown usernames still do one password verification, rather than returning early.
@@ -129,6 +130,15 @@ def protect_mutations():
 
 @app.after_request
 def protect_private_page_cache(response):
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'DENY')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    # Compatible first layer: script/style restrictions need a separate inline
+    # asset audit. This policy does not pretend to prevent every possible XSS.
+    response.headers.setdefault('Content-Security-Policy', "object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+    # Never trust a user-supplied X-Forwarded-Proto just to enable HSTS.
+    if request.is_secure:
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000')
     if response.mimetype == "text/html" or (request.method not in ("GET", "HEAD", "OPTIONS")):
         response.headers["Cache-Control"] = "no-store"
     return response
@@ -1031,6 +1041,12 @@ PAGE_STYLE = '<script src="/static/kanban.js?v=20261031-tasks" defer></script>'
 # LOGIN
 # =========================================================
 
+def teacher_registration_code():
+    code = app.config.get('TEACHER_REGISTRATION_CODE', '')
+    # Empty or misconfigured enrollment fails closed without breaking logins.
+    return code if isinstance(code, str) and 24 <= len(code) <= 256 and code == code.strip() else ''
+
+
 def render_auth_page(mode, error=None, role="student", field=None):
     is_login = mode == "login"
     is_teacher = role == "teacher"
@@ -1090,6 +1106,10 @@ def render_auth_page(mode, error=None, role="student", field=None):
             {password_control('repeat_password', 'new-password', repeat=True)}
         """
         submit_label = "Создать аккаунт"
+        if is_teacher:
+            form_fields += f'''<label for="auth-teacher-code">Код регистрации учителя</label>
+                <input id="auth-teacher-code" type="password" name="teacher_code" autocomplete="off" maxlength="256"{field_attributes('teacher_code', 'auth-teacher-code-hint')} required>
+                <small class="auth-hint" id="auth-teacher-code-hint">Получите код лично у организатора M-Flow. Это не код подключения проекта.</small>{field_error('teacher_code')}'''
     intro = ('Проекты учеников и обратная связь в одном месте.' if is_teacher
              else 'От идеи до защиты — всё для вашего проекта.')
     pending_label = 'Входим…' if is_login else 'Создаём аккаунт…'
@@ -1097,6 +1117,9 @@ def render_auth_page(mode, error=None, role="student", field=None):
     switch_text = 'Нет аккаунта?' if is_login else 'Уже есть аккаунт?'
     switch_mode = 'register' if is_login else 'login'
     switch_label = 'Зарегистрироваться' if is_login else 'Войти'
+    auth_form = f'''<form method="post">{csrf_input()}{form_fields}<button type="submit" class="auth-submit" data-ui-icon="arrow" data-pending-label="{pending_label}">{submit_label}</button></form><p class="auth-submit-status" role="status" aria-live="polite"></p>'''
+    if is_teacher and not is_login and not teacher_registration_code():
+        auth_form = '<p class="auth-intro">Регистрация учителей пока закрыта. Для получения доступа обратитесь к организатору M-Flow. Если аккаунт уже есть, войдите в него.</p>'
 
     return render_page(
         f"""
@@ -1113,12 +1136,7 @@ def render_auth_page(mode, error=None, role="student", field=None):
                         <a href="{teacher_url}" class="{"active" if is_teacher else ""}" {"aria-current='page'" if is_teacher else ""}>Я учитель</a>
                     </nav>
                     {error_html}
-                    <form method="post">
-                        {csrf_input()}
-                        {form_fields}
-                        <button type="submit" class="auth-submit" data-ui-icon="arrow" data-pending-label="{pending_label}">{submit_label}</button>
-                    </form>
-                    <p class="auth-submit-status" role="status" aria-live="polite"></p>
+                    {auth_form}
                     <p class="auth-footer">{switch_text} <a href="{prefix}/{switch_mode}">{switch_label}</a></p>
                     </div>
                 </main>
@@ -1212,6 +1230,15 @@ def register_for_role(role):
         if retry:
             return auth_wait('register', role, retry)
 
+        if role == 'teacher':
+            expected = teacher_registration_code()
+            supplied = request.form.get('teacher_code', '')
+            if not expected:
+                return render_auth_page('register', error='Регистрация учителей закрыта.', role=role), 403
+            if (not supplied or len(supplied) > 256
+                    or not secrets.compare_digest(expected.encode('utf-8'), supplied.encode('utf-8'))):
+                return render_auth_page('register', error='Укажите действующий код регистрации от организатора.', role=role, field='teacher_code'), 400
+
         if not username or not password:
             return render_auth_page("register", error="Заполните все поля.", role=role)
 
@@ -1292,8 +1319,8 @@ def profile():
     projects_count = len(get_projects())
     skills_link = '<p><a class="teacher-primary-link" href="/skills">Мой класс, направление и навыки</a></p>' if user["role"] == "student" else ''
 
-    message_html = f'<div class="ok">{message}</div>' if message else ""
-    error_html = f'<div class="error">{error}</div>' if error else ""
+    message_html = f'<div class="ok">{escape(message)}</div>' if message else ""
+    error_html = f'<div class="error">{escape(error)}</div>' if error else ""
 
     return render_page(
         PAGE_STYLE

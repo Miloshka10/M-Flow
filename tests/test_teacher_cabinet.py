@@ -842,7 +842,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             "teacher_test_app", Path(__file__).resolve().parents[1] / "app.py")
         cls.module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.module)
-        cls.module.app.config.update(TESTING=True)
+        cls.module.app.config.update(TESTING=True, TEACHER_REGISTRATION_CODE='isolated-teacher-enrollment-code')
         cls.password = generate_password_hash("test-password")
 
     @classmethod
@@ -953,6 +953,10 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         else:
             kwargs['data'] = dict(kwargs.get('data', {}))
             kwargs['data'].setdefault('csrf_token', token)
+            if path.split('?', 1)[0] == '/teacher/register':
+                # Existing functional scenarios use authorized teacher enrollment.
+                # Gate regressions explicitly supply empty/invalid codes below.
+                kwargs['data'].setdefault('teacher_code', self.module.app.config['TEACHER_REGISTRATION_CODE'])
             if path.split('?', 1)[0].endswith('/assessment') and 'assessment_version' not in kwargs['data']:
                 # Read the current form as a browser would; explicit stale versions remain untouched.
                 page = self.client.get(path.split('?', 1)[0] + '?student_id=' + str(kwargs['data'].get('student_id', ''))).text
@@ -1660,6 +1664,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
                     client = self.module.app.test_client()
                     page = client.get(f'{prefix}/register').text
                     token = FormTokens(page).forms[0]['tokens'][0]
+                    if prefix == '/teacher':
+                        values['teacher_code'] = self.module.app.config['TEACHER_REGISTRATION_CODE']
                     response = client.post(f'{prefix}/register', data={**values, 'csrf_token': token})
                     self.assertEqual(response.status_code, 200)
                     class Fields(HTMLParser):
