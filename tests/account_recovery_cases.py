@@ -190,6 +190,7 @@ class AccountRecoveryCases:
         self.assertEqual(len(box.letters),count)
         box.flush()
         self.assertEqual(len(box.letters),count+1)
+        self.assertIn('Аккаунт: student-one',box.letters[-1][2])
         self.assertNotIn('student@example.org',known.text)
         self.assertNotIn(box.token(), known.text)
 

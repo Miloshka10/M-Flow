@@ -1379,7 +1379,7 @@ def reset_password_page():
                 if settings and result['email']:
                     try:
                         app.config['MAIL_DISPATCHER'].submit(lambda send: send(settings, result['email'], 'Пароль M-Flow изменён',
-                            'Пароль вашего аккаунта M-Flow изменён. Все прежние сеансы завершены. Если это сделали не вы, снова запросите восстановление доступа.'))
+                            f'Аккаунт: {result["display_name"]}\nПароль вашего аккаунта M-Flow изменён. Все прежние сеансы завершены. Если это сделали не вы, снова запросите восстановление доступа.'))
                     except DatabaseUnavailable:
                         app.logger.warning('Password reset notice could not be queued; details omitted.')
                 return mail_response('Пароль изменён', 'Все прежние сеансы завершены. Войдите с новым паролем через обычную форму.', '', '', ready=False)

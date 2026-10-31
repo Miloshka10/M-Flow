@@ -203,13 +203,17 @@ def _issue(conn, secret, user, email, purpose, recipient):
     return raw
 
 
-def _letter(settings, raw, purpose):
+def _display_name(username):
+    return ''.join(c if c.isprintable() else ' ' for c in username)[:128]
+
+
+def _letter(settings, raw, purpose, username):
     reset = purpose == 'reset'
     url = settings.origin + ('/reset-password' if reset else '/email/confirm') + '#token=' + raw
     subject = 'Восстановление доступа к M-Flow' if reset else 'Подтвердите почту M-Flow' if purpose == 'verify_new' else 'Смена почты M-Flow: подтвердите со старого адреса'
     note = ('Ссылка действует 20 минут. После смены пароля старые сеансы будут завершены.' if reset else
             'Ссылка действует 24 часа. При смене адреса нужны подтверждения со старого и нового ящиков.')
-    return subject, f'{subject}\n\n{url}\n\n{note}\nЕсли ссылка не открывается, скопируйте код из письма в форму:\n{raw}\n\nЕсли вы не запрашивали это действие, проигнорируйте письмо. Пароль в письме никогда не запрашивается.'
+    return subject, f'{subject}\nАккаунт: {_display_name(username)}\n\n{url}\n\n{note}\nЕсли ссылка не открывается, скопируйте код из письма в форму:\n{raw}\n\nЕсли вы не запрашивали это действие, проигнорируйте письмо. Пароль в письме никогда не запрашивается.'
 
 
 def schedule_reset(get_db, secret, settings, dispatcher, username, address):
@@ -229,7 +233,7 @@ def schedule_reset(get_db, secret, settings, dispatcher, username, address):
                 conn.rollback()
                 raise
         if raw:
-            subject, body = _letter(settings, raw, 'reset')
+            subject, body = _letter(settings, raw, 'reset', user['username'])
             send(settings, address, subject, body)
     dispatcher.submit(job)
 
@@ -255,9 +259,9 @@ def request_email(get_db, secret, settings, dispatcher, user_id, address, passwo
                          (user_id, address, int(not current['email'])))
             current = email_for(conn, user_id)
             conn.execute("DELETE FROM account_email_tokens WHERE user_id=? AND purpose!='reset'", (user_id,))
-            letters = [(address, *_letter(settings, _issue(conn, secret, user, current, 'verify_new', address), 'verify_new'))]
+            letters = [(address, *_letter(settings, _issue(conn, secret, user, current, 'verify_new', address), 'verify_new', user['username']))]
             if current['email']:
-                letters.append((current['email'], *_letter(settings, _issue(conn, secret, user, current, 'approve_old', current['email']), 'approve_old')))
+                letters.append((current['email'], *_letter(settings, _issue(conn, secret, user, current, 'approve_old', current['email']), 'approve_old', user['username'])))
             # Reserve queue space before commit; sending starts only after commit.
             ready = threading.Event()
             committed = []
@@ -332,7 +336,7 @@ def reset_password(get_db, secret, raw, password, repeat):
             conn.execute('DELETE FROM account_email_tokens WHERE user_id=?', (user['id'],))
             conn.execute("UPDATE account_emails SET pending_email='',revision=revision+1,old_approved=0,new_approved=0 WHERE user_id=?", (user['id'],))
             conn.commit()
-            return dict(id=user['id'], role=user['role'], email=email['email'])
+            return dict(id=user['id'], role=user['role'], email=email['email'], display_name=_display_name(user['username']))
         except Exception:
             conn.rollback()
             raise
