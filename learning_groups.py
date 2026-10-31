@@ -321,7 +321,7 @@ def render_group(conn, user, group, data, token, code=None):
     def form(action, content):
         return f'<form method="post">{hidden_token(token)}<input type="hidden" name="revision" value="{revision}"><input type="hidden" name="action" value="{action}">{content}</form>'
     body = f'''<link rel="stylesheet" href="/static/learning-groups.css?v=20261016">
-        <p class="groups-intro">Учитель: {escape(group['teacher_name'])} · {'Группа в архиве' if group['archived'] else 'Действующая группа'}</p><p class="group-text">{escape(group['description'])}</p>'''
+        <p class="groups-intro group-identity">Учитель: {escape(group['teacher_name'])} · {'Группа в архиве' if group['archived'] else 'Действующая группа'}</p><p class="group-text">{escape(group['description'])}</p>'''
     if group['archived']:
         body += '<p class="group-notice">Группа в архиве. Новые вступления и выбор проекта закрыты; существующие проекты и руководство сохранены.</p>'
     if data['teacher']:
@@ -357,8 +357,9 @@ def render_group(conn, user, group, data, token, code=None):
                 hint = ('Учитель группы уже сопровождает выбранный проект.' if connected else 'Предложение отправлено. Дождитесь согласования в разделе «Руководство».') + ' Чтобы предложить другой проект, сначала сохраните новый выбор.'
             selector = f'''<form method="post" class="group-form">{hidden_token(token)}<label>Мой проект<select name="project_id">{options}</select></label><div class="group-actions">
                 <button name="action" value="select" data-ui-icon="save">Сохранить выбор проекта</button>{proposal}</div></form>''' if projects else f'<p>У тебя пока нет собственного проекта. Сначала создай его, затем выбери для группы.</p><a href="/#project-create">Создать проект {icon('arrow')}</a>'
-            body += f'''<section class="group-panel"><h2>Мой проект в группе</h2><p>Выберите один собственный проект. Учитель увидит его название. Работы и оценки доступны только действующему руководителю.</p>
-                {selector}<p>{hint}</p><a href="/supervision">Мои согласования руководства {icon('arrow')}</a></section>'''
+            body += f'''<section class="group-panel"><h2>Мой проект в группе</h2>
+                {selector}<details class="ds-guide"><summary>Проект и доступ учителя</summary><p>Выберите один собственный проект. Учитель увидит его название. Работы и оценки доступны только действующему руководителю.</p>
+                <p>{hint}</p></details><a href="/supervision">Мои согласования руководства {icon('arrow')}</a></section>'''
         if selected in owned_ids:
             states = get_stages(conn, selected)
             defense = defense_for(conn, selected)
@@ -423,5 +424,5 @@ def render_group(conn, user, group, data, token, code=None):
             <label>Название группы<input name="name" maxlength="120" required value="{escape(group['name'], quote=True)}"></label><label>Описание для учеников<textarea name="description" maxlength="600" rows="3">{escape(group['description'])}</textarea></label><button data-ui-icon="save">Сохранить настройки группы</button></form>
             {form('restore' if group['archived'] else 'archive', '<button class="secondary" data-ui-icon="archive">' + ('Восстановить группу' if group['archived'] else 'Отправить группу в архив') + '</button>')}</details>'''
     else:
-        body += '<section class="group-panel"><h2>Выход из группы</h2><p>Выход скроет вас из списка класса. Проект, команда, оценки, действующий руководитель и отдельные запросы сопровождения сохранятся. Запрос можно отменить в разделе «Руководство».</p>' + form('leave', '<button class="secondary" data-ui-icon="logout">Выйти из группы</button>') + '</section>'
+        body += '<details class="group-panel"><summary>Выход из группы</summary><p>Выход скроет вас из списка класса. Проект, команда, оценки, действующий руководитель и отдельные запросы сопровождения сохранятся. Запрос можно отменить в разделе «Руководство».</p>' + form('leave', '<button class="secondary" data-ui-icon="logout">Выйти из группы</button>') + '</details>'
     return body

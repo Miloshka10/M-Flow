@@ -182,7 +182,7 @@ def render_results(result, params, projects):
     counts = result['counts']
     html = f'''<section id="student-results" class="student-results" aria-labelledby="results-title">
         <div class="section-title"><div><span class="eyebrow">ОБРАТНАЯ СВЯЗЬ И СЛЕДУЮЩИЙ ШАГ</span>
-        <h2 id="results-title">Центр результатов</h2><p>Сначала то, что нужно исправить. Только актуальные результаты и твои опубликованные оценки.</p></div></div>
+        <h2 id="results-title">Мои результаты</h2></div></div>
         <p class="t-muted">Доработать: {counts.get('revision', 0)} · На проверке: {counts.get('review', 0)} · Принято: {counts.get('accepted', 0)} · Личных оценок: {counts.get('grade', 0)}</p>
         <form class="results-filters" method="get" action="/#student-results">
             {focus_field}
@@ -246,9 +246,9 @@ def render_results(result, params, projects):
             action = 'Перейти к доработке' if category == 'revision' else 'Открыть результат' if kind != 'grade' else 'Посмотреть критерии и баллы'
             html += f'''<article class="result-item result-{category}" data-result-key="{kind}-{pid}-{item['item_id']}" data-result-state="{category}">
                 <div class="result-heading"><span class="result-state">{label}</span><a href="{base}">{escape(item['project_name'])} {icon('arrow')}</a></div>
-                <h3>{escape(title)}</h3><p class="t-muted">{result_date(item)}</p>{teacher}{feedback}
+                <h3>{escape(title)}</h3><details class="ds-result-meta"><summary>Дата и учитель</summary><p class="t-muted">{result_date(item)}</p>{teacher}</details>{feedback}
                 <a class="action-link" href="{href}">{action} {icon('arrow')}</a>
-                <div class="result-next"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ ПРОЕКТА</span><strong>{step['title']}</strong><p>{step['text']}</p>{step_link}</div></article>'''
+                <details class="ds-result-next"><summary>Следующий шаг проекта</summary><div class="result-next"><strong>{step['title']}</strong><p>{step['text']}</p>{step_link}</div></details></article>'''
         html += '</div>'
     if result['pages'] > 1:
         html += '<nav class="results-pages" aria-label="Страницы результатов">'
