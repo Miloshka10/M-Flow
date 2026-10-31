@@ -14,6 +14,12 @@ function setupTaskBoard() {
     history.replaceState(null, '', canonical);
   }
   let active = null;
+  board.querySelectorAll('[data-task-report]').forEach(field => {
+    const count = field.closest('form').querySelector('[data-report-count]');
+    const update = () => { if (count) count.textContent = field.value.length + ' / 500'; };
+    field.addEventListener('input', update);
+    update();
+  });
   let column = board.dataset.column || 'todo';
   function selectColumn(value, updateURL = true) {
     if (listMode) return;

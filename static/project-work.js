@@ -3,10 +3,23 @@ document.addEventListener('DOMContentLoaded', () => {
   'use strict';
   const board = document.querySelector('[data-workspace="1"]');
   if (!board) return;
+  board.classList.add('pw-enhanced');
   const panels = [...board.querySelectorAll('[data-work-panel]')];
   const tools = board.querySelector('[data-work-tools]');
   const general = board.querySelector('.pw-unassigned');
   let selected = board.dataset.selectedStage || '1';
+  function setView(panel, view) {
+    panel.dataset.workView = view;
+    panel.querySelectorAll('[data-work-view-button]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.workViewButton === view));
+    });
+  }
+  panels.forEach(panel => {
+    setView(panel, 'tasks');
+    panel.querySelectorAll('[data-work-view-button]').forEach(button => {
+      button.addEventListener('click', () => setView(panel, button.dataset.workViewButton));
+    });
+  });
   function show(number) {
     if (!panels.some(p => p.dataset.workPanel === number)) return;
     selected = number;
@@ -42,6 +55,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (stage) selected = stage[1];
     else if (card?.dataset.taskStage !== 'none' && card?.dataset.taskStage) selected = card.dataset.taskStage;
     show(selected);
+    const panel = panels.find(p => p.dataset.workPanel === selected);
+    if (stage && /-result$/.test(id)) setView(panel, 'result');
+    else if (card || (stage && /-tasks$/.test(id))) setView(panel, 'tasks');
     if (card) {
       for (let node = card.parentElement; node && node !== board; node = node.parentElement) {
         if (node.tagName === 'DETAILS') node.open = true;

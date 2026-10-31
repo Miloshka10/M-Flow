@@ -69,13 +69,16 @@ def render_project_work(pid, user, owner, members, stages, defense, assessments,
         panels.append(f'''<section class="pw-stage pw-stage-{kind}" id="stage-{number}" data-work-panel="{number}">
             <header class="pw-stage-heading"><span class="eyebrow">ЭТАП {number} / 5{' · ТЕКУЩИЙ' if current and number == current['number'] else ''}</span>
             <h2>{escape(s['title'])}</h2><p>{STAGE_DESCRIPTIONS[number]}</p></header>
-            <section class="pw-next pw-{kind}" data-next-step="{key}"><div><span class="eyebrow">{'ВАШ СЛЕДУЮЩИЙ ШАГ' if user['role'] == 'teacher' else 'ЧТО ДЕЛАТЬ СЕЙЧАС'}</span>
-            <h3>{escape(title)}</h3><p>{escape(text)}</p></div>{f'<a class="btn" href="{target}">{escape(action)} {icon("arrow")}</a>' if target else ''}</section>
+            <div class="pw-mobile-views" role="group" aria-label="Задачи и результат этапа {number}">
+            <button type="button" data-work-view-button="tasks" aria-pressed="true" aria-controls="stage-{number}-tasks">Задачи</button>
+            <button type="button" data-work-view-button="result" aria-pressed="false" aria-controls="stage-{number}-result">Результат этапа</button></div>
             <div class="pw-grid"><section class="pw-tasks" id="stage-{number}-tasks"><div class="pw-task-heading"><h3>Задачи этапа</h3>
             {f'<a class="board-add action-link" href="#task-create">{icon("plus")} Задача</a>' if owner else ''}</div>
             <div data-work-tools-slot></div>{task_list(rows, number)}<div data-unassigned-slot></div></section>
             <aside class="pw-result" id="stage-{number}-result" tabindex="-1" aria-label="Результат этапа {number}">
-            {f'<p class="error" role="alert">{escape(error)}</p>{unsaved}' if error and (number == current_number) else ''}{result}</aside></div></section>''')
+            {f'<p class="error" role="alert">{escape(error)}</p>{unsaved}' if error and (number == current_number) else ''}{result}
+            <details class="pw-next pw-{kind}" data-next-step="{key}"><summary>{escape(title)}</summary>
+            <p>{escape(text)}</p>{f'<a class="action-link" href="{target}">{escape(action)} {icon("arrow")}</a>' if target else ''}</details></aside></div></section>''')
     general = [t for t in tasks if t['stage_number'] is None]
     unassigned = f'''<details class="pw-unassigned" id="tasks-without-stage"><summary>Без этапа · {len(general)}</summary>
         <p>Общие дела проекта. Владелец может привязать их к этапу.</p>{task_list(general, None)}</details>'''

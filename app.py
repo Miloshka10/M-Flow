@@ -1021,7 +1021,7 @@ def get_student_progress(project_id):
 # STYLE + JAVASCRIPT
 # =========================================================
 
-PAGE_STYLE = '<script src="/static/kanban.js?v=20261027-work" defer></script>'
+PAGE_STYLE = '<script src="/static/kanban.js?v=20261031-tasks" defer></script>'
 
 
 # =========================================================
@@ -1652,11 +1652,6 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
         updates = task_update_history.get(task_id, [])
         latest_update_html = ""
         if updates:
-            latest_update = updates[0]
-            update_author = escape(latest_update["username"] or "Участник")
-            update_timestamp = format_timestamp(latest_update["created_at"])
-            update_body = escape(latest_update["body"])
-
             history_items = "".join(
                 f'''<article class="task-report-entry">
                     <div class="task-report-head">
@@ -1669,33 +1664,27 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
             )
 
             latest_update_html = f"""
-                <div class="task-report">
-                    <div class="task-report-head">
-                        <strong>Последний отчёт · {update_author}</strong>
-                        <span>{update_timestamp}</span>
-                    </div>
-                    <p>{update_body}</p>
-                    <details class="task-report-history">
-                        <summary data-ui-icon="history">История отчётов ({len(updates)})</summary>
-                        <div>{history_items}</div>
-                    </details>
-                </div>
+                <section class="task-report task-report-history">
+                    <h3>Отчёты · {len(updates)}</h3>{history_items}
+                </section>
             """
+        else:
+            latest_update_html = '<section class="task-report"><h3>Отчёты · 0</h3><p class="t-muted">Отчётов пока нет.</p></section>'
 
         report_form = ""
         if current_user["role"] == "student" and task["assignee_id"] == current_user["id"]:
             report_form = f"""
-                <details class="task-report-compose">
-                    <summary data-ui-icon="plus">Добавить отчёт</summary>
+                <section class="task-report-compose">
                     <form method="post" action="/project/{project_id}/task/{task_id}/update">
                         {csrf_input()}
                         <input type="hidden" name="return_to" value="{escape(board_location + '#task-' + str(task_id),quote=True)}">
-                        <textarea name="body" maxlength="500" rows="3" required
+                        <label>Добавить отчёт<textarea name="body" maxlength="500" rows="3" required data-task-report
                             aria-label="Отчёт по задаче"
-                            placeholder="Что уже сделано? Что мешает двигаться дальше?"></textarea>
+                            placeholder="Что сделали и какой результат получили?"></textarea></label>
+                        <span class="task-report-count" data-report-count>0 / 500</span>
                         <button type="submit" data-ui-icon="save">Сохранить отчёт</button>
                     </form>
-                </details>
+                </section>
             """
 
         delete_control = f"""
@@ -1709,6 +1698,7 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
         task_title = escape(
             task["title"]
         )
+        assignee_initials = escape(''.join(word[0] for word in (task['assignee_name'] or '').split()[:2]).upper() or '—')
 
         safe_deadline = escape(deadline_text(deadline))
         deadline_class = deadline['css']
@@ -1742,9 +1732,11 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
             for value, label in (("todo", "К выполнению"), ("progress", "В работе"), ("done", "Готово"))
         )
         status_control = f'''<label class="task-status-control" for="task-status-{task_id}">Статус задачи
-            <select id="task-status-{task_id}" class="task-status-select" onchange="changeTaskStatus(this)">
+            <select id="task-status-{task_id}" class="task-status-select" aria-label="Статус задачи: {task_title}" onchange="changeTaskStatus(this)">
                 {status_options}
             </select></label>''' if can_update else ''
+        detail_status = status_control.replace(f'task-status-{task_id}"', f'task-status-{task_id}-detail"')
+        readonly_status = {"todo":"К выполнению", "progress":"В работе", "done":"Готово"}[task["status"]]
 
         priority_control = f"""
             <label class="task-priority-control">Приоритет<select class="task-priority-select" data-task-id="{task_id}" aria-label="Приоритет задачи: {task_title}" onchange="changePriority(this)">
@@ -1776,28 +1768,19 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
 
             <details class="board-disclosure task-details" id="task-details-{task_id}">
                 <summary class="task-title">{task_title}</summary>
-                <div class="task-detail-content"><h2>{task_title}</h2>{description_html}
+                <div class="task-detail-content"><h2>{task_title}</h2>
+                    <div class="task-detail-controls">{detail_status if can_update else '<div><span>Статус задачи</span><strong>' + readonly_status + '</strong></div>'}{priority_control if owner else '<div><span>Приоритет</span><strong>' + priority_name + '</strong></div>'}</div>
                     <div class="task-detail-meta"><span>Ответственный: {assignee_name}</span><span class="task-detail-deadline {deadline_class}">{safe_deadline}</span></div>
-                    <p>{stage_html}</p><p class="t-muted">Выполнение задачи не означает принятие этапа учителем.</p>
-                    {priority_control}{edit_control}{latest_update_html}{report_form}{delete_control}
+                    <p>{stage_html}</p><h3 class="task-description-heading">Что нужно сделать</h3>{description_html}
+                    {latest_update_html}{report_form}{edit_control}
+                    <p class="task-stage-rule t-muted">Выполнение задачи не означает принятие этапа учителем.</p>{delete_control}
                 </div>
             </details>
-            <div class="pw-row-state">{status_control if can_update else "<span>" + {"todo":"К выполнению", "progress":"В работе", "done":"Готово"}[task["status"]] + "</span>"}</div>
-            <div class="task-priority priority-{escape(priority)}">
-                {priority_name}
-            </div>
-
-
-            <div class="task-footer">
-
-                <span class="task-deadline {deadline_class}">
-                    {safe_deadline}
-                </span>
-
-                <span class="role">{assignee_name}</span>
-
-            </div>
-            <div class="task-meta"><span>{'Этап ' + str(task['stage_number']) if task['stage_number'] else 'Без этапа'}</span><span>Отчётов: {len(updates)}</span></div>
+            <div class="task-card-badges"><span class="task-deadline {deadline_class}">{icon('calendar')} {safe_deadline}</span>
+                <span class="task-priority priority-{escape(priority)}">{priority_name}</span></div>
+            <div class="task-card-bottom"><div class="task-footer"><span class="task-avatar" aria-hidden="true">{assignee_initials}</span>
+                <span class="task-assignee">{assignee_name}<small>Отчётов: {len(updates)}</small></span></div>
+                <div class="pw-row-state">{status_control if can_update else '<span>' + readonly_status + '</span>'}</div></div>
 
         </div>
         """
@@ -1982,7 +1965,7 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
         PAGE_STYLE
         + f"""
         <link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">
-        <link rel="stylesheet" href="/static/task-board.css?v=20261019"><link rel="stylesheet" href="/static/project-work.css?v=20261027-finish"><script src="/static/project-work.js?v=20261027" defer></script><script src="/static/task-board.js?v=20261027" defer></script>
+        <link rel="stylesheet" href="/static/task-board.css?v=20261031"><link rel="stylesheet" href="/static/project-work.css?v=20261031-tasks"><script src="/static/project-work.js?v=20261031" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
         <div class="container">
             {render_header(current_user)}
             <main class="project-workspace" data-project-views data-work-default="{int(work_mode)}">
