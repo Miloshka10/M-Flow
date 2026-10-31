@@ -13,12 +13,38 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request
 
 from account_mail import (MailSettings, MailDispatcher, normalize_email, send_smtp,
-                          send_brevo, send_mail, _NoMailRedirect)
+                          send_brevo, send_mail, public_origin, _NoMailRedirect)
 from check_account_setup import configuration_report
 from database import DatabaseUnavailable
 
 
 class AccountMailUnits(unittest.TestCase):
+    def test_origin_rejects_broken_recovery_link_prefixes_for_both_transports_and_preflight(self):
+        invalid = ('https://example.org#', 'https://example.org?', 'https://@example.org',
+                   'https://example.org\\other', '\x00https://example.org', 'https://exa\x00mple.org',
+                   'https://example.org\x7f', 'https://example.org\x80', 'https://example.org:',
+                   'https://[::1]:')
+        common = dict(M_FLOW_MAIL_HOST='smtp.example.org', M_FLOW_MAIL_USER='test-user',
+                      M_FLOW_MAIL_PASSWORD='test-password', M_FLOW_MAIL_FROM='sender@example.org',
+                      M_FLOW_MAIL_API_KEY='test-api-key')
+        for origin in invalid:
+            with self.subTest(origin=repr(origin)):
+                self.assertEqual(public_origin(origin), '')
+                if '\x00' in origin:
+                    continue  # The OS itself refuses NUL in environment values.
+                for provider in ('smtp', 'brevo'):
+                    with patch.dict(os.environ, dict(common, M_FLOW_MAIL_PROVIDER=provider,
+                                                    M_FLOW_PUBLIC_URL=origin), clear=True):
+                        self.assertIsNone(MailSettings.from_environment())
+                        report = configuration_report()
+                        self.assertFalse(report['checks']['public_https_origin_configured'])
+                        self.assertFalse(report['checks']['mail_configured'])
+        for origin in ('https://m-flow-4tjw.onrender.com', 'https://example.org:8443',
+                       'https://[::1]', 'https://[2001:db8::1]:8443', 'https://пример.рф'):
+            with self.subTest(origin=origin):
+                self.assertEqual(public_origin(origin + '/'), origin)
+                self.assertEqual(public_origin(origin), origin)
+
     def brevo_settings(self):
         return MailSettings('', 0, '', '', 'sender@example.org', 'https://mflow.example.org', '',
                             'brevo', 'private-test-api-key')

@@ -35,10 +35,15 @@ TOKEN = re.compile(r'[A-Za-z0-9_-]{43}\Z')
 
 def public_origin(value):
     try:
+        # urlsplit drops empty query/fragment delimiters and leading controls.
+        # Validate the original text before appending a recovery URL to it.
+        if any(c in '\\?#' or c.isspace() or ord(c) < 32 or 127 <= ord(c) <= 159 for c in value):
+            return ''
         origin = value.rstrip('/')
         parsed = urlsplit(origin)
-        if (parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password
-                or parsed.path or parsed.query or parsed.fragment or any(c.isspace() for c in origin)
+        if (parsed.scheme != 'https' or not parsed.hostname
+                or parsed.username is not None or parsed.password is not None
+                or parsed.path or parsed.query or parsed.fragment or parsed.netloc.endswith(':')
                 or (parsed.port is not None and not 1 <= parsed.port <= 65535)):
             return ''
         return origin
