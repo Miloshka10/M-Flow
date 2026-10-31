@@ -122,6 +122,18 @@ function setup(response) {
   assert.equal(failedReloads, 0, 'Denied save never reloads or presents success');
   assert.equal(filteredFailure.select.value, 'todo');
   assert.equal(filteredFailure.priority.value, 'normal');
+  const workspaceFailure = setup({ok: false, status: 403, json: async () => ({success: false, error: 'Нет доступа'})});
+  workspaceFailure.elements['#task-board'] = {dataset: {workspace: '1'}};
+  workspaceFailure.elements['#board-status'].scrollIntoView = () => {};
+  workspaceFailure.card.dataset.taskState = 'todo';
+  const detailStatus = {value: 'done', disabled: false};
+  workspaceFailure.card.querySelectorAll = selector => selector === '.task-status-select' ?
+    [workspaceFailure.select, detailStatus] : [workspaceFailure.select, detailStatus, workspaceFailure.priority];
+  await workspaceFailure.context.moveTask(workspaceFailure.card, 'done');
+  assert.equal(workspaceFailure.select.value, 'todo', 'Denied save restores the list status');
+  assert.equal(detailStatus.value, 'todo', 'Denied save also restores the status inside the drawer');
+  assert.equal(workspaceFailure.priority.value, 'high', 'Restoring statuses never changes priority');
+  assert.equal(workspaceFailure.elements['#board-status'].textContent, 'Нет доступа');
   // An in-flight save may not mutate the visible board or signal success.
   const pending = setup({});
   let finishSave;

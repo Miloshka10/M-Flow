@@ -68,7 +68,7 @@ async function moveTask(card, target) {
       await saveTask(card, 'status', target);
       location.reload();
     } catch (error) {
-      if (select) select.value = previous;
+      card.querySelectorAll('.task-status-select').forEach(control => control.value = previous);
       const message = document.querySelector('#board-status');
       if (message) { message.hidden = false; message.textContent = error.message || 'Не удалось сохранить задачу.'; message.scrollIntoView({block: 'center'}); }
     }
