@@ -1,0 +1,33 @@
+{
+  "head": "2a011fb46ae4948962aca002119f5120d78813bd",
+  "historical_database_blobs": [
+    {
+      "blob": "900a7b3ce6b4b3ba87af49b05e4f1d79129f12e6",
+      "path": "database.db",
+      "bytes": 16384,
+      "table_names": [
+        "projects",
+        "sqlite_sequence",
+        "tasks"
+      ],
+      "row_counts": {
+        "projects": 1,
+        "tasks": 3
+      },
+      "inspection": "aggregate metadata only; no records or hashes exported"
+    },
+    {
+      "blob": "218c72e27fa72de7415d28947efac8e6cb3c82a7",
+      "path": "database.db",
+      "bytes": 12288,
+      "table_names": [
+        "sqlite_sequence",
+        "tasks"
+      ],
+      "row_counts": {
+        "tasks": 2
+      },
+      "inspection": "aggregate metadata only; no records or hashes exported"
+    }
+  ]
+}

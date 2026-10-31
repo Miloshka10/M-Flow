@@ -1,0 +1,12 @@
+[
+  {
+    "role": "student",
+    "http_recovery_cycle": "passed",
+    "real_email_sent": false
+  },
+  {
+    "role": "teacher",
+    "http_recovery_cycle": "passed",
+    "real_email_sent": false
+  }
+]

@@ -151,6 +151,10 @@ def phase(mode):
     progress('startup')
     import app as module
     module.app.config.update(TESTING=True)
+    # This runner has already refused production and uses disposable accounts.
+    # Authorize its teacher fixture without relying on a production secret.
+    enrollment_code = secrets.token_urlsafe(32)
+    module.app.config['TEACHER_REGISTRATION_CODE'] = enrollment_code
     require(fingerprint(url) == before)
     student, teacher = module.app.test_client(), module.app.test_client()
     stranger = module.app.test_client()
@@ -183,7 +187,7 @@ def phase(mode):
         name = prefix + '_' + role
         if mode == 'create':
             require(post(client, route + '/register', dict(username=name, password=password,
-                    repeat_password=password)).status_code == 302)
+                    repeat_password=password, teacher_code=enrollment_code if role == 'teacher' else '')).status_code == 302)
             require(user_id(client) is not None)
             require(post(client, '/logout', {}).status_code == 302)
         require(post(client, route + '/login', dict(username=name, password=password)).status_code == 302)

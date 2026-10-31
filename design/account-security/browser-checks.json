@@ -1,0 +1,26 @@
+[
+  {
+    "codeType": "password",
+    "overflow": false,
+    "theme": "light",
+    "width": 320
+  },
+  {
+    "codeType": "password",
+    "overflow": false,
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "codeType": "password",
+    "overflow": false,
+    "theme": "dark",
+    "width": 320
+  },
+  {
+    "codeType": "password",
+    "overflow": false,
+    "theme": "dark",
+    "width": 1440
+  }
+]

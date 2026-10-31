@@ -10,6 +10,79 @@ from database import DatabaseUnavailable
 
 
 class AuthSecurityCases:
+    def test_security_followup_teacher_registration_fails_closed_and_preserves_existing_login(self):
+        for code in ('', 'too-short', ' ' + 'x' * 24):
+            with patch.dict(self.module.app.config, TEACHER_REGISTRATION_CODE=code):
+                page = self.client.get('/teacher/register')
+                self.assertEqual(page.status_code, 200)
+                self.assertIn('Регистрация учителей пока закрыта', page.text)
+                self.assertNotIn('name="teacher_code"', page.text)
+                before = self.database_snapshot()
+                result = self.post('/teacher/register', data=dict(username='blocked-teacher',
+                    password='test-password', repeat_password='test-password', teacher_code=code))
+                self.assertEqual(result.status_code, 403)
+                self.assertEqual(self.database_snapshot(), before)
+        with patch.dict(self.module.app.config, TEACHER_REGISTRATION_CODE=''):
+            self.assertEqual(self.post('/teacher/login', data=dict(username='teacher-one', password='test-password')).status_code, 302)
+            self.assertEqual(self.client.get('/teacher').status_code, 200)
+
+    def test_security_followup_teacher_code_is_required_and_not_echoed(self):
+        expected = self.module.app.config['TEACHER_REGISTRATION_CODE']
+        self.assertNotIn(expected, self.client.get('/teacher/register').text)
+        for n, supplied in enumerate(('', '<script>bad-code</script>', 'я' * 257)):
+            before = self.database_snapshot()
+            result = self.post('/teacher/register', data=dict(username=f'blocked-{n}', password='test-password',
+                repeat_password='test-password', teacher_code=supplied))
+            self.assertEqual(result.status_code, 400)
+            self.assertIn('aria-invalid="true"', result.text)
+            self.assertNotIn(expected, result.text)
+            if supplied:
+                self.assertNotIn(supplied, result.text)
+            self.assertEqual(self.database_snapshot(), before)
+        result = self.post('/teacher/register', data=dict(username='authorized-teacher', password='test-password',
+            repeat_password='test-password', teacher_code=expected))
+        self.assertEqual(result.status_code, 302)
+        with closing(self.module.get_db()) as conn:
+            self.assertEqual(conn.execute("SELECT role FROM users WHERE username='authorized-teacher'").fetchone()['role'], 'teacher')
+
+    def test_security_followup_bad_teacher_codes_share_registration_limits(self):
+        with patch('auth_security.time.time', return_value=200000):
+            data = dict(username='guessing-teacher', password='test-password', repeat_password='test-password', teacher_code='wrong')
+            for _ in range(3):
+                self.assertEqual(self.post('/teacher/register', data=data).status_code, 400)
+            data['teacher_code'] = self.module.app.config['TEACHER_REGISTRATION_CODE']
+            self.assertEqual(self.post('/teacher/register', data=data).status_code, 429)
+
+    def test_security_followup_student_registration_does_not_require_teacher_code(self):
+        with patch.dict(self.module.app.config, TEACHER_REGISTRATION_CODE=''):
+            result = self.post('/register', data=dict(username='regular-pupil', password='test-password',
+                repeat_password='test-password', role='teacher'))
+            self.assertEqual(result.status_code, 302)
+            with closing(self.module.get_db()) as conn:
+                self.assertEqual(conn.execute("SELECT role FROM users WHERE username='regular-pupil'").fetchone()['role'], 'student')
+
+    def test_security_followup_headers_cover_errors_and_https_does_not_trust_forwarded_proto(self):
+        for path in ('/login', '/teacher/register', '/settings', '/health', '/does-not-exist', '/static/auth.js'):
+            response = self.client.get(path)
+            self.assertEqual(response.headers['X-Content-Type-Options'], 'nosniff')
+            self.assertEqual(response.headers['X-Frame-Options'], 'DENY')
+            self.assertEqual(response.headers['Referrer-Policy'], 'strict-origin-when-cross-origin')
+            self.assertIn("frame-ancestors 'none'", response.headers['Content-Security-Policy'])
+            self.assertIn("object-src 'none'", response.headers['Content-Security-Policy'])
+            self.assertNotIn('Strict-Transport-Security', response.headers)
+            response.close()
+        spoofed = self.client.get('/login', headers={'X-Forwarded-Proto': 'https'})
+        self.assertNotIn('Strict-Transport-Security', spoofed.headers)
+        secure = self.client.get('/login', base_url='https://localhost')
+        self.assertEqual(secure.headers['Strict-Transport-Security'], 'max-age=31536000')
+
+    def test_security_followup_profile_escapes_exception_messages(self):
+        self.sign_in(3)
+        with patch.object(self.module, 'replace_password', side_effect=ValueError('<script>unsafe-error</script>')):
+            result = self.post('/profile', data=dict(old_password='test-password', new_password='new-password', repeat_password='new-password'))
+        self.assertIn('&lt;script&gt;unsafe-error&lt;/script&gt;', result.text)
+        self.assertNotIn('<script>unsafe-error</script>', result.text)
+
     def counters(self):
         with closing(self.module.get_db()) as conn:
             return [tuple(row) for row in conn.execute('SELECT bucket,hits,expires FROM auth_limits ORDER BY bucket')]

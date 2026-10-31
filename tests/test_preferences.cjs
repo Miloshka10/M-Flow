@@ -8,7 +8,7 @@ function setup({saved = null, dark = false, blocked = false} = {}) {
   let stored = saved;
   const system = {matches: dark, addEventListener: (_, fn) => system.changed = fn};
   const elements = {
-    'site-preferences': {addEventListener: (_, fn) => elements.change = fn},
+    'site-preferences': {addEventListener: (event, fn) => elements[event] = fn},
     'site-theme': {}, 'site-animations': {}, 'preferences-status': {},
     'reset-preferences': {addEventListener: (_, fn) => elements.reset = fn}
   };
@@ -24,6 +24,9 @@ function setup({saved = null, dark = false, blocked = false} = {}) {
   return {root, system, elements, windowEvents, stored: () => stored, updateStorage: value => stored = value};
 }
 const defaults = setup();
+let prevented = false;
+defaults.elements.submit({preventDefault(){ prevented = true; }});
+assert.equal(prevented,true,'Appearance form must not submit account data or navigate');
 assert.equal(defaults.root.dataset.theme, 'light');
 assert.equal(defaults.root.dataset.animations, 'on');
 defaults.system.matches = true; defaults.system.changed();
