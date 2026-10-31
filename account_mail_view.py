@@ -21,7 +21,9 @@ def email_panel(email, token, error='', notice='', ready=True, submitted=None):
     current = (f'<p>Подтверждённый адрес: <strong>{escape(email["email"])}</strong></p>' if email['email'] else
                '<p>Почта ещё не подтверждена. Без неё восстановить пароль по email не получится.</p>')
     if email['pending_email']:
-        current += f'<p>Ждёт подтверждения: {escape(email["pending_email"])}. Старый подтверждённый адрес действует до завершения смены.</p>'
+        pending_note = ('Старый подтверждённый адрес действует до завершения смены.' if email['email'] else
+                        'Откройте письмо и подтвердите адрес, чтобы включить восстановление доступа.')
+        current += f'<p>Ждёт подтверждения: {escape(email["pending_email"])}. {pending_note}</p>'
     feedback = f'<p class="error" role="alert">{escape(error)}</p>' if error else ''
     if notice:
         feedback += f'<p class="ok" role="status">{escape(notice)}</p>'

@@ -2,6 +2,9 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 import re
+import io
+import json
+import threading
 from unittest.mock import patch
 from types import SimpleNamespace
 import os
@@ -27,6 +30,72 @@ class Mailbox:
 
 
 class AccountRecoveryCases:
+    def test_recovery_brevo_transport_confirms_and_resets_both_roles_without_network(self):
+        condition, letters, failures = threading.Condition(), [], []
+        class Receipt(io.BytesIO):
+            status = 201
+        class Provider:
+            def open(inner, request, timeout):
+                self.assertEqual(request.full_url, 'https://api.brevo.com/v3/smtp/email')
+                with condition:
+                    letters.append(json.loads(request.data))
+                    condition.notify_all()
+                return Receipt(b'{"messageId":"isolated-test-receipt"}')
+        def wait_for_mail(count):
+            with condition:
+                self.assertTrue(condition.wait_for(lambda: len(letters) >= count, timeout=10),
+                                'A synthetic provider should have received the message')
+            return letters[count-1]
+        settings = account_mail.MailSettings('', 0, '', '', 'sender@example.org',
+            'https://mflow.example.org', '', 'brevo', 'isolated-api-key')
+        with patch('account_mail.build_opener', return_value=Provider()):
+            dispatcher = account_mail.MailDispatcher(on_error=lambda: failures.append(True))
+            try:
+                with patch.dict(self.module.app.config, MAIL_SETTINGS=settings, MAIL_DISPATCHER=dispatcher):
+                    for offset, (user, name, login) in enumerate(((3, 'student-one', '/login'), (1, 'teacher-one', '/teacher/login'))):
+                        base = offset * 3
+                        address = f'role-{user}@example.org'
+                        self.sign_in(user)
+                        self.assertEqual(self.post('/profile/email', data=dict(email=address, password='test-password')).status_code, 200)
+                        confirmation = wait_for_mail(base + 1)
+                        self.assertEqual(confirmation['to'], [dict(email=address)])
+                        token = re.search(r'#token=([A-Za-z0-9_-]{43})', confirmation['textContent'])[1]
+                        self.assertEqual(self.post('/email/confirm', data=dict(token=token)).status_code, 200)
+                        self.assertEqual(self.post('/forgot-password', data=dict(username=name, email=address)).status_code, 200)
+                        recovery = wait_for_mail(base + 2)
+                        token = re.search(r'#token=([A-Za-z0-9_-]{43})', recovery['textContent'])[1]
+                        self.assertEqual(self.post('/reset-password', data=dict(token=token, password='new-api-password', repeat_password='new-api-password')).status_code, 200)
+                        notice = wait_for_mail(base + 3)
+                        self.assertEqual(notice['to'], [dict(email=address)])
+                        self.assertIn(name, notice['textContent'])
+                        self.assertNotIn('new-api-password', notice['textContent'])
+                        self.assertEqual(self.post(login, data=dict(username=name, password='new-api-password')).status_code, 302)
+                        self.assertEqual(self.post('/reset-password', data=dict(token=token, password='another-password', repeat_password='another-password')).status_code, 400)
+            finally:
+                dispatcher._pool.shutdown(wait=True)
+        self.assertEqual(failures, [])
+
+    def test_recovery_teacher_code_rotation_blocks_old_invites_without_revoking_existing_teachers(self):
+        old_code, new_code = 'old-school-enrollment-code-123456', 'new-school-enrollment-code-654321'
+        with patch.dict(self.module.app.config, TEACHER_REGISTRATION_CODE=old_code):
+            self.assertEqual(self.post('/teacher/register', data=dict(username='gate-teacher-first',
+                password='test-password', repeat_password='test-password', teacher_code=old_code)).status_code, 302)
+        with patch.dict(self.module.app.config, TEACHER_REGISTRATION_CODE=new_code):
+            self.client = self.module.app.test_client()
+            rejected = self.post('/teacher/register', data=dict(username='gate-teacher-blocked',
+                password='test-password', repeat_password='test-password', teacher_code=old_code))
+            self.assertEqual(rejected.status_code, 400)
+            self.assertNotIn(old_code, rejected.text)
+            self.assertEqual(self.post('/teacher/register', data=dict(username='gate-teacher-new',
+                password='test-password', repeat_password='test-password', teacher_code=new_code)).status_code, 302)
+            self.client = self.module.app.test_client()
+            self.assertEqual(self.post('/teacher/login', data=dict(username='gate-teacher-first',
+                password='test-password')).status_code, 302)
+        with closing(self.module.get_db()) as conn:
+            self.assertIsNone(conn.execute('SELECT 1 FROM users WHERE username=?', ('gate-teacher-blocked',)).fetchone())
+            self.assertEqual(conn.execute('SELECT role FROM users WHERE id=1').fetchone()['role'], 'teacher')
+            self.assertEqual(conn.execute('SELECT role FROM users WHERE id=3').fetchone()['role'], 'student')
+
     def test_recovery_bootstrap_cannot_create_case_alias_or_replace_existing_role(self):
         before=self.database_snapshot()
         with patch.dict(os.environ,M_FLOW_DEBUG='0',M_FLOW_TEACHER_USER='STUDENT-ONE',M_FLOW_TEACHER_PASSWORD='bootstrap-password'):
@@ -111,7 +180,9 @@ class AccountRecoveryCases:
         self.assertNotIn('bad-password', invalid.text)
         self.assertEqual(self.database_snapshot(), before)
         self.assertEqual(box.jobs, [])
-        self.post('/profile/email', data=dict(email='student@example.org', password='test-password'))
+        pending = self.post('/profile/email', data=dict(email='student@example.org', password='test-password'))
+        self.assertNotIn('Старый подтверждённый адрес действует', pending.text)
+        self.assertIn('Откройте письмо и подтвердите адрес', pending.text)
         box.flush()
         with closing(self.module.get_db()) as conn:
             self.assertEqual(account_mail.email_for(conn,3)['email'], '')
@@ -139,7 +210,8 @@ class AccountRecoveryCases:
     def test_recovery_existing_email_requires_both_mailboxes_for_change(self):
         box = self.mail_setup()
         self.attach_email(box)
-        self.post('/profile/email', data=dict(email='new@example.org', password='test-password'))
+        pending = self.post('/profile/email', data=dict(email='new@example.org', password='test-password'))
+        self.assertIn('Старый подтверждённый адрес действует', pending.text)
         box.flush()
         self.assertEqual([m[0] for m in box.letters[-2:]], ['new@example.org','student@example.org'])
         new, old = box.token(-2), box.token(-1)

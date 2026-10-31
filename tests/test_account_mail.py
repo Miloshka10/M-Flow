@@ -1,13 +1,146 @@
 import os
+import io
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import threading
+import traceback
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError, URLError
+from urllib.request import Request
 
-from account_mail import MailSettings, MailDispatcher, normalize_email, send_smtp
+from account_mail import (MailSettings, MailDispatcher, normalize_email, send_smtp,
+                          send_brevo, send_mail, _NoMailRedirect)
+from check_account_setup import configuration_report
 from database import DatabaseUnavailable
 
 
 class AccountMailUnits(unittest.TestCase):
+    def brevo_settings(self):
+        return MailSettings('', 0, '', '', 'sender@example.org', 'https://mflow.example.org', '',
+                            'brevo', 'private-test-api-key')
+
+    def test_brevo_configuration_is_explicit_and_never_falls_back_to_smtp(self):
+        good = dict(M_FLOW_MAIL_PROVIDER='brevo', M_FLOW_PUBLIC_URL='https://mflow.example.org',
+                    M_FLOW_MAIL_FROM='sender@example.org', M_FLOW_MAIL_API_KEY='private-test-api-key')
+        with patch.dict(os.environ, good, clear=True):
+            settings = MailSettings.from_environment()
+            self.assertEqual(settings.provider, 'brevo')
+            self.assertEqual(settings.password, '')
+            self.assertNotIn('private-test-api-key', repr(settings))
+        for key, value in (('M_FLOW_MAIL_API_KEY', ''), ('M_FLOW_MAIL_API_KEY', 'secret\nheader'),
+                           ('M_FLOW_MAIL_API_KEY', ' secret '), ('M_FLOW_MAIL_PROVIDER', 'typo'),
+                           ('M_FLOW_PUBLIC_URL', 'http://mflow.example.org'),
+                           ('M_FLOW_MAIL_FROM', 'sender@example.org\r\nBcc:other@example.org')):
+            with self.subTest(key=key), patch.dict(os.environ, dict(good, **{key: value}), clear=True):
+                self.assertIsNone(MailSettings.from_environment())
+
+    def test_brevo_uses_fixed_https_verified_tls_plain_text_and_no_contact_import(self):
+        received = []
+        class Response(io.BytesIO):
+            status = 201
+        class Opener:
+            def open(self, request, timeout):
+                received.append((request, timeout))
+                return Response(b'{"messageId":"accepted-by-provider"}')
+        with patch('account_mail.build_opener', return_value=Opener()) as build:
+            send_brevo(self.brevo_settings(), 'PUPIL@example.org', 'Подтвердите почту', 'Код и ссылка')
+        handlers = build.call_args.args
+        self.assertTrue(handlers[0]._context.check_hostname)
+        self.assertTrue(handlers[0]._context.verify_mode)
+        self.assertIsInstance(handlers[1], _NoMailRedirect)
+        request, timeout = received[0]
+        self.assertEqual(request.full_url, 'https://api.brevo.com/v3/smtp/email')
+        self.assertEqual(request.get_method(), 'POST')
+        self.assertEqual(timeout, 15)
+        self.assertEqual(request.get_header('Api-key'), 'private-test-api-key')
+        payload = json.loads(request.data)
+        self.assertEqual(payload, dict(sender=dict(email='sender@example.org', name='M-Flow'),
+            to=[dict(email='pupil@example.org')], subject='Подтвердите почту', textContent='Код и ссылка'))
+
+    def test_brevo_rejects_redirects_bad_receipts_timeouts_and_never_exposes_provider_body(self):
+        class Response(io.BytesIO):
+            def __init__(self, status, body):
+                super().__init__(body)
+                self.status = status
+        cases = [(200, b'{"messageId":"not-created"}'), (201, b'not-json'), (201, b'[]'),
+                 (201, b'{"messageId":""}'), (201, b'{"messageId":123}'), (201, b'x'*16385),
+                 URLError('private-provider-response'), TimeoutError('private-provider-response')]
+        for case in cases:
+            response = None if isinstance(case, Exception) else Response(*case)
+            opener = unittest.mock.Mock()
+            if isinstance(case, Exception):
+                opener.open.side_effect = case
+            else:
+                opener.open.return_value = response
+            with self.subTest(case=type(case).__name__), patch('account_mail.build_opener', return_value=opener):
+                try:
+                    send_brevo(self.brevo_settings(), 'pupil@example.org', 'Subject', 'secret-token-in-body')
+                except DatabaseUnavailable as exc:
+                    displayed = ''.join(traceback.format_exception(exc))
+                    self.assertNotIn('private-provider-response', displayed)
+                    self.assertNotIn('private-test-api-key', displayed)
+                    self.assertNotIn('secret-token-in-body', str(exc))
+                else:
+                    self.fail('A mail provider failure must fail closed')
+            self.assertEqual(opener.open.call_count, 1, 'No automatic resends')
+            if response:
+                self.assertTrue(response.closed)
+        error_body = io.BytesIO(b'private-provider-response')
+        error = HTTPError('https://api.brevo.com/v3/smtp/email', 302, 'redirect',
+                          {'Location': 'https://other.invalid'}, error_body)
+        with patch('account_mail.build_opener') as build:
+            build.return_value.open.side_effect = error
+            with self.assertRaises(DatabaseUnavailable):
+                send_brevo(self.brevo_settings(), 'pupil@example.org', 'Subject', 'Body')
+        self.assertTrue(error_body.closed)
+        request = Request('https://api.brevo.com/v3/smtp/email', headers={'api-key': 'test-secret'}, data=b'body')
+        for status in (301, 302, 303, 307, 308):
+            self.assertIsNone(_NoMailRedirect().redirect_request(request, None, status, '', {}, 'https://other.invalid'))
+
+    def test_dispatcher_selects_only_the_explicit_transport(self):
+        smtp = MailSettings('smtp.invalid', 587, 'user', 'secret', 'sender@example.org', 'https://mflow.example.org', 'starttls')
+        with patch('account_mail.send_brevo') as brevo_send, patch('account_mail.send_smtp') as smtp_send:
+            send_mail(self.brevo_settings(), 'pupil@example.org', 'Subject', 'Body')
+            brevo_send.assert_called_once()
+            smtp_send.assert_not_called()
+            send_mail(smtp, 'pupil@example.org', 'Subject', 'Body')
+            smtp_send.assert_called_once()
+            invalid = MailSettings('', 0, '', '', 'sender@example.org', 'https://mflow.example.org', '', 'typo')
+            with self.assertRaises(DatabaseUnavailable):
+                send_mail(invalid, 'pupil@example.org', 'Subject', 'Body')
+            self.assertEqual(brevo_send.call_count, 1)
+            self.assertEqual(smtp_send.call_count, 1)
+
+    def test_setup_check_is_secret_free_and_does_not_open_app_database_or_send_mail(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as folder:
+            settings = dict(M_FLOW_MAIL_PROVIDER='brevo', M_FLOW_PUBLIC_URL='https://mflow.example.org',
+                M_FLOW_MAIL_FROM='private-sender@example.org', M_FLOW_MAIL_API_KEY='private-api-key',
+                M_FLOW_TEACHER_CODE='private-enrollment-code-123456', M_FLOW_OPERATOR_NAME='private-operator',
+                M_FLOW_SUPPORT_EMAIL='private-support@example.org', M_FLOW_DATABASE=str(Path(folder)/'never-create.db'))
+            env = dict(os.environ, **settings)
+            result = subprocess.run([sys.executable, str(root/'check_account_setup.py')], env=env,
+                                    cwd=folder, capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = json.loads(result.stdout)
+            self.assertTrue(report['configuration_only'])
+            self.assertIn('real_test_delivery', report['external_checks_required'])
+            for value in (settings['M_FLOW_MAIL_FROM'], settings['M_FLOW_MAIL_API_KEY'], settings['M_FLOW_TEACHER_CODE'],
+                          settings['M_FLOW_OPERATOR_NAME'], settings['M_FLOW_SUPPORT_EMAIL']):
+                self.assertNotIn(value, result.stdout + result.stderr)
+            self.assertFalse(Path(settings['M_FLOW_DATABASE']).exists())
+            with patch.dict(os.environ, dict(settings, M_FLOW_TEACHER_CODE=' '*32), clear=True):
+                self.assertFalse(configuration_report()['checks']['teacher_registration_code_configured'])
+        with patch.dict(os.environ, {'M_FLOW_MAIL_PROVIDER': 'private-mistyped-key'}, clear=True):
+            report = configuration_report()
+            self.assertFalse(report['configuration_complete'])
+            self.assertEqual(report['mail_provider'], 'unsupported')
+            self.assertNotIn('private-mistyped-key', repr(report))
+
     def test_email_validation_blocks_headers_and_normalizes_without_provider_alias_rules(self):
         self.assertEqual(normalize_email(' Name+project@EXAMPLE.ORG '),'name+project@example.org')
         self.assertNotEqual(normalize_email('n.ame@example.org'),normalize_email('name@example.org'))

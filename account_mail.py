@@ -1,4 +1,4 @@
-"""Confirmed recovery email, single-use capabilities, and bounded async SMTP.
+"""Confirmed recovery email, single-use capabilities, and bounded async mail.
 
 No network in request/DB locks for password recovery; unknown addresses use the
 same queued path. Tokens travel in URL fragments, are stored only as HMACs, and
@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from dataclasses import dataclass
 from email.message import EmailMessage
+import json
 import os
 import re
 import secrets
@@ -16,6 +17,8 @@ import ssl
 import threading
 import time
 from urllib.parse import urlsplit
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, HTTPSHandler, HTTPRedirectHandler, build_opener
 
 from werkzeug.security import check_password_hash, generate_password_hash
 from account_names import login_user
@@ -72,11 +75,25 @@ class MailSettings:
     sender: str
     origin: str
     mode: str
+    provider: str = 'smtp'
+    api_key: str = ''
 
     @classmethod
     def from_environment(cls):
         try:
             origin = public_origin(os.environ.get('M_FLOW_PUBLIC_URL', ''))
+            sender = normalize_email(os.environ.get('M_FLOW_MAIL_FROM', ''))
+            provider = os.environ.get('M_FLOW_MAIL_PROVIDER', 'smtp').strip().lower()
+            if not origin:
+                return None
+            if provider == 'brevo':
+                api_key = os.environ.get('M_FLOW_MAIL_API_KEY', '')
+                if (not 1 <= len(api_key) <= 512 or not api_key.isascii()
+                        or not api_key.isprintable() or any(c.isspace() for c in api_key)):
+                    return None
+                return cls('', 0, '', '', sender, origin, '', provider, api_key)
+            if provider != 'smtp':
+                return None
             host = os.environ.get('M_FLOW_MAIL_HOST', '').strip()
             mode = os.environ.get('M_FLOW_MAIL_TLS', 'starttls')
             port = int(os.environ.get('M_FLOW_MAIL_PORT', '587' if mode == 'starttls' else '465'))
@@ -84,12 +101,54 @@ class MailSettings:
                     or any(c.isspace() for c in host) or mode not in ('starttls', 'ssl') or not 1 <= port <= 65535):
                 return None
             user, password = os.environ.get('M_FLOW_MAIL_USER', ''), os.environ.get('M_FLOW_MAIL_PASSWORD', '')
-            sender = normalize_email(os.environ.get('M_FLOW_MAIL_FROM', ''))
             if not user or not password or '\r' in user or '\n' in user:
                 return None
             return cls(host, port, user, password, sender, origin, mode)
         except (ValueError, UnicodeError):
             return None
+
+
+class _NoMailRedirect(HTTPRedirectHandler):
+    """Do not forward a provider credential or recovery token to another URL."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def send_brevo(settings, recipient, subject, body):
+    """HTTPS on the provider's fixed endpoint, without retries or response logging.
+
+    A 201 response means accepted by the provider, not delivery to an inbox.
+    No contact list, tracking script, webhook or marketing subscription is created.
+    """
+    payload = dict(sender=dict(email=settings.sender, name='M-Flow'),
+                   to=[dict(email=normalize_email(recipient))], subject=subject, textContent=body)
+    request = Request('https://api.brevo.com/v3/smtp/email',
+                      data=json.dumps(payload, ensure_ascii=False).encode('utf-8'), method='POST',
+                      headers={'api-key': settings.api_key, 'Content-Type': 'application/json',
+                               'Accept': 'application/json'})
+    opener = build_opener(HTTPSHandler(context=ssl.create_default_context()), _NoMailRedirect())
+    try:
+        with opener.open(request, timeout=15) as response:
+            if response.status != 201:
+                raise ValueError('Unexpected mail response')
+            data = response.read(16385)
+            if len(data) > 16384:
+                raise ValueError('Oversized mail response')
+            result = json.loads(data)
+            if not isinstance(result, dict) or not isinstance(result.get('messageId'), str) or not result['messageId'].strip():
+                raise ValueError('Missing mail receipt')
+    except (HTTPError, URLError, OSError, ValueError, UnicodeError) as exc:
+        if isinstance(exc, HTTPError):
+            exc.close()
+        raise DatabaseUnavailable('Почтовый сервис не подтвердил приём письма. Повторите запрос позже.') from None
+
+
+def send_mail(settings, recipient, subject, body):
+    if settings.provider == 'brevo':
+        return send_brevo(settings, recipient, subject, body)
+    if settings.provider == 'smtp':
+        return send_smtp(settings, recipient, subject, body)
+    raise DatabaseUnavailable('Способ отправки почты не поддерживается.')
 
 
 def send_smtp(settings, recipient, subject, body):
@@ -116,7 +175,7 @@ class MailDispatcher:
 In-flight mail can be lost on process restart: the user may request it again.
 Never log exceptions that can contain SMTP credentials or recipient addresses.
 """
-    def __init__(self, on_error, sender=send_smtp):
+    def __init__(self, on_error, sender=send_mail):
         self._pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='mflow-mail')
         self._slots = threading.BoundedSemaphore(16)
         self.sender, self.on_error = sender, on_error
