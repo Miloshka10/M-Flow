@@ -13,8 +13,10 @@ def configuration_report():
     provider = os.environ.get('M_FLOW_MAIL_PROVIDER', 'smtp').strip().lower()
     mail = MailSettings.from_environment()
     required = ['M_FLOW_PUBLIC_URL', 'M_FLOW_MAIL_FROM']
-    if provider == 'brevo':
+    if provider in ('brevo', 'emailjs'):
         required += ['M_FLOW_MAIL_API_KEY']
+        if provider == 'emailjs':
+            required += ['M_FLOW_MAIL_PUBLIC_KEY', 'M_FLOW_MAIL_SERVICE_ID', 'M_FLOW_MAIL_TEMPLATE_ID']
     elif provider == 'smtp':
         required += ['M_FLOW_MAIL_HOST', 'M_FLOW_MAIL_USER', 'M_FLOW_MAIL_PASSWORD']
     code = os.environ.get('M_FLOW_TEACHER_CODE', '')
@@ -28,7 +30,7 @@ def configuration_report():
                   operator_name_present=bool(os.environ.get('M_FLOW_OPERATOR_NAME', '').strip()),
                   support_address_valid=support)
     return dict(configuration_only=True, configuration_complete=all(checks.values()),
-                mail_provider=provider if provider in ('smtp', 'brevo') else 'unsupported',
+                mail_provider=provider if provider in ('smtp', 'brevo', 'emailjs') else 'unsupported',
                 checks=checks, missing_mail_variables=[name for name in required if not os.environ.get(name)],
                 external_checks_required=['sender_verification', 'real_test_delivery', 'browser_qa',
                                           'data_processing_policy', 'live_release_verification'])

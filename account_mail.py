@@ -24,6 +24,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from account_names import login_user
 from auth_security import begin_auth_write, fingerprint, _cleanup, private_database_error, MAX_COUNTERS
 from database import execute_schema, DatabaseUnavailable
+from mail_delivery_gate import emailjs_gate
 
 TOKEN_SECONDS = 20 * 60
 VERIFY_SECONDS = 24 * 60 * 60
@@ -82,6 +83,9 @@ class MailSettings:
     mode: str
     provider: str = 'smtp'
     api_key: str = ''
+    public_key: str = ''
+    service_id: str = ''
+    template_id: str = ''
 
     @classmethod
     def from_environment(cls):
@@ -91,11 +95,21 @@ class MailSettings:
             provider = os.environ.get('M_FLOW_MAIL_PROVIDER', 'smtp').strip().lower()
             if not origin:
                 return None
-            if provider == 'brevo':
+            if provider in ('brevo', 'emailjs'):
                 api_key = os.environ.get('M_FLOW_MAIL_API_KEY', '')
                 if (not 1 <= len(api_key) <= 512 or not api_key.isascii()
                         or not api_key.isprintable() or any(c.isspace() for c in api_key)):
                     return None
+                if provider == 'emailjs':
+                    public_key = os.environ.get('M_FLOW_MAIL_PUBLIC_KEY', '')
+                    service_id = os.environ.get('M_FLOW_MAIL_SERVICE_ID', '')
+                    template_id = os.environ.get('M_FLOW_MAIL_TEMPLATE_ID', '')
+                    if (not 1 <= len(public_key) <= 512 or not public_key.isascii()
+                            or not public_key.isprintable() or any(c.isspace() for c in public_key)
+                            or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', service_id)
+                            or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', template_id)):
+                        return None
+                    return cls('', 0, '', '', sender, origin, '', provider, api_key, public_key, service_id, template_id)
                 return cls('', 0, '', '', sender, origin, '', provider, api_key)
             if provider != 'smtp':
                 return None
@@ -149,6 +163,9 @@ def send_brevo(settings, recipient, subject, body):
 
 
 def send_mail(settings, recipient, subject, body):
+    if settings.provider == 'emailjs':
+        from emailjs_transport import send_emailjs
+        return send_emailjs(settings, recipient, subject, body)
     if settings.provider == 'brevo':
         return send_brevo(settings, recipient, subject, body)
     if settings.provider == 'smtp':
@@ -180,17 +197,25 @@ class MailDispatcher:
 In-flight mail can be lost on process restart: the user may request it again.
 Never log exceptions that can contain SMTP credentials or recipient addresses.
 """
-    def __init__(self, on_error, sender=send_mail):
+    def __init__(self, on_error, sender=send_mail, gate=None):
         self._pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='mflow-mail')
         self._slots = threading.BoundedSemaphore(16)
         self.sender, self.on_error = sender, on_error
+        self.gate = gate
 
     def submit(self, job):
         if not self._slots.acquire(blocking=False):
             raise DatabaseUnavailable('Отправка писем временно занята. Попробуйте позже.')
         def run():
             try:
-                job(self.sender)
+                def deliver(settings, recipient, subject, body):
+                    if settings.provider == 'emailjs':
+                        if self.gate is None:
+                            raise DatabaseUnavailable('Ограничение скорости отправки не подключено.')
+                        with self.gate(settings):
+                            return self.sender(settings, recipient, subject, body)
+                    return self.sender(settings, recipient, subject, body)
+                job(deliver)
             except Exception:
                 self.on_error()
             finally:

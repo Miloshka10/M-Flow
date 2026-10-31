@@ -19,6 +19,32 @@ from database import DatabaseUnavailable
 
 
 class AccountMailUnits(unittest.TestCase):
+    def test_emailjs_requires_private_key_and_specific_template_configuration(self):
+        good = dict(M_FLOW_MAIL_PROVIDER='emailjs', M_FLOW_PUBLIC_URL='https://mflow.example.org',
+                    M_FLOW_MAIL_FROM='sender@example.org', M_FLOW_MAIL_API_KEY='private-test-key',
+                    M_FLOW_MAIL_PUBLIC_KEY='public-test-key', M_FLOW_MAIL_SERVICE_ID='service_test',
+                    M_FLOW_MAIL_TEMPLATE_ID='template_test')
+        with patch.dict(os.environ, good, clear=True):
+            settings = MailSettings.from_environment()
+            self.assertEqual(settings.provider, 'emailjs')
+            self.assertEqual(configuration_report()['mail_provider'], 'emailjs')
+            self.assertNotIn('private-test-key', repr(settings))
+        for name, value in (('M_FLOW_MAIL_API_KEY', ''), ('M_FLOW_MAIL_PUBLIC_KEY', ''),
+                            ('M_FLOW_MAIL_SERVICE_ID', ''), ('M_FLOW_MAIL_TEMPLATE_ID', 'bad\nheader')):
+            with self.subTest(name=name), patch.dict(os.environ, dict(good, **{name:value}), clear=True):
+                self.assertIsNone(MailSettings.from_environment())
+
+    def test_emailjs_dispatcher_without_shared_gate_never_sends(self):
+        failed, sent = threading.Event(), []
+        settings = MailSettings('', 0, '', '', 'sender@example.org', 'https://mflow.example.org', '', 'emailjs')
+        dispatcher = MailDispatcher(on_error=failed.set, sender=lambda *args: sent.append(args))
+        try:
+            dispatcher.submit(lambda send: send(settings, 'pupil@example.org', 'Subject', 'Body'))
+            self.assertTrue(failed.wait(5))
+            self.assertEqual(sent, [])
+        finally:
+            dispatcher._pool.shutdown(wait=True)
+
     def test_origin_rejects_broken_recovery_link_prefixes_for_both_transports_and_preflight(self):
         invalid = ('https://example.org#', 'https://example.org?', 'https://@example.org',
                    'https://example.org\\other', '\x00https://example.org', 'https://exa\x00mple.org',

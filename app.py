@@ -91,7 +91,9 @@ app.config.update(
 )
 app.config['MAIL_SETTINGS'] = account_mail.MailSettings.from_environment()
 app.config['PUBLIC_ORIGIN'] = account_mail.public_origin(os.environ.get('M_FLOW_PUBLIC_URL', ''))
-app.config['MAIL_DISPATCHER'] = account_mail.MailDispatcher(lambda: app.logger.warning('Account email delivery failed; details omitted.'))
+app.config['MAIL_DISPATCHER'] = account_mail.MailDispatcher(
+    lambda: app.logger.warning('Account email delivery failed; details omitted.'),
+    gate=lambda settings: account_mail.emailjs_gate(get_db, SECRET_KEY, settings.public_key))
 TRUSTED_AUTH_PROXIES = proxy_networks(os.environ.get('M_FLOW_TRUSTED_PROXY_CIDRS', ''))
 # Unknown usernames still do one password verification, rather than returning early.
 DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))

@@ -11,6 +11,7 @@ import os
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import account_mail
+import mail_delivery_gate
 from account_names import name_audit
 
 
@@ -31,25 +32,56 @@ class Mailbox:
 
 class AccountRecoveryCases:
     def test_recovery_brevo_transport_confirms_and_resets_both_roles_without_network(self):
+        self.exercise_https_recovery('brevo')
+
+    def test_recovery_emailjs_transport_confirms_and_resets_both_roles_with_shared_gate(self):
+        self.exercise_https_recovery('emailjs')
+
+    def test_recovery_delivery_gate_is_shared_across_connections_and_releases_after_failure(self):
+        clock = SimpleNamespace(time=lambda: 100.0)
+        key = 'isolated-test-delivery-bucket'
+        with patch.object(mail_delivery_gate, 'time', clock):
+            first, _ = mail_delivery_gate.claim_delivery(self.module.get_db, key)
+            second, delay = mail_delivery_gate.claim_delivery(self.module.get_db, key)
+            self.assertIsNone(second)
+            self.assertGreater(delay, 0)
+            # Another writer can proceed while the network would be running.
+            with closing(self.module.get_db()) as conn:
+                conn.execute("INSERT INTO auth_limits(bucket,hits,expires) VALUES('unrelated-test-bucket',1,999)")
+                conn.commit()
+            mail_delivery_gate.finish_delivery(self.module.get_db, key, first)
+            self.assertIsNone(mail_delivery_gate.claim_delivery(self.module.get_db, key)[0])
+            clock.time = lambda: 103.0
+            third, _ = mail_delivery_gate.claim_delivery(self.module.get_db, key)
+            self.assertIsNotNone(third)
+
+    def exercise_https_recovery(self, provider):
         condition, letters, failures = threading.Condition(), [], []
         class Receipt(io.BytesIO):
-            status = 201
+            status = 200 if provider == 'emailjs' else 201
         class Provider:
             def open(inner, request, timeout):
-                self.assertEqual(request.full_url, 'https://api.brevo.com/v3/smtp/email')
+                self.assertEqual(request.full_url, 'https://api.emailjs.com/api/v1.0/email/send' if provider == 'emailjs'
+                                 else 'https://api.brevo.com/v3/smtp/email')
+                payload = json.loads(request.data)
+                if provider == 'emailjs':
+                    params = payload['template_params']
+                    payload = dict(to=[dict(email=params['to_email'])], textContent=params['message'])
                 with condition:
-                    letters.append(json.loads(request.data))
+                    letters.append(payload)
                     condition.notify_all()
-                return Receipt(b'{"messageId":"isolated-test-receipt"}')
+                return Receipt(b'OK' if provider == 'emailjs' else b'{"messageId":"isolated-test-receipt"}')
         def wait_for_mail(count):
             with condition:
                 self.assertTrue(condition.wait_for(lambda: len(letters) >= count, timeout=10),
                                 'A synthetic provider should have received the message')
             return letters[count-1]
         settings = account_mail.MailSettings('', 0, '', '', 'sender@example.org',
-            'https://mflow.example.org', '', 'brevo', 'isolated-api-key')
-        with patch('account_mail.build_opener', return_value=Provider()):
-            dispatcher = account_mail.MailDispatcher(on_error=lambda: failures.append(True))
+            'https://mflow.example.org', '', provider, 'isolated-api-key', 'isolated-public-key', 'service_test', 'template_test')
+        target = 'emailjs_transport.build_opener' if provider == 'emailjs' else 'account_mail.build_opener'
+        with patch(target, return_value=Provider()):
+            dispatcher = account_mail.MailDispatcher(on_error=lambda: failures.append(True),
+                gate=lambda config: account_mail.emailjs_gate(self.module.get_db, self.module.SECRET_KEY, config.public_key))
             try:
                 with patch.dict(self.module.app.config, MAIL_SETTINGS=settings, MAIL_DISPATCHER=dispatcher):
                     for offset, (user, name, login) in enumerate(((3, 'student-one', '/login'), (1, 'teacher-one', '/teacher/login'))):
