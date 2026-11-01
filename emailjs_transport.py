@@ -17,6 +17,45 @@ ENDPOINT = 'https://api.emailjs.com/api/v1.0/email/send'
 MAX_RESPONSE_BYTES = 4096
 
 
+def _refusal_code(status, stream):
+    """Recognize fixed provider phrases; never return any response text.
+
+    Early authorization failures need not appear in the provider's email history.
+    A bounded response is used only to select a fixed local category, then dropped.
+    Unrecognized text still produces only the numeric HTTP status.
+    """
+    fallback = f'EMAILJS_HTTP_{status}' if type(status) is int and 100 <= status <= 599 else 'EMAILJS_RECEIPT'
+    if status not in (400, 401, 403):
+        return fallback
+    try:
+        raw = stream.read(MAX_RESPONSE_BYTES + 1)
+        if len(raw) > MAX_RESPONSE_BYTES:
+            return fallback
+        message = raw.decode('utf-8').strip()
+        if message.startswith('"'):
+            message = json.loads(message)
+            if not isinstance(message, str):
+                return fallback
+        message = message.casefold()
+        if message.startswith(('<!doctype html', '<html')):
+            return 'EMAILJS_HTML_REFUSAL'
+        # Match short, known phrases rather than printing a provider sentence
+        # that could echo credentials, a recipient, a template or a token.
+        for pattern, code in (
+            (r'\bapi calls are disabled for non-browser applications\b', 'EMAILJS_NON_BROWSER'),
+            (r'\b(?:the )?public key is invalid\b', 'EMAILJS_PUBLIC_KEY'),
+            (r'\b(?:the )?private key is invalid\b', 'EMAILJS_PRIVATE_KEY'),
+            (r'\b(?:the )?access token is invalid\b', 'EMAILJS_PRIVATE_KEY'),
+            (r'\b(?:the )?origin is not allowed\b', 'EMAILJS_ORIGIN'),
+            (r'\brequests from this origin are (?:not allowed|blocked)\b', 'EMAILJS_ORIGIN'),
+        ):
+            if re.search(pattern, message):
+                return code
+    except (OSError, ValueError, UnicodeError, RecursionError):
+        pass
+    return fallback
+
+
 def _action_url(origin, body):
     """Only a complete, trusted capability line can become the template button.
 
@@ -50,9 +89,7 @@ def send_emailjs(settings, recipient, subject, body):
         opener = build_opener(HTTPSHandler(context=ssl.create_default_context()), _NoMailRedirect())
         with opener.open(request, timeout=15) as response:
             if response.status != 200:
-                status = response.status
-                code = f'EMAILJS_HTTP_{status}' if type(status) is int and 100 <= status <= 599 else 'EMAILJS_RECEIPT'
-                raise MailDeliveryError(code)
+                raise MailDeliveryError(_refusal_code(response.status, response))
             raw = response.read(MAX_RESPONSE_BYTES + 1)
             if len(raw) > MAX_RESPONSE_BYTES:
                 raise ValueError('Oversized mail response')
@@ -60,9 +97,10 @@ def send_emailjs(settings, recipient, subject, body):
             if receipt != 'OK' and json.loads(receipt) != 'OK':
                 raise ValueError('Missing mail receipt')
     except HTTPError as exc:
-        status = exc.code
-        exc.close()  # Do not read, retain or display the provider's response body.
-        code = f'EMAILJS_HTTP_{status}' if type(status) is int and 100 <= status <= 599 else 'EMAILJS_RECEIPT'
+        try:
+            code = _refusal_code(exc.code, exc)
+        finally:
+            exc.close()
         raise MailDeliveryError(code) from None
     except URLError as exc:
         reason = exc.reason

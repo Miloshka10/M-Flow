@@ -21,6 +21,31 @@ class Response(io.BytesIO):
 
 
 class EmailJsTransportTests(unittest.TestCase):
+    def test_forbidden_reason_is_classified_with_bounded_reads_without_echoing_any_provider_text(self):
+        marker = 'private-provider-response'
+        cases = (
+            ('API calls are disabled for non-browser applications. ' + marker, 'EMAILJS_NON_BROWSER'),
+            ('The Public Key is invalid. ' + marker, 'EMAILJS_PUBLIC_KEY'),
+            (json.dumps('The Private Key is invalid. ' + marker), 'EMAILJS_PRIVATE_KEY'),
+            ('The access token is invalid. ' + marker, 'EMAILJS_PRIVATE_KEY'),
+            ('The origin is not allowed. ' + marker, 'EMAILJS_ORIGIN'),
+            ('Requests from this origin are blocked. ' + marker, 'EMAILJS_ORIGIN'),
+            ('<!DOCTYPE html><html>' + marker, 'EMAILJS_HTML_REFUSAL'),
+            (marker, 'EMAILJS_HTTP_403'),
+            ('x' * 4097 + 'The Private Key is invalid.', 'EMAILJS_HTTP_403'),
+        )
+        for body, code in cases:
+            response = io.BytesIO(body.encode())
+            error = HTTPError('https://api.emailjs.com/api/v1.0/email/send', 403, marker, {}, response)
+            with self.subTest(code=code), patch('emailjs_transport.build_opener') as build:
+                build.return_value.open.side_effect = error
+                with self.assertRaises(MailDeliveryError) as caught:
+                    send_emailjs(self.settings, self.recipient, self.subject, self.body)
+                self.assertEqual(caught.exception.code, code)
+                self.assertNotIn(marker, ''.join(traceback.format_exception(caught.exception)))
+                build.return_value.open.assert_called_once()
+            self.assertTrue(response.closed)
+
     def test_provider_status_network_timeout_and_tls_are_distinguished_without_response_text(self):
         for status in (400, 401, 403, 404, 422, 429, 500):
             response = io.BytesIO(b'private-provider-response')
