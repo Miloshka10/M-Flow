@@ -1,6 +1,7 @@
 """Authentication scenarios inherited by both disposable SQLite and PostgreSQL suites."""
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+from html.parser import HTMLParser
 import subprocess
 import sys
 from unittest.mock import patch
@@ -9,7 +10,50 @@ import auth_security as security
 from database import DatabaseUnavailable
 
 
+class _AccessibilityTags(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.tags = []
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        self.tags.append((tag, dict(attrs)))
+
+
 class AuthSecurityCases:
+    def test_profile_password_feedback_is_accessible_and_safe_for_both_roles(self):
+        for user_id in (1, 3):
+            self.sign_in(user_id)
+            before = self.database_snapshot()
+            invalid = (
+                ('wrong-current-password', 'new-test-password', 'new-test-password', 'Старый пароль введён неверно.'),
+                ('test-password', 'short', 'short', 'Новый пароль слишком короткий'),
+                ('test-password', 'new-test-password', 'different-password', 'Новые пароли не совпадают.'),
+            )
+            for old, new, repeat, message in invalid:
+                with self.subTest(user=user_id, message=message):
+                    result = self.post('/profile', data=dict(old_password=old, new_password=new, repeat_password=repeat))
+                    self.assertEqual(result.status_code, 200)
+                    self.assertIn(message, result.text)
+                    alerts = [attrs for _, attrs in _AccessibilityTags(result.text).tags if attrs.get('role') == 'alert']
+                    self.assertEqual(len(alerts), 1)
+                    self.assertEqual(alerts[0].get('tabindex'), '-1')
+                    self.assertIn('data-account-password-error', alerts[0])
+                    self.assertIn('/static/account-mail.js', result.text)
+                    for secret in (old, new, repeat):
+                        self.assertNotIn(secret, result.text)
+                    self.assertEqual(self.database_snapshot(), before)
+
+            result = self.post('/profile', data=dict(old_password='test-password',
+                new_password='new-test-password', repeat_password='new-test-password'))
+            tags = _AccessibilityTags(result.text).tags
+            self.assertEqual(result.status_code, 200)
+            self.assertIn('Пароль изменён. Другие сеансы этого аккаунта завершены.', result.text)
+            self.assertTrue(any(attrs.get('role') == 'status' for _, attrs in tags))
+            self.assertFalse(any(attrs.get('role') == 'alert' or 'data-account-password-error' in attrs for _, attrs in tags))
+            self.assertNotIn('new-test-password', result.text)
+            self.assertEqual(self.client.get('/profile').status_code, 200)
+
     def test_security_followup_teacher_registration_fails_closed_and_preserves_existing_login(self):
         for code in ('', 'too-short', ' ' + 'x' * 24):
             with patch.dict(self.module.app.config, TEACHER_REGISTRATION_CODE=code):

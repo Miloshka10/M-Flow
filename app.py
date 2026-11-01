@@ -1471,11 +1471,12 @@ def profile():
     projects_count = len(get_projects())
     skills_link = '<p><a class="teacher-primary-link" href="/skills">Мой класс, направление и навыки</a></p>' if user["role"] == "student" else ''
 
-    message_html = f'<div class="ok">{escape(message)}</div>' if message else ""
-    error_html = f'<div class="error">{escape(error)}</div>' if error else ""
+    message_html = f'<div class="ok" role="status">{escape(message)}</div>' if message else ""
+    error_html = f'<div class="error" role="alert" tabindex="-1" data-account-password-error>{escape(error)}</div>' if error else ""
 
     return render_page(
         PAGE_STYLE
+        + '<script src="/static/account-mail.js?v=20261101-profile-feedback" defer></script>'
         + f"""
         <div class="container">
             {render_header(user)}

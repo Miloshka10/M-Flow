@@ -2,7 +2,7 @@
    accept the code copied from the same email when JavaScript is unavailable. */
 (() => {
   'use strict';
-  const error = document.querySelector('[data-account-email-error]');
+  const error = document.querySelector('[data-account-email-error], [data-account-password-error]');
   if (error) error.focus();
   const form = document.querySelector('[data-email-token-form]');
   if (!form) return;
