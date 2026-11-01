@@ -31,6 +31,8 @@ class EmailJsTransportTests(unittest.TestCase):
             ('The origin is not allowed. ' + marker, 'EMAILJS_ORIGIN'),
             ('Requests from this origin are blocked. ' + marker, 'EMAILJS_ORIGIN'),
             ('<!DOCTYPE html><html>' + marker, 'EMAILJS_HTML_REFUSAL'),
+            (json.dumps({'cloudflare_error': True, 'error_name': 'browser_signature_banned',
+                         'detail': marker}), 'EMAILJS_CLIENT_BLOCKED'),
             (marker, 'EMAILJS_HTTP_403'),
             ('x' * 4097 + 'The Private Key is invalid.', 'EMAILJS_HTTP_403'),
         )
@@ -100,6 +102,7 @@ class EmailJsTransportTests(unittest.TestCase):
         self.assertEqual(request.full_url, 'https://api.emailjs.com/api/v1.0/email/send')
         self.assertEqual(request.get_method(), 'POST')
         self.assertEqual(request.get_header('Content-type'), 'application/json')
+        self.assertEqual(request.get_header('User-agent'), 'M-Flow-Mail/1.0')
         self.assertEqual(opener.open.call_args.kwargs['timeout'], 15)
         self.assertEqual(json.loads(request.data), dict(
             service_id='service_test', template_id='template_test', user_id='public-test-key',

@@ -144,6 +144,7 @@ def report_delivery_failure(code):
         'EMAILJS_PRIVATE_KEY': 'EmailJS сообщает: Private Key / access token недействителен. Сверьте ключи одного аккаунта EmailJS.',
         'EMAILJS_ORIGIN': 'Ответ EmailJS сообщает об ограничении origin. Это требует отдельной проверки настроек доступа.',
         'EMAILJS_HTML_REFUSAL': 'Вместо обычного ответа API получена HTML-страница отказа. Возможна блокировка сервисом или сетью.',
+        'EMAILJS_CLIENT_BLOCKED': 'Cloudflare заблокировал клиент запросов. Нужна поддержка EmailJS; смена ключей не подтверждена как решение.',
         'EMAILJS_TLS': 'Не удалось проверить защищённое соединение с EmailJS. Проверка сертификатов остаётся включённой.',
         'EMAILJS_TIMEOUT': 'Истекло время ожидания ответа EmailJS.',
         'EMAILJS_NETWORK': 'Не удалось установить соединение с EmailJS.',

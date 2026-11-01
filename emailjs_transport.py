@@ -14,6 +14,7 @@ from account_mail import _NoMailRedirect, normalize_email, MailDeliveryError
 
 
 ENDPOINT = 'https://api.emailjs.com/api/v1.0/email/send'
+USER_AGENT = 'M-Flow-Mail/1.0'
 MAX_RESPONSE_BYTES = 4096
 
 
@@ -32,8 +33,11 @@ def _refusal_code(status, stream):
         if len(raw) > MAX_RESPONSE_BYTES:
             return fallback
         message = raw.decode('utf-8').strip()
-        if message.startswith('"'):
+        if message.startswith(('"', '{')):
             message = json.loads(message)
+            if (isinstance(message, dict) and message.get('cloudflare_error') is True
+                    and message.get('error_name') == 'browser_signature_banned'):
+                return 'EMAILJS_CLIENT_BLOCKED'
             if not isinstance(message, str):
                 return fallback
         message = message.casefold()
@@ -85,7 +89,8 @@ def send_emailjs(settings, recipient, subject, body):
                                             message=body, action_url=_action_url(settings.origin, body)))
         request = Request(ENDPOINT, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
                           method='POST', headers={'Content-Type': 'application/json',
-                                                  'Accept': 'application/json, text/plain'})
+                                                  'Accept': 'application/json, text/plain',
+                                                  'User-Agent': USER_AGENT})
         opener = build_opener(HTTPSHandler(context=ssl.create_default_context()), _NoMailRedirect())
         with opener.open(request, timeout=15) as response:
             if response.status != 200:

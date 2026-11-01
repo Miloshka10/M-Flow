@@ -130,7 +130,7 @@ class MailSettings:
 DELIVERY_CODES = frozenset(('MAIL_JOB_FAILED', 'EMAILJS_NETWORK', 'EMAILJS_TLS', 'EMAILJS_TIMEOUT',
                            'EMAILJS_RECEIPT', 'EMAILJS_RECIPIENT', 'PREVIEW_RECIPIENT', 'PREVIEW_LIMIT',
                            'EMAILJS_NON_BROWSER', 'EMAILJS_PUBLIC_KEY', 'EMAILJS_PRIVATE_KEY',
-                           'EMAILJS_ORIGIN', 'EMAILJS_HTML_REFUSAL'))
+                           'EMAILJS_ORIGIN', 'EMAILJS_HTML_REFUSAL', 'EMAILJS_CLIENT_BLOCKED'))
 
 
 def delivery_error_code(error):
