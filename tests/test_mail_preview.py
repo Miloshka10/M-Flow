@@ -1,5 +1,6 @@
 """The mail QA launcher must stay isolated even with production-like environment."""
-from contextlib import closing
+from contextlib import closing, redirect_stdout
+import getpass
 import io
 import os
 from pathlib import Path
@@ -8,10 +9,53 @@ from unittest.mock import Mock, patch
 
 from account_mail import MailSettings
 from database import DatabaseUnavailable
-from preview_account_mail import PreviewDelivery, MAX_LETTERS, hidden, preview
+from preview_account_mail import (PreviewDelivery, MAX_LETTERS, hidden, preview,
+                                  provider_settings, PreviewSetupError, run)
 
 
 class MailPreviewTests(unittest.TestCase):
+    def test_setup_retries_only_invalid_fields_trims_paste_and_never_echoes_values(self):
+        secret = 'private-setup-marker'
+        entries = [' Sender@Example.Org\n', 'service bad-' + secret, '\tservice_valid \r\n',
+                   ' template_valid ', 'public-valid', '\x16' + secret, ' ' + secret + ' ',
+                   'not-an-address-' + secret, ' Owner@Example.Org ', '']
+        output = io.StringIO()
+        with patch('preview_account_mail.hidden', side_effect=entries) as read, \
+             patch('builtins.input', return_value='ОТПРАВКА'), redirect_stdout(output):
+            settings, recipients = provider_settings()
+        self.assertEqual(settings.sender, 'sender@example.org')
+        self.assertEqual(settings.service_id, 'service_valid')
+        self.assertEqual(settings.template_id, 'template_valid')
+        self.assertEqual(settings.api_key, secret)
+        self.assertEqual(recipients, {'owner@example.org'})
+        prompts = [call.args[0] for call in read.call_args_list]
+        self.assertEqual(prompts.count('Service ID: '), 2)
+        self.assertEqual(prompts.count('Private Key: '), 2)
+        self.assertEqual(prompts.count('Public Key: '), 1)
+        self.assertEqual(prompts.count('Ваш тестовый адрес получателя: '), 2)
+        for value in (secret, 'sender@example.org', 'Owner@Example.Org', 'public-valid', 'service_valid'):
+            self.assertNotIn(value, output.getvalue())
+        self.assertIn('Не принято поле «Service ID»', output.getvalue())
+        self.assertIn('Не принято поле «Private Key»', output.getvalue())
+        self.assertIn('Действительность ключей и доставку ещё нужно проверить', output.getvalue())
+
+    def test_setup_error_is_explained_but_unknown_exception_values_are_redacted(self):
+        for error, expected in ((PreviewSetupError('Скрытый ввод недоступен.'), 'Скрытый ввод недоступен.'),
+                                (RuntimeError('private-setup-marker'), 'LOCAL_START')):
+            output = io.StringIO()
+            with self.subTest(kind=type(error).__name__), patch('preview_account_mail.main', side_effect=error), redirect_stdout(output):
+                self.assertEqual(run(), 1)
+            self.assertIn(expected, output.getvalue())
+            self.assertNotIn('private-setup-marker', output.getvalue())
+
+    def test_getpass_fallback_and_eof_are_explained_without_exposing_the_exception(self):
+        for error in (getpass.GetPassWarning('private-setup-marker'), EOFError('private-setup-marker')):
+            with patch('sys.stdin.isatty', return_value=True), patch('getpass.getpass', side_effect=error):
+                with self.assertRaises(PreviewSetupError) as caught:
+                    hidden('Private Key: ')
+            self.assertNotIn('private-setup-marker', str(caught.exception))
+            self.assertIn('PowerShell', str(caught.exception))
+
     def test_delivery_allowlist_and_attempt_cap_hold_after_provider_failure(self):
         sender = Mock(side_effect=DatabaseUnavailable('provider failed'))
         delivery = PreviewDelivery(['owner@example.org'], real=True, sender=sender)

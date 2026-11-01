@@ -30,38 +30,75 @@ from werkzeug.serving import make_server, WSGIRequestHandler
 MAX_LETTERS = 12
 
 
+class PreviewSetupError(ValueError):
+    """Only fixed, safe setup guidance; never include an entered value."""
+
+
 def hidden(prompt):
     if not sys.stdin.isatty():
-        raise ValueError('Запустите из обычного интерактивного терминала.')
+        raise PreviewSetupError('Скрытый ввод недоступен. Запустите команду в обычном окне PowerShell.')
     # Never accept getpass's fallback that would echo a credential.
     with warnings.catch_warnings():
         warnings.simplefilter('error', getpass.GetPassWarning)
-        return getpass.getpass(prompt)
+        try:
+            return getpass.getpass(prompt)
+        except (getpass.GetPassWarning, EOFError):
+            raise PreviewSetupError('Скрытый ввод прерван или недоступен. Запустите команду в обычном окне PowerShell.') from None
+
+
+def validated_input(label, valid, guidance, optional=False):
+    while True:
+        value = hidden(label + ': ').strip()
+        if optional and not value:
+            return ''
+        try:
+            accepted = valid(value)
+        except ValueError:
+            accepted = False
+        if accepted:
+            return value
+        print(f'Не принято поле «{label}». {guidance} Значение не выводится; повторите только это поле.')
+
+
+def mail_settings(values):
+    with patch.dict(os.environ, values):
+        return MailSettings.from_environment()
 
 
 def provider_settings():
     print('Настройки вводятся без отображения и не сохраняются в файлы.')
-    values = dict(M_FLOW_MAIL_PROVIDER='emailjs', M_FLOW_PUBLIC_URL='https://local-preview.invalid')
-    for name, label in (
-        ('M_FLOW_MAIL_FROM', 'Подключённый адрес Gmail: '),
-        ('M_FLOW_MAIL_SERVICE_ID', 'Service ID: '),
-        ('M_FLOW_MAIL_TEMPLATE_ID', 'Template ID: '),
-        ('M_FLOW_MAIL_PUBLIC_KEY', 'Public Key: '),
-        ('M_FLOW_MAIL_API_KEY', 'Private Key: '),
+    # Validate each field with the same production parser. Valid placeholders
+    # let us identify the failing field without printing any private values.
+    values = dict(M_FLOW_MAIL_PROVIDER='emailjs', M_FLOW_PUBLIC_URL='https://local-preview.invalid',
+                  M_FLOW_MAIL_FROM='sender@example.org', M_FLOW_MAIL_SERVICE_ID='service_preview',
+                  M_FLOW_MAIL_TEMPLATE_ID='template_preview', M_FLOW_MAIL_PUBLIC_KEY='preview-public',
+                  M_FLOW_MAIL_API_KEY='preview-private')
+    key_help = 'Скопируйте только значение ключа, без подписи, кавычек и внутренних пробелов.'
+    id_help = 'Скопируйте только ID; допустимы латинские буквы, цифры, дефис и подчёркивание.'
+    for name, label, guidance in (
+        ('M_FLOW_MAIL_FROM', 'Подключённый адрес Gmail', 'Нужен полный адрес почты, без имени отправителя.'),
+        ('M_FLOW_MAIL_SERVICE_ID', 'Service ID', id_help),
+        ('M_FLOW_MAIL_TEMPLATE_ID', 'Template ID', id_help),
+        ('M_FLOW_MAIL_PUBLIC_KEY', 'Public Key', key_help),
+        ('M_FLOW_MAIL_API_KEY', 'Private Key', key_help),
     ):
-        values[name] = hidden(label)
-    with patch.dict(os.environ, values):
-        settings = MailSettings.from_environment()
+        values[name] = validated_input(label, lambda value: mail_settings({**values, name: value}) is not None,
+                                       guidance)
+    settings = mail_settings(values)
     if settings is None:
-        raise ValueError('Настройки EmailJS некорректны; отправка не включена.')
-    recipients = {normalize_email(hidden('Ваш тестовый адрес получателя: '))}
-    second = hidden('Второй ваш ящик для смены почты (Enter — пропустить): ')
+        raise PreviewSetupError('Настройки EmailJS не прошли проверку формата; отправка не включена.')
+    print('Формат настроек принят. Действительность ключей и доставку ещё нужно проверить отправкой.')
+    email_help = 'Нужен полный адрес вашего тестового ящика.'
+    first = validated_input('Ваш тестовый адрес получателя', normalize_email, email_help)
+    recipients = {normalize_email(first)}
+    second = validated_input('Второй ваш ящик для смены почты (Enter — пропустить)', normalize_email,
+                             email_help, optional=True)
     if second:
         recipients.add(normalize_email(second))
     print('Будут разрешены письма только выбранным ящикам, максимум 12 за запуск.')
     print('Подтвердите: шаблон сохранён, история выключена, ящики принадлежат вам.')
     if input('Для разрешения отправки введите ОТПРАВКА: ').strip() != 'ОТПРАВКА':
-        raise ValueError('Настоящая отправка не разрешена.')
+        raise PreviewSetupError('Настоящая отправка не разрешена. Для повторной попытки запустите команду заново.')
     return settings, recipients
 
 
@@ -177,11 +214,20 @@ def main():
         server.serve_forever()
 
 
-if __name__ == '__main__':
+def run():
     try:
         main()
     except KeyboardInterrupt:
         print('\nТестовый запуск остановлен.')
-    except (Exception, getpass.GetPassWarning):
-        print('Не удалось запустить проверку. Настройки не выводятся; рабочая база не открывалась.')
-        raise SystemExit(1) from None
+        return 0
+    except PreviewSetupError as error:
+        print(str(error))  # This exception is only constructed with fixed guidance.
+        return 1
+    except Exception:
+        print('Не удалось запустить локальный стенд (LOCAL_START). Значения настроек скрыты; рабочая база не открывалась.')
+        return 1
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(run())
