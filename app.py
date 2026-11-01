@@ -166,7 +166,7 @@ def render_page(html, title=None):
     skip_target = 'main-content' if '<main' in html else 'page-content'
     body_class = 'mf-v2 ui-authenticated' if 'data-interface-shell=' in html else 'mf-v2'
     suite_attribute = ' data-design-suite' if 'data-interface-shell=' in html else ''
-    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261030">'
+    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261101-mail-ui">'
                    '<script src="/static/auth.js?v=20261030" defer></script>'
                    if 'class="auth-page ' in html else '')
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
@@ -191,7 +191,7 @@ def render_page(html, title=None):
         '<link rel="stylesheet" href="/static/interface.css?v=20261029-review">'
         '<script src="/static/interface.js?v=20261027-work" defer></script>'
         '<script src="/static/form-guard.js?v=20261029" defer></script>'
-        '<link rel="stylesheet" href="/static/design-suite.css?v=20261031-final">'
+        '<link rel="stylesheet" href="/static/design-suite.css?v=20261101-mail-ui">'
         '<script src="/static/design-suite.js?v=20261031-final" defer></script>'
             + auth_assets +
             f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-design-page="{escape(request.endpoint or "", quote=True)}"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')

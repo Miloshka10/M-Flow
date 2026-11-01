@@ -146,6 +146,12 @@ html body.mf-v2[data-design-suite] .ds-roster-details summary{cursor:pointer;col
 html body.mf-v2[data-design-suite] .ds-roster-details>div{margin:12px 0}
 html body.mf-v2[data-design-suite] .ds-roster-details strong{display:block;font-size:12px;color:var(--mf-muted);margin-bottom:5px}
 html body.mf-v2[data-design-suite] .team-profile-form{background:var(--mf-card);border-radius:15px;padding:22px;max-width:760px}
+html body.mf-v2[data-design-suite] .account-email-panel .account-email-form{display:grid;gap:12px;padding:0;max-width:580px;margin:22px 0 0}
+html body.mf-v2[data-design-suite] .account-email-form label{margin:0}
+html body.mf-v2[data-design-suite] .account-email-form input{width:100%;min-width:0}
+html body.mf-v2[data-design-suite] .account-email-form button{margin:8px 0 0;max-width:100%;min-height:44px;justify-self:start}
+html body.mf-v2[data-design-suite] .ui-mobile-menu .ui-mobile-backdrop,
+html body.mf-v2[data-design-suite] .ui-mobile-menu .ui-mobile-backdrop:hover{background:#18213c66;border:0;border-radius:0;padding:0;box-shadow:none}
 html body.mf-v2[data-design-suite] .assessment-page .card{border-radius:16px}
 html body.mf-v2[data-design-suite] .assessment-page .assessment-note{background:var(--ds-gold);padding:20px;border-radius:12px;font-size:16px}
 html body.mf-v2[data-design-suite] .assessment-page h3{color:var(--ds-sage-ink)}
