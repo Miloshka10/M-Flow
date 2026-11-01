@@ -127,6 +127,27 @@ class MailSettings:
             return None
 
 
+DELIVERY_CODES = frozenset(('MAIL_JOB_FAILED', 'EMAILJS_NETWORK', 'EMAILJS_TLS', 'EMAILJS_TIMEOUT',
+                           'EMAILJS_RECEIPT', 'EMAILJS_RECIPIENT', 'PREVIEW_RECIPIENT', 'PREVIEW_LIMIT'))
+
+
+def delivery_error_code(error):
+    """Allowlisted metadata only; never stringify a provider/driver exception."""
+    if not isinstance(error, MailDeliveryError):
+        return 'MAIL_JOB_FAILED'
+    code = getattr(error, 'code', None)
+    if isinstance(code, str) and (code in DELIVERY_CODES or re.fullmatch(r'EMAILJS_HTTP_[1-5][0-9]{2}', code)):
+        return code
+    return 'MAIL_JOB_FAILED'
+
+
+class MailDeliveryError(DatabaseUnavailable):
+    def __init__(self, code):
+        self.code = code
+        self.code = delivery_error_code(self)
+        super().__init__('Почтовый сервис не подтвердил приём письма. Повторите запрос позже.')
+
+
 class _NoMailRedirect(HTTPRedirectHandler):
     """Do not forward a provider credential or recovery token to another URL."""
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -197,11 +218,12 @@ class MailDispatcher:
 In-flight mail can be lost on process restart: the user may request it again.
 Never log exceptions that can contain SMTP credentials or recipient addresses.
 """
-    def __init__(self, on_error, sender=send_mail, gate=None):
+    def __init__(self, on_error, sender=send_mail, gate=None, diagnostic=None):
         self._pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='mflow-mail')
         self._slots = threading.BoundedSemaphore(16)
         self.sender, self.on_error = sender, on_error
         self.gate = gate
+        self.diagnostic = diagnostic  # Local QA only: receives an allowlisted code, never the exception.
 
     def submit(self, job):
         if not self._slots.acquire(blocking=False):
@@ -216,8 +238,14 @@ Never log exceptions that can contain SMTP credentials or recipient addresses.
                             return self.sender(settings, recipient, subject, body)
                     return self.sender(settings, recipient, subject, body)
                 job(deliver)
-            except Exception:
-                self.on_error()
+            except Exception as error:
+                if self.diagnostic is None:
+                    self.on_error()
+                else:
+                    try:
+                        self.diagnostic(delivery_error_code(error))
+                    except Exception:
+                        self.on_error()
             finally:
                 self._slots.release()
         try:

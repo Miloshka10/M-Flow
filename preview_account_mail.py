@@ -20,8 +20,7 @@ import threading
 import warnings
 from unittest.mock import patch
 
-from account_mail import MailSettings, MailDispatcher, normalize_email, send_mail, emailjs_gate
-from database import DatabaseUnavailable
+from account_mail import MailSettings, MailDispatcher, normalize_email, send_mail, emailjs_gate, MailDeliveryError
 from flask import abort, request
 from werkzeug.security import generate_password_hash
 from werkzeug.serving import make_server, WSGIRequestHandler
@@ -113,8 +112,10 @@ class PreviewDelivery:
     def __call__(self, settings, recipient, subject, body):
         recipient = normalize_email(recipient)
         with self._lock:
-            if recipient not in self.recipients or self._attempts >= MAX_LETTERS:
-                raise DatabaseUnavailable('Получатель не разрешён или исчерпан лимит тестового запуска.')
+            if recipient not in self.recipients:
+                raise MailDeliveryError('PREVIEW_RECIPIENT')
+            if self._attempts >= MAX_LETTERS:
+                raise MailDeliveryError('PREVIEW_LIMIT')
             self._attempts += 1  # Count failed attempts too; no hidden retries.
             if not self.real:
                 self._letters.append((recipient, subject, body))
@@ -125,6 +126,31 @@ class PreviewDelivery:
     def captured(self):
         with self._lock:
             return list(reversed(self._letters))
+
+
+def report_delivery_failure(code):
+    hints = {
+        'PREVIEW_RECIPIENT': 'Адрес в форме не совпадает с разрешённым тестовым ящиком.',
+        'PREVIEW_LIMIT': 'Достигнут предел 12 попыток за этот запуск.',
+        'EMAILJS_RECIPIENT': 'Адрес получателя не прошёл проверку формата.',
+        'EMAILJS_HTTP_400': 'EmailJS отклонил параметры. Проверьте Service ID, Template ID и настройки шаблона.',
+        'EMAILJS_HTTP_401': 'EmailJS отклонил авторизацию. Проверьте Public Key и Private Key.',
+        'EMAILJS_HTTP_403': 'EmailJS запретил запрос. Проверьте ключи и разрешение серверных запросов в Account → Security.',
+        'EMAILJS_HTTP_404': 'Ресурс EmailJS не найден. Проверьте Service ID и Template ID.',
+        'EMAILJS_HTTP_422': 'EmailJS не принял данные письма. Проверьте To Email = {{to_email}} и подключение сервиса.',
+        'EMAILJS_HTTP_429': 'EmailJS ограничил запросы. Проверьте квоту; не повторяйте отправку подряд.',
+        'EMAILJS_TLS': 'Не удалось проверить защищённое соединение с EmailJS. Проверка сертификатов остаётся включённой.',
+        'EMAILJS_TIMEOUT': 'Истекло время ожидания ответа EmailJS.',
+        'EMAILJS_NETWORK': 'Не удалось установить соединение с EmailJS.',
+        'EMAILJS_RECEIPT': 'EmailJS не вернул ожидаемое подтверждение OK.',
+    }
+    # Never print an unrecognized argument, exception, recipient or provider response.
+    if isinstance(code, str) and code in hints:
+        print(f'Тестовое письмо не отправлено [{code}]. {hints[code]}')
+    elif isinstance(code, str) and re.fullmatch(r'EMAILJS_HTTP_[1-5][0-9]{2}', code):
+        print(f'Тестовое письмо не отправлено [{code}]. EmailJS вернул отказ; проверьте состояние Email Services.')
+    else:
+        print('Тестовое письмо не отправлено [MAIL_JOB_FAILED]. Сбой локального почтового задания или ожидания отправки.')
 
 
 class QuietRequests(WSGIRequestHandler):
@@ -160,7 +186,8 @@ def preview(settings=None, recipients=('first@example.org', 'second@example.org'
             dispatcher = MailDispatcher(
                 lambda: print('Тестовое письмо не отправлено. Проверьте настройки, получателя и лимит.'),
                 sender=delivery,
-                gate=lambda config: emailjs_gate(module.get_db, module.SECRET_KEY, config.public_key))
+                gate=lambda config: emailjs_gate(module.get_db, module.SECRET_KEY, config.public_key),
+                diagnostic=report_delivery_failure)
             server = None
             try:
                 server = make_server('127.0.0.1', 0, module.app, threaded=True, request_handler=QuietRequests)

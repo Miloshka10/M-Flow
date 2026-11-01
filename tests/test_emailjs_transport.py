@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from urllib.error import HTTPError, URLError
 from urllib.request import Request
 
-from account_mail import _NoMailRedirect
+from account_mail import _NoMailRedirect, MailDeliveryError
 from database import DatabaseUnavailable
 from emailjs_transport import send_emailjs
 
@@ -21,6 +21,31 @@ class Response(io.BytesIO):
 
 
 class EmailJsTransportTests(unittest.TestCase):
+    def test_provider_status_network_timeout_and_tls_are_distinguished_without_response_text(self):
+        for status in (400, 401, 403, 404, 422, 429, 500):
+            response = io.BytesIO(b'private-provider-response')
+            error = HTTPError('https://api.emailjs.com/api/v1.0/email/send', status,
+                              'private-provider-response', {}, response)
+            with self.subTest(status=status), patch('emailjs_transport.build_opener') as build:
+                build.return_value.open.side_effect = error
+                with self.assertRaises(MailDeliveryError) as caught:
+                    send_emailjs(self.settings, self.recipient, self.subject, self.body)
+                self.assertEqual(caught.exception.code, f'EMAILJS_HTTP_{status}')
+                self.assertNotIn('private-provider-response', str(caught.exception))
+                build.return_value.open.assert_called_once()
+            self.assertTrue(response.closed)
+        for error, code in ((URLError('private-provider-response'), 'EMAILJS_NETWORK'),
+                            (TimeoutError('private-provider-response'), 'EMAILJS_TIMEOUT'),
+                            (URLError(TimeoutError('private-provider-response')), 'EMAILJS_TIMEOUT'),
+                            (ssl.SSLCertVerificationError('private-provider-response'), 'EMAILJS_TLS'),
+                            (URLError(ssl.SSLCertVerificationError('private-provider-response')), 'EMAILJS_TLS')):
+            with self.subTest(code=code), patch('emailjs_transport.build_opener') as build:
+                build.return_value.open.side_effect = error
+                with self.assertRaises(MailDeliveryError) as caught:
+                    send_emailjs(self.settings, self.recipient, self.subject, self.body)
+                self.assertEqual(caught.exception.code, code)
+                self.assertNotIn('private-provider-response', str(caught.exception))
+
     def setUp(self):
         self.settings = SimpleNamespace(sender='sender@example.org', origin='https://mflow.example.org',
             provider='emailjs', api_key='private-test-key', public_key='public-test-key',

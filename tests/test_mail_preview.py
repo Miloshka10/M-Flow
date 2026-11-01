@@ -5,15 +5,43 @@ import io
 import os
 from pathlib import Path
 import unittest
+import threading
 from unittest.mock import Mock, patch
 
-from account_mail import MailSettings
+from account_mail import MailSettings, MailDispatcher, MailDeliveryError
 from database import DatabaseUnavailable
 from preview_account_mail import (PreviewDelivery, MAX_LETTERS, hidden, preview,
-                                  provider_settings, PreviewSetupError, run)
+                                  provider_settings, PreviewSetupError, run, report_delivery_failure)
 
 
 class MailPreviewTests(unittest.TestCase):
+    def test_async_diagnostics_include_only_allowlisted_codes_and_do_not_change_default_error_callback(self):
+        for error, expected in ((MailDeliveryError('EMAILJS_HTTP_403'), 'EMAILJS_HTTP_403'),
+                                (RuntimeError('private-error-marker'), 'MAIL_JOB_FAILED'),
+                                (MailDeliveryError('private-error-marker'), 'MAIL_JOB_FAILED')):
+            done = threading.Event()
+            codes = []
+            def report(code):
+                codes.append(code)
+                done.set()
+            dispatcher = MailDispatcher(on_error=lambda: self.fail('An optional diagnostic should handle the error'),
+                                        diagnostic=report)
+            try:
+                def bad(send):
+                    raise error
+                dispatcher.submit(bad)
+                self.assertTrue(done.wait(5))
+            finally:
+                dispatcher._pool.shutdown(wait=True)
+            self.assertEqual(codes, [expected])
+            output = io.StringIO()
+            with redirect_stdout(output):
+                report_delivery_failure(codes[0])
+                report_delivery_failure('private-error-marker')
+                report_delivery_failure({'private-error-marker': 'private-error-marker'})
+            self.assertNotIn('private-error-marker', output.getvalue())
+            self.assertIn(expected, output.getvalue())
+
     def test_setup_retries_only_invalid_fields_trims_paste_and_never_echoes_values(self):
         secret = 'private-setup-marker'
         entries = [' Sender@Example.Org\n', 'service bad-' + secret, '\tservice_valid \r\n',
