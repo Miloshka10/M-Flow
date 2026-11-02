@@ -166,8 +166,8 @@ def render_page(html, title=None):
     skip_target = 'main-content' if '<main' in html else 'page-content'
     body_class = 'mf-v2 ui-authenticated' if 'data-interface-shell=' in html else 'mf-v2'
     suite_attribute = ' data-design-suite' if 'data-interface-shell=' in html else ''
-    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261102-access">'
-                   '<script src="/static/auth.js?v=20261102-access" defer></script>'
+    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261102-layout-review">'
+                   '<script src="/static/auth.js?v=20261102-layout-review" defer></script>'
                    if 'class="auth-page ' in html else '')
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -1469,10 +1469,10 @@ def profile():
         + f"""
         <div class="container">
             {render_header(user)}
-            <main class="profile-card">
+            <main class="profile-card account-profile">
                 <a class="back" href="/">{icon('arrow-left')} На главную</a>
                 <h1>Профиль</h1>
-                <dl>
+                <dl class="account-profile-facts">
                     <dt>Логин</dt>
                     <dd>{escape(user["username"])}</dd>
                     <dt>Роль</dt>
@@ -1480,11 +1480,13 @@ def profile():
                     <dt>Проектов</dt>
                     <dd>{projects_count}</dd>
                 </dl>
-                {skills_link}
+                <nav class="account-profile-links" aria-label="Разделы аккаунта">{skills_link}
                 <p><a class="back" href="/profile/email">Почта и восстановление доступа {icon('arrow')}</a></p>
                 <p><a class="back" href="/settings">Настройки оформления и анимаций {icon('arrow')}</a></p>
+                </nav>
                 <div class="account-access-layout account-password-layout"><section class="account-security-panel" data-account-form>
                 <h2>Смена пароля</h2>
+                <p class="account-section-intro">Текущий сеанс сохранится. После смены пароля другие сеансы этого аккаунта завершатся.</p>
                 {message_html}
                 {error_html}
                 <form method="post">
@@ -1494,7 +1496,7 @@ def profile():
                     {account_password_control('repeat-password', 'repeat_password', 'Повторите новый пароль', 'new-password', ' minlength="8" maxlength="256"')}
                     <button type="submit" data-ui-icon="settings" data-pending-label="Сохраняем…">Сменить пароль</button>
                 </form><p class="auth-submit-status" role="status" aria-live="polite"></p>
-                </section>{access_aside('password')}</div>
+                </section></div>
             </main>
         </div>
         """

@@ -2,7 +2,7 @@
 from html import escape
 import re
 
-ACCESS_VERSION = '20261102-access'
+ACCESS_VERSION = '20261102-layout-review'
 
 
 def password_control(input_id, name, label, autocomplete, limits='', hint=''):
@@ -54,11 +54,19 @@ def public_form(title, intro, fields, token, button, error='', notice='', token_
     if notice:
         feedback += f'<p class="ok auth-access-status" role="status">{escape(notice)}</p>'
     fields = _password_controls(fields)
+    detail = {
+        'forgot': 'Нужна почта, которую вы заранее подтвердили в профиле. Ссылка восстановления действует 20 минут.',
+        'reset': 'От 8 до 256 символов. После смены пароля прежние сеансы завершатся, проекты и оценки сохранятся.',
+        'reset-success': 'На других устройствах также потребуется войти с новым паролем.',
+        'confirm': 'Открытие ссылки само по себе ничего не меняет. При смене почты нужны подтверждения обоих ящиков.',
+    }[kind]
+    retry_link = '<p class="auth-retry"><a href="/forgot-password">Запросить новую ссылку</a></p>' if kind == 'reset' else ''
     form = (f'<form method="post" {("data-email-token-form" if token_form else "")}><input type="hidden" name="csrf_token" value="{escape(token, quote=True)}">{fields}<button type="submit" class="auth-submit" data-pending-label="Сохраняем…">{escape(button)}</button></form><p class="auth-submit-status" role="status" aria-live="polite"></p>' if ready else '')
     return f'''<script src="/static/account-mail.js?v=20261101-profile-feedback" defer></script><div class="auth-page auth-recovery"><div class="auth-card auth-recovery-card"><main class="auth-form-side"><div class="auth-form-inner">
-        <a class="brand auth-form-brand" href="/login">M-Flow<span class="ui-brand-dot">.</span></a><p class="auth-eyebrow">ВАШ АККАУНТ</p><h1>{escape(title)}</h1><p class="auth-intro">{escape(intro)}</p><div class="auth-access-content">{feedback}{form}</div>
-        <p class="auth-footer"><a href="/login">Вход ученика</a> · <a href="/teacher/login">Вход учителя</a></p><p class="auth-footer"><a href="/data">Данные и помощь</a></p>
-        </div></main>{access_aside(kind)}</div></div>'''
+        <a class="brand auth-form-brand" href="/login">M-Flow<span class="ui-brand-dot">.</span></a><h1>{escape(title)}</h1><p class="auth-intro">{escape(intro)}</p><div class="auth-access-content">{feedback}{form}</div>
+        <p class="auth-recovery-note">{detail}</p>{retry_link}
+        <nav class="auth-recovery-links" aria-label="Вернуться ко входу"><a href="/login">Вход ученика</a><a href="/teacher/login">Вход учителя</a></nav><p class="auth-recovery-data"><a href="/data">Данные и помощь</a></p>
+        </div></main></div></div>'''
 
 
 def email_panel(email, token, error='', notice='', ready=True, submitted=None):
@@ -75,5 +83,6 @@ def email_panel(email, token, error='', notice='', ready=True, submitted=None):
         <label for="recovery-email">Почта для восстановления</label><input id="recovery-email" name="email" type="email" autocomplete="email" maxlength="254" required value="{escape(email['pending_email'] if submitted is None else submitted, quote=True)}">
         {password_control('email-password', 'password', 'Текущий пароль', 'current-password', ' maxlength="256"')}
         <button type="submit" data-pending-label="Отправляем…">Отправить подтверждение</button></form><p class="auth-submit-status" role="status" aria-live="polite"></p>''' if ready else '<p class="auth-access-status" role="status">Отправка почты пока не подключена. Попробуйте позже; вход и смена пароля по текущему паролю доступны.</p>'
-    kind = 'email-change' if email['email'] else 'email'
-    return f'{account_assets()}<div class="account-access-layout"><section class="card account-email-panel" data-account-form><div class="account-email-state">{current}</div><p class="account-email-help">При добавлении подтвердите новый ящик. Для смены уже подтверждённого адреса нужны оба ящика — старый и новый. Неподтверждённый адрес не подходит для сброса пароля.</p>{feedback}{form}</section>{access_aside(kind)}</div>'
+    help_text = ('Для смены адреса подтвердите письма из прежнего и нового ящиков. Пока смена не завершена, действует прежний адрес.' if email['email'] else
+                 'Неподтверждённый адрес не подходит для сброса пароля. Добавьте почту и подтвердите её из письма.')
+    return f'{account_assets()}<div class="account-access-layout account-email-layout"><section class="card account-email-panel" data-account-form><div class="account-email-state">{current}</div><p class="account-email-help">{help_text}</p>{feedback}{form}</section></div>'

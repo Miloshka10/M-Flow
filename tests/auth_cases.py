@@ -36,7 +36,7 @@ class AuthSecurityCases:
             self.assertIn('name="repeat_password"', page)
             self.assertIn('name="teacher_code"', page) if path.startswith('/teacher') else self.assertNotIn('name="teacher_code"', page)
         page = self.client.get('/reset-password').text
-        self.assertIn('Пароль для следующего входа', page)
+        self.assertIn('href="/forgot-password"', page)
         self.assertIn('name="token"', page)
         self.assertNotIn('aria-controls="mail-token"', page)
         self.assertIn('aria-controls="reset-password"', page)
@@ -54,6 +54,17 @@ class AuthSecurityCases:
             email = self.client.get('/profile/email').text
             self.assertIn('Неподтверждённый адрес', email)
             self.assertNotIn('student@example.org', email)
+
+    def test_invalid_reset_keeps_manual_form_and_offers_a_new_request(self):
+        result = self.post('/reset-password', data=dict(token='A' * 43,
+            password='new-test-password', repeat_password='new-test-password'))
+        self.assertEqual(result.status_code, 400)
+        tags = _AccessibilityTags(result.text).tags
+        self.assertTrue(any(tag == 'a' and attrs.get('href') == '/forgot-password' for tag, attrs in tags))
+        self.assertTrue(any(tag == 'input' and attrs.get('name') == 'token' for tag, attrs in tags))
+        self.assertTrue(any(tag == 'input' and attrs.get('name') == 'csrf_token' for tag, attrs in tags))
+        self.assertTrue(any(attrs.get('role') == 'alert' for _, attrs in tags))
+        self.assertNotIn('new-test-password', result.text)
 
     def test_profile_password_feedback_is_accessible_and_safe_for_both_roles(self):
         for user_id in (1, 3):
