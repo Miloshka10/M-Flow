@@ -45,6 +45,7 @@ from learning_groups import (initialize_groups, create_group, preview_code as pr
 from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue
 from dashboard_view import student_dashboard
 from graphics import illustration
+from scenery import scenery
 from project_workspace import render_workspace, task_deadline
 from project_work import render_project_work
 from navigation import project_navigation
@@ -166,8 +167,15 @@ def render_page(html, title=None):
     skip_target = 'main-content' if '<main' in html else 'page-content'
     body_class = 'mf-v2 ui-authenticated' if 'data-interface-shell=' in html else 'mf-v2'
     suite_attribute = ' data-design-suite' if 'data-interface-shell=' in html else ''
-    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261102-access">'
-                   '<script src="/static/auth.js?v=20261102-access" defer></script>'
+    endpoint = request.endpoint or ''
+    scenery_layout = ('access' if endpoint in ('forgot_password', 'reset_password_page', 'confirm_email_page')
+                      else 'auth' if endpoint in ('login', 'register', 'teacher_login', 'teacher_register')
+                      else 'workspace')
+    scenery_context = ('together' if endpoint in ('learning_groups_page', 'learning_group_page', 'teams_directory', 'project_team')
+                       else 'review' if endpoint.startswith('teacher_') or
+                       ('data-interface-shell="teacher"' in html) else 'workshop')
+    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261102-layout-review">'
+                   '<script src="/static/auth.js?v=20261102-layout-review" defer></script>'
                    if 'class="auth-page ' in html else '')
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -193,8 +201,10 @@ def render_page(html, title=None):
         '<script src="/static/form-guard.js?v=20261029" defer></script>'
         '<link rel="stylesheet" href="/static/design-suite.css?v=20261101-mail-ui">'
         '<script src="/static/design-suite.js?v=20261031-final" defer></script>'
-            + auth_assets +
-            f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-design-page="{escape(request.endpoint or "", quote=True)}"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
+            + auth_assets + '<link rel="stylesheet" href="/static/scenery.css?v=20261102-ink-world">' +
+            f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-scenery="{scenery_context}" data-scenery-layout="{scenery_layout}" data-design-page="{escape(endpoint, quote=True)}">'
+            + scenery(scenery_context, layout=scenery_layout)
+            + f'<a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
 
 DATABASE_SETTINGS = DatabaseSettings.from_environment(app.root_path)
@@ -1469,10 +1479,10 @@ def profile():
         + f"""
         <div class="container">
             {render_header(user)}
-            <main class="profile-card">
+            <main class="profile-card account-profile">
                 <a class="back" href="/">{icon('arrow-left')} На главную</a>
                 <h1>Профиль</h1>
-                <dl>
+                <dl class="account-profile-facts">
                     <dt>Логин</dt>
                     <dd>{escape(user["username"])}</dd>
                     <dt>Роль</dt>
@@ -1480,11 +1490,13 @@ def profile():
                     <dt>Проектов</dt>
                     <dd>{projects_count}</dd>
                 </dl>
-                {skills_link}
+                <nav class="account-profile-links" aria-label="Разделы аккаунта">{skills_link}
                 <p><a class="back" href="/profile/email">Почта и восстановление доступа {icon('arrow')}</a></p>
                 <p><a class="back" href="/settings">Настройки оформления и анимаций {icon('arrow')}</a></p>
+                </nav>
                 <div class="account-access-layout account-password-layout"><section class="account-security-panel" data-account-form>
                 <h2>Смена пароля</h2>
+                <p class="account-section-intro">Текущий сеанс сохранится. После смены пароля другие сеансы этого аккаунта завершатся.</p>
                 {message_html}
                 {error_html}
                 <form method="post">
@@ -1494,7 +1506,7 @@ def profile():
                     {account_password_control('repeat-password', 'repeat_password', 'Повторите новый пароль', 'new-password', ' minlength="8" maxlength="256"')}
                     <button type="submit" data-ui-icon="settings" data-pending-label="Сохраняем…">Сменить пароль</button>
                 </form><p class="auth-submit-status" role="status" aria-live="polite"></p>
-                </section>{access_aside('password')}</div>
+                </section></div>
             </main>
         </div>
         """

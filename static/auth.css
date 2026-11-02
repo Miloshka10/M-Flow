@@ -107,8 +107,18 @@ html body.mf-v2 .auth-page-footer a:hover { color:var(--mf-text); }
 }
 
 /* Access release: the approved account prototype, using existing product tokens. */
-html body.mf-v2 .auth-page .auth-recovery-card{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);max-width:1120px;min-height:580px}
-html body.mf-v2 .auth-page .auth-recovery-card .auth-form-inner{max-width:500px}
+html body.mf-v2 .auth-page .auth-recovery-card{display:block;max-width:540px;min-height:0}
+html body.mf-v2 .auth-page .auth-recovery-card .auth-form-side{padding:32px}
+html body.mf-v2 .auth-page .auth-recovery-card .auth-form-inner{max-width:none}
+html body.mf-v2 .auth-recovery .auth-form-brand{margin-bottom:24px}
+html body.mf-v2 .auth-recovery .auth-form-inner h1{font-size:30px;margin-bottom:12px}
+html body.mf-v2 .auth-recovery .auth-access-content{margin-top:24px}
+html body.mf-v2 .auth-recovery-note{font-size:13px;line-height:1.6;color:var(--mf-muted);margin:16px 0 0}
+html body.mf-v2 .auth-retry{margin:12px 0 0;font-size:14px}
+html body.mf-v2 .auth-retry a{display:inline-flex;align-items:center;min-height:40px}
+html body.mf-v2 .auth-recovery-links{display:flex;flex-wrap:wrap;gap:8px 24px;border-top:1px solid var(--mf-line);margin-top:24px;padding-top:16px}
+html body.mf-v2 .auth-recovery-links a,html body.mf-v2 .auth-recovery-data a{display:inline-flex;align-items:center;min-height:40px;font-size:13px}
+html body.mf-v2 .auth-recovery-data{margin:0}
 html body.mf-v2 .auth-access-content{margin-top:28px}
 html body.mf-v2 .auth-label-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:16px 0 8px}
 html body.mf-v2 .auth-label-row label{margin:0;font-size:13px}
@@ -122,7 +132,7 @@ html body.mf-v2 .auth-access-note h3,html body.mf-v2 .auth-access-extra h3{font-
 html body.mf-v2 .auth-access-note p,html body.mf-v2 .auth-access-extra p{font-size:13px;line-height:1.8;color:var(--mf-muted);margin:0}
 html body.mf-v2 .auth-access-extra{margin-top:auto}
 html body.mf-v2 .auth-access-status{background:var(--ui-success-bg);border:1px solid var(--mf-line);border-radius:11px;color:var(--ui-success);padding:16px;line-height:1.7;font-size:14px;margin:20px 0}
-html body.mf-v2 .account-access-layout{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(250px,1fr);gap:0;border:1px solid var(--mf-line);border-radius:18px;overflow:hidden;margin-top:22px;min-width:0}
+html body.mf-v2 .account-access-layout{display:block;max-width:640px;border:1px solid var(--mf-line);border-radius:16px;margin-top:24px;min-width:0}
 html body.mf-v2 .account-access-layout .auth-access-aside{padding:28px;gap:22px}
 html body.mf-v2 .account-access-layout .auth-access-aside h2{font-size:25px}
 html body.mf-v2[data-design-suite] .account-access-layout>.account-email-panel{padding:28px;margin:0;border:0;border-radius:0;box-shadow:none;min-width:0}
@@ -145,6 +155,33 @@ html body.mf-v2 .account-access-layout form>button{min-height:52px;max-width:100
 html body.mf-v2[data-design-suite] .account-email-panel .account-email-form{display:block;margin-top:20px;padding:0;max-width:100%}
 html body.mf-v2 .account-access-layout .auth-hint{font-size:12px;color:var(--mf-muted);line-height:1.6;margin:8px 0 0}
 html body.mf-v2 .account-access-layout .error:focus{outline:3px solid var(--mf-accent);outline-offset:4px}
+/* Account forms own their rhythm; legacy card/grid rules must not size controls. */
+html body.mf-v2 .account-access-layout input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]){display:block;width:100%;height:52px;min-height:52px;margin:0;padding:12px 14px;font-size:16px;line-height:24px}
+html body.mf-v2 .account-access-layout .auth-password-control.has-toggle input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]){padding-right:104px}
+html body.mf-v2 .account-access-layout .auth-password-control .auth-password-toggle{margin:0;height:44px;min-height:44px;max-width:94px;line-height:20px;inset:4px 4px auto auto}
+html body.mf-v2 .account-access-layout.account-email-layout>.account-email-panel{margin:0;padding:24px;border:0;border-radius:16px;box-shadow:none}
+html body.mf-v2 .account-access-layout.account-email-layout .account-email-form{display:block;background:transparent;padding:0;margin:0;max-width:none}
+html body.mf-v2 .account-access-layout.account-email-layout .account-email-form>label{margin:16px 0 8px;font-size:14px}
+html body.mf-v2 .account-access-layout.account-email-layout .account-email-form>label:first-of-type{margin-top:0}
+html body.mf-v2 .account-access-layout.account-email-layout .account-email-form>button{margin:24px 0 0;min-height:52px}
+html body.mf-v2 .account-access-layout .account-email-help{margin:0 0 24px}
+html body.mf-v2 .account-access-layout .account-email-state{margin-bottom:16px;padding:16px}
+html body.mf-v2 .account-profile{max-width:760px;margin:32px auto;padding:32px}
+html body.mf-v2 .account-profile h1{margin:20px 0 0}
+html body.mf-v2 .account-profile .account-profile-facts{display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px 24px;margin:24px 0;padding:0;border:0}
+html body.mf-v2 .account-profile .account-profile-facts dt,html body.mf-v2 .account-profile .account-profile-facts dd{margin:0;font-size:14px;line-height:24px;overflow-wrap:anywhere}
+html body.mf-v2 .account-profile-links{border-top:1px solid var(--mf-line);padding-top:16px;display:grid;gap:0}
+html body.mf-v2 .account-profile-links p{margin:0}
+html body.mf-v2 .account-profile-links a{font-size:14px;min-height:44px;margin:0;display:inline-flex;align-items:center;line-height:1.5}
+html body.mf-v2 .account-profile-links .teacher-primary-link,html body.mf-v2 .account-profile-links .teacher-primary-link:hover{background:none;border:0;border-radius:0;padding:0;color:var(--mf-accent)}
+html body.mf-v2 .account-profile .account-password-layout{border:0;border-top:1px solid var(--mf-line);border-radius:0;padding-top:24px;margin-top:16px;max-width:none}
+html body.mf-v2 .account-profile .account-security-panel{padding:0}
+html body.mf-v2 .account-profile .account-security-panel h2{margin:0 0 8px;font-size:22px}
+html body.mf-v2 .account-section-intro{font-size:13px;line-height:1.6;color:var(--mf-muted);margin:0 0 24px;max-width:520px}
+html body.mf-v2 .account-profile .account-security-panel form{max-width:520px}
+html body.mf-v2 .account-profile .account-security-panel form>label{margin:16px 0 8px;font-size:14px}
+html body.mf-v2 .account-profile .account-security-panel form>label:first-of-type{margin-top:0}
+html body.mf-v2 .auth-recovery-links a,html body.mf-v2 .auth-retry a,html body.mf-v2 .auth-recovery-data a{color:var(--mf-accent)}
 @media(max-width:900px){
  html body.mf-v2 .auth-page .auth-recovery-card,html body.mf-v2 .account-access-layout{grid-template-columns:minmax(0,1fr);min-height:0}
  html body.mf-v2 .auth-access-aside{border-left:0;border-top:1px solid var(--mf-line);padding:28px 40px;gap:20px}
@@ -154,6 +191,9 @@ html body.mf-v2 .account-access-layout .error:focus{outline:3px solid var(--mf-a
  html body.mf-v2 .auth-access-extra{margin-top:0}
 }
 @media(max-width:480px){
+ html body.mf-v2 .auth-page .auth-recovery-card .auth-form-side{padding:24px}
+ html body.mf-v2 .account-profile{margin:20px auto;padding:24px}
+ html body.mf-v2 .account-profile .account-profile-facts{grid-template-columns:88px minmax(0,1fr);gap:8px 16px}
  html body.mf-v2 .auth-access-aside{padding:24px;gap:18px}
  html body.mf-v2 .auth-access-aside h2{font-size:21px}
  html body.mf-v2 .auth-access-copy{font-size:13px}

@@ -1,0 +1,278 @@
+/* Hand-drawn M-Flow places live behind the page, never inside its controls. */
+html body.mf-v2[data-scenery] {
+  position:relative;
+  isolation:isolate;
+  min-height:100dvh;
+  --scenery-card-shadow:0 18px 60px #2939570b,0 2px 8px #29395704;
+}
+html[data-theme="dark"] body.mf-v2[data-scenery] {
+  --scenery-card-shadow:0 18px 60px #00000020,0 2px 8px #00000012;
+}
+html body.mf-v2[data-scenery="workshop"] { --scenery-image:url('/static/scenery/workshop-day-1600.webp'); }
+html body.mf-v2[data-scenery="together"] { --scenery-image:url('/static/scenery/together-day-1600.webp'); }
+html body.mf-v2[data-scenery="review"] { --scenery-image:url('/static/scenery/review-day-1600.webp'); }
+html[data-theme="dark"] body.mf-v2[data-scenery="workshop"] { --scenery-image:url('/static/scenery/workshop-night-1600.webp'); }
+html[data-theme="dark"] body.mf-v2[data-scenery="together"] { --scenery-image:url('/static/scenery/together-night-1600.webp'); }
+html[data-theme="dark"] body.mf-v2[data-scenery="review"] { --scenery-image:url('/static/scenery/review-night-1600.webp'); }
+html body.mf-v2[data-scenery] > .mf-scenery {
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  overflow:hidden;
+  pointer-events:none;
+  user-select:none;
+  -webkit-user-select:none;
+}
+html body.mf-v2[data-scenery] .mf-scenery-art {
+  display:block;
+  position:absolute;
+  right:0;
+  bottom:0;
+  width:min(100%,1920px);
+  aspect-ratio:1672 / 941;
+  max-width:none;
+  margin:0;
+  border:0;
+  background-image:var(--scenery-image);
+  background-repeat:no-repeat;
+  background-size:contain;
+  background-position:right bottom;
+}
+
+/* The transparent outer shell leaves a real place for the drawing. Only the
+   working form is a card; decorative scenery never lowers form contrast. */
+html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-page {
+  background:transparent;
+  padding:48px 32px 32px;
+  gap:16px;
+}
+html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-card {
+  grid-template-columns:minmax(0,1fr) minmax(0,.95fr);
+  gap:clamp(40px,5vw,76px);
+  min-height:620px;
+  overflow:visible;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-form-side {
+  align-self:start;
+  padding:40px 44px;
+  border:1px solid var(--mf-line);
+  border-radius:22px;
+  background:var(--mf-card);
+  box-shadow:var(--scenery-card-shadow);
+}
+html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-aside {
+  align-self:start;
+  gap:18px;
+  padding:30px 8px 0 0;
+  border:0;
+  background:transparent;
+  max-width:430px;
+}
+html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-aside h2 {
+  max-width:390px;
+  font-size:clamp(30px,3.3vw,43px);
+  line-height:1.13;
+  letter-spacing:-.045em;
+}
+html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-copy {
+  max-width:360px;
+  font-size:15px;
+  line-height:1.75;
+}
+html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-page-footer {
+  text-align:left;
+}
+html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-page-footer a {
+  background:var(--mf-bg);
+  border-radius:8px;
+}
+html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-guide > summary {
+  width:fit-content;
+  max-width:100%;
+  min-height:40px;
+  padding:7px 10px;
+  border-radius:7px;
+  background:var(--mf-bg);
+  cursor:pointer;
+  font-size:13px;
+}
+html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-guide[open] {
+  padding:16px;
+  border:1px solid var(--mf-line);
+  border-radius:12px;
+  background:var(--mf-card);
+}
+html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-guide[open] > summary {
+  width:100%;
+  padding:0;
+  min-height:32px;
+  margin-bottom:12px;
+  background:transparent;
+}
+html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-guide[open] .auth-access-note {
+  padding:0;
+  border:0;
+  background:transparent;
+}
+html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-guide[open] .auth-access-extra { margin-top:18px; }
+
+/* Recovery remains a single compact form, aligned with the sign-in card. */
+html body.mf-v2[data-scenery][data-scenery-layout="access"] .auth-page {
+  width:min(1184px,100%);
+  margin-inline:auto;
+  padding:48px 32px;
+  align-items:flex-start;
+  background:transparent;
+}
+html body.mf-v2[data-scenery][data-scenery-layout="access"] .auth-recovery-card {
+  width:min(540px,100%);
+  border-radius:22px;
+  box-shadow:var(--scenery-card-shadow);
+}
+
+/* On long workspace pages a single landscape belongs to the opening area,
+   rather than following the viewport or appearing beneath every section. */
+html body.mf-v2[data-scenery][data-scenery-layout="workspace"] > .mf-scenery {
+  top:100px;
+  bottom:auto;
+  left:0;
+  height:min(960px,70vw);
+}
+html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] > .mf-scenery { left:var(--ui-sidebar,190px); }
+html body.mf-v2[data-scenery][data-scenery-layout="workspace"] .mf-scenery-art {
+  width:max(1120px,100%);
+}
+
+/* Protect the few unboxed disclosure labels that can meet the drawing. The
+   landscape remains visible in the open space around these small surfaces. */
+html body.mf-v2[data-scenery][data-scenery-layout="workspace"] :is(.journey-route,.ds-home-groups,.ds-teacher-projects,.teacher-signal-strip,.ui-teacher-filters) > summary {
+  width:fit-content;
+  max-width:100%;
+  padding:8px 12px;
+  border-radius:8px;
+  background:var(--mf-bg);
+}
+html body.mf-v2[data-scenery][data-scenery-layout="workspace"] .journey-route > summary {
+  flex-wrap:wrap;
+  gap:8px 12px;
+}
+html body.mf-v2[data-scenery][data-scenery-layout="workspace"] .journey-route > summary > span {
+  float:none;
+  display:inline;
+  margin:0;
+}
+html body.mf-v2[data-scenery][data-scenery-layout="workspace"] .journey-route > .journey-explanation,
+html body.mf-v2[data-scenery][data-scenery-layout="workspace"] .teacher-signal-strip > span,
+html body.mf-v2[data-scenery][data-scenery-layout="workspace"] .ds-teacher-projects > .section-title {
+  width:fit-content;
+  max-width:100%;
+  padding:6px 10px;
+  border-radius:6px;
+  background:var(--mf-bg);
+}
+html body.mf-v2[data-scenery][data-scenery-layout="workspace"] .journey-route > .journey-explanation { max-width:min(720px,100%); }
+html body.mf-v2[data-scenery][data-scenery-layout="workspace"] .ds-home-groups > a {
+  display:inline-flex;
+  align-items:center;
+  min-height:40px;
+  padding:6px 10px;
+  border-radius:6px;
+  background:var(--mf-bg);
+}
+
+@media (min-width:1921px) {
+  html body.mf-v2[data-scenery] .mf-scenery-art { right:max(0px,calc((100vw - 1920px)/2)); }
+}
+
+@media (max-width:1200px) {
+  html body.mf-v2[data-scenery="workshop"] { --scenery-image:url('/static/scenery/workshop-day-960.webp'); }
+  html body.mf-v2[data-scenery="together"] { --scenery-image:url('/static/scenery/together-day-960.webp'); }
+  html body.mf-v2[data-scenery="review"] { --scenery-image:url('/static/scenery/review-day-960.webp'); }
+  html[data-theme="dark"] body.mf-v2[data-scenery="workshop"] { --scenery-image:url('/static/scenery/workshop-night-960.webp'); }
+  html[data-theme="dark"] body.mf-v2[data-scenery="together"] { --scenery-image:url('/static/scenery/together-night-960.webp'); }
+  html[data-theme="dark"] body.mf-v2[data-scenery="review"] { --scenery-image:url('/static/scenery/review-night-960.webp'); }
+}
+
+@media (max-width:1100px) and (min-width:901px) {
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-card {
+    grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);
+    gap:32px;
+  }
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-form-side { padding:36px 32px; }
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-aside { padding-top:30px; }
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-aside h2 { font-size:32px; }
+}
+
+/* The phone receives its own edge composition. Reserve its space below the
+   last action instead of shrinking the desktop landscape behind the form. */
+@media (max-width:900px) {
+  html body.mf-v2[data-scenery] > .mf-scenery {
+    inset:auto 0 0;
+    height:220px;
+  }
+  html body.mf-v2[data-scenery] .mf-scenery-art {
+    width:100%;
+    height:100%;
+    aspect-ratio:auto;
+    right:0;
+    bottom:0;
+    background-size:cover;
+    background-position:right bottom;
+  }
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-page {
+    justify-content:flex-start;
+    padding:32px 24px 240px;
+  }
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-card {
+    grid-template-columns:minmax(0,1fr);
+    gap:24px;
+    min-height:0;
+    max-width:540px;
+  }
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-form-side { padding:36px; }
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-aside {
+    padding:0 12px;
+    gap:12px;
+    max-width:480px;
+  }
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-aside h2 { font-size:24px; }
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-copy { font-size:14px; max-width:none; }
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-page-footer { max-width:540px; }
+  html body.mf-v2[data-scenery][data-scenery-layout="access"] .auth-page {
+    justify-content:flex-start;
+    align-items:center;
+    padding:32px 24px 240px;
+  }
+  html body.mf-v2[data-scenery][data-scenery-layout="workspace"] { padding-bottom:160px; }
+  html body.mf-v2[data-scenery][data-scenery-layout="workspace"] > .mf-scenery,
+  html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] > .mf-scenery {
+    inset:auto 0 0;
+    height:180px;
+  }
+  html body.mf-v2[data-scenery][data-scenery-layout="workspace"] .mf-scenery-art { width:100%; }
+}
+
+@media (max-width:800px) {
+  html body.mf-v2[data-scenery][data-scenery] { --scenery-image:url('/static/scenery/mobile-day-720.webp'); }
+  html[data-theme="dark"] body.mf-v2[data-scenery][data-scenery] { --scenery-image:url('/static/scenery/mobile-night-720.webp'); }
+}
+
+@media (max-width:480px) {
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-page,
+  html body.mf-v2[data-scenery][data-scenery-layout="access"] .auth-page { padding:20px 12px 220px; }
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-form-side { padding:28px 24px; border-radius:18px; }
+  html body.mf-v2[data-scenery][data-scenery-layout="access"] .auth-recovery-card { border-radius:18px; }
+  html body.mf-v2[data-scenery] > .mf-scenery { height:200px; }
+}
+
+@media print, (forced-colors:active) {
+  html body.mf-v2[data-scenery] > .mf-scenery { display:none; }
+  html body.mf-v2[data-scenery] { --scenery-card-shadow:none; }
+  html body.mf-v2[data-scenery][data-scenery-layout="workspace"] { padding-bottom:0; }
+  html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-page,
+  html body.mf-v2[data-scenery][data-scenery-layout="access"] .auth-page { padding-bottom:24px; }
+}
