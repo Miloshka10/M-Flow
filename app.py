@@ -26,6 +26,10 @@ from urllib.parse import urlencode, urlsplit, parse_qsl
 from datetime import timedelta
 from auth_security import (initialize_auth, reserve_attempt, client_source, proxy_networks,
                            new_session, revoke_session, replace_password, fingerprint, SESSION_SECONDS, begin_auth_write)
+from account_names import name_key, name_taken, login_user
+import account_mail
+from account_mail_view import public_form as mail_form, token_field, email_panel, access_aside, password_control as account_password_control, account_assets
+from data_notice import render_data_notice
 from collections import defaultdict
 from deadlines import business_today, deadline_info, deadline_text, parse_deadline, urgent_tasks, TIMEZONE_LABEL, format_timestamp
 from deadlines import DEADLINE_FILTERS, TASK_SORTS, matches_deadline, task_sort_key
@@ -83,7 +87,13 @@ app.config.update(
     SESSION_COOKIE_SECURE=not DEBUG_MODE,
     PERMANENT_SESSION_LIFETIME=timedelta(seconds=SESSION_SECONDS),
     MAX_CONTENT_LENGTH=1024 * 1024,
+    TEACHER_REGISTRATION_CODE=os.environ.get('M_FLOW_TEACHER_CODE', ''),
 )
+app.config['MAIL_SETTINGS'] = account_mail.MailSettings.from_environment()
+app.config['PUBLIC_ORIGIN'] = account_mail.public_origin(os.environ.get('M_FLOW_PUBLIC_URL', ''))
+app.config['MAIL_DISPATCHER'] = account_mail.MailDispatcher(
+    lambda: app.logger.warning('Account email delivery failed; details omitted.'),
+    gate=lambda settings: account_mail.emailjs_gate(get_db, SECRET_KEY, settings.public_key))
 TRUSTED_AUTH_PROXIES = proxy_networks(os.environ.get('M_FLOW_TRUSTED_PROXY_CIDRS', ''))
 # Unknown usernames still do one password verification, rather than returning early.
 DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
@@ -109,7 +119,7 @@ def protect_mutations():
         return
     if request.method not in request.url_rule.methods:
         return
-    public_auth = {"login", "register", "teacher_login", "teacher_register"}
+    public_auth = {"login", "register", "teacher_login", "teacher_register", 'forgot_password', 'reset_password_page', 'confirm_email_page'}
     if request.endpoint not in public_auth and get_current_user() is None:
         # Expired authentication is reported before CSRF; no mutation can run.
         session.clear()
@@ -129,6 +139,19 @@ def protect_mutations():
 
 @app.after_request
 def protect_private_page_cache(response):
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'DENY')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    # Compatible first layer: script/style restrictions need a separate inline
+    # asset audit. This policy does not pretend to prevent every possible XSS.
+    response.headers.setdefault('Content-Security-Policy', "object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+    # HSTS can cross a TLS-terminating proxy without granting trust to XFP/XFF.
+    # Browsers ignore HSTS received over plain HTTP. A fixed canonical HTTPS
+    # origin is deployment intent, not authentication or request-scheme evidence.
+    origin = app.config.get('PUBLIC_ORIGIN', '')
+    canonical_https = bool(origin and request.host.lower() == urlsplit(origin).netloc.lower())
+    if request.is_secure or canonical_https:
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000')
     if response.mimetype == "text/html" or (request.method not in ("GET", "HEAD", "OPTIONS")):
         response.headers["Cache-Control"] = "no-store"
     return response
@@ -143,8 +166,8 @@ def render_page(html, title=None):
     skip_target = 'main-content' if '<main' in html else 'page-content'
     body_class = 'mf-v2 ui-authenticated' if 'data-interface-shell=' in html else 'mf-v2'
     suite_attribute = ' data-design-suite' if 'data-interface-shell=' in html else ''
-    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261030">'
-                   '<script src="/static/auth.js?v=20261030" defer></script>'
+    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261102-access">'
+                   '<script src="/static/auth.js?v=20261102-access" defer></script>'
                    if 'class="auth-page ' in html else '')
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -156,7 +179,7 @@ def render_page(html, title=None):
         '<link rel="stylesheet" href="/static/preferences.css?v=20261005">'
         '<link rel="stylesheet" href="/static/controls.css?v=20261006-csrf">'
         '<script src="/static/preferences.js?v=20261005"></script>'
-        '<script src="/static/motion.js?v=20261005-controls"></script>'
+        '<script src="/static/motion.js?v=20261005-controls" defer></script>'
         '<link rel="stylesheet" href="/static/product-design.css?v=20261017-text-logo">'
         '<link rel="stylesheet" href="/static/graphics.css?v=20261015">'
         '<link rel="stylesheet" href="/static/notifications.css?v=20261013">'
@@ -168,7 +191,7 @@ def render_page(html, title=None):
         '<link rel="stylesheet" href="/static/interface.css?v=20261029-review">'
         '<script src="/static/interface.js?v=20261027-work" defer></script>'
         '<script src="/static/form-guard.js?v=20261029" defer></script>'
-        '<link rel="stylesheet" href="/static/design-suite.css?v=20261031-final">'
+        '<link rel="stylesheet" href="/static/design-suite.css?v=20261101-mail-ui">'
         '<script src="/static/design-suite.js?v=20261031-final" defer></script>'
             + auth_assets +
             f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-design-page="{escape(request.endpoint or "", quote=True)}"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
@@ -303,6 +326,7 @@ def _prepare_database(conn):
     initialize_history(conn)
     initialize_notifications(conn)
     initialize_auth(conn)
+    account_mail.initialize_mail(conn)
     initialize_supervision(conn)
     initialize_groups(conn)
 
@@ -375,9 +399,12 @@ def _prepare_database(conn):
         ON task_updates(task_id, id DESC)
     """)
 
+    # Startup account creation obeys the same lock/name policy as registration.
+    if isinstance(conn, PostgresConnection) or not conn.in_transaction:
+        begin_auth_write(conn)
     if os.environ.get("M_FLOW_DEBUG") == "1":
         for username, role in (("milosh", "student"), ("uchitel", "teacher")):
-            if conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+            if name_taken(conn, username):
                 continue
             conn.execute(
                 """
@@ -393,7 +420,7 @@ def _prepare_database(conn):
     teacher_password = os.environ.get("M_FLOW_TEACHER_PASSWORD", "")
 
     if (teacher_name and len(teacher_password) >= 8
-            and not conn.execute("SELECT 1 FROM users WHERE username = ?", (teacher_name,)).fetchone()):
+            and not name_taken(conn, teacher_name)):
         conn.execute(
             """
             INSERT INTO users (username, password, role)
@@ -1031,6 +1058,12 @@ PAGE_STYLE = '<script src="/static/kanban.js?v=20261031-tasks" defer></script>'
 # LOGIN
 # =========================================================
 
+def teacher_registration_code():
+    code = app.config.get('TEACHER_REGISTRATION_CODE', '')
+    # Empty or misconfigured enrollment fails closed without breaking logins.
+    return code if isinstance(code, str) and 24 <= len(code) <= 256 and code == code.strip() else ''
+
+
 def render_auth_page(mode, error=None, role="student", field=None):
     is_login = mode == "login"
     is_teacher = role == "teacher"
@@ -1058,8 +1091,11 @@ def render_auth_page(mode, error=None, role="student", field=None):
                        ('Введите пароль' if is_login else 'Не менее 8 символов'))
         limits = ' minlength="8" maxlength="256"' if not is_login else ''
         hint = 'auth-password-hint' if not is_login and not repeat else None
+        label_html = f'<label for="{input_id}">{label}</label>'
+        if is_login and not repeat:
+            label_html = f'<div class="auth-label-row">{label_html}<a href="/forgot-password">Забыли пароль?</a></div>'
         return f'''
-            <label for="{input_id}">{label}</label>
+            {label_html}
             <div class="auth-password-control">
                 <input id="{input_id}" name="{name}" type="password" placeholder="{placeholder}" autocomplete="{autocomplete}"{limits}{field_attributes(name, hint)} required>
                 <button class="auth-password-toggle" type="button" aria-controls="{input_id}" aria-pressed="false" aria-label="Показать {"повтор пароля" if repeat else "пароль"}" hidden>Показать</button>
@@ -1090,6 +1126,10 @@ def render_auth_page(mode, error=None, role="student", field=None):
             {password_control('repeat_password', 'new-password', repeat=True)}
         """
         submit_label = "Создать аккаунт"
+        if is_teacher:
+            form_fields += f'''<label for="auth-teacher-code">Код регистрации учителя</label>
+                <input id="auth-teacher-code" type="password" name="teacher_code" autocomplete="off" maxlength="256"{field_attributes('teacher_code', 'auth-teacher-code-hint')} required>
+                <small class="auth-hint" id="auth-teacher-code-hint">Получите код лично у организатора M-Flow. Это не код подключения проекта.</small>{field_error('teacher_code')}'''
     intro = ('Проекты учеников и обратная связь в одном месте.' if is_teacher
              else 'От идеи до защиты — всё для вашего проекта.')
     pending_label = 'Входим…' if is_login else 'Создаём аккаунт…'
@@ -1097,6 +1137,9 @@ def render_auth_page(mode, error=None, role="student", field=None):
     switch_text = 'Нет аккаунта?' if is_login else 'Уже есть аккаунт?'
     switch_mode = 'register' if is_login else 'login'
     switch_label = 'Зарегистрироваться' if is_login else 'Войти'
+    auth_form = f'''<form method="post">{csrf_input()}{form_fields}<button type="submit" class="auth-submit" data-ui-icon="arrow" data-pending-label="{pending_label}">{submit_label}</button></form><p class="auth-submit-status" role="status" aria-live="polite"></p>'''
+    if is_teacher and not is_login and not teacher_registration_code():
+        auth_form = '<p class="auth-intro">Регистрация учителей пока закрыта. Для получения доступа обратитесь к организатору M-Flow. Если аккаунт уже есть, войдите в него.</p>'
 
     return render_page(
         f"""
@@ -1113,30 +1156,13 @@ def render_auth_page(mode, error=None, role="student", field=None):
                         <a href="{teacher_url}" class="{"active" if is_teacher else ""}" {"aria-current='page'" if is_teacher else ""}>Я учитель</a>
                     </nav>
                     {error_html}
-                    <form method="post">
-                        {csrf_input()}
-                        {form_fields}
-                        <button type="submit" class="auth-submit" data-ui-icon="arrow" data-pending-label="{pending_label}">{submit_label}</button>
-                    </form>
-                    <p class="auth-submit-status" role="status" aria-live="polite"></p>
+                    {auth_form}
                     <p class="auth-footer">{switch_text} <a href="{prefix}/{switch_mode}">{switch_label}</a></p>
+
+                    <p class="auth-footer"><a href="/data">Данные и помощь</a></p>
                     </div>
                 </main>
-                <aside class="auth-hero" aria-label="О проекте M-Flow">
-                    <div class="auth-story">
-                        <p class="auth-product-tag">ПРОЕКТНАЯ РАБОТА БЕЗ ХАОСА</p>
-                        <h2 class="auth-logo">Большие идеи<br>начинаются<br>с первого шага.</h2>
-                        <p class="auth-story-copy">Планируйте задачи, следите за этапами и двигайтесь к результату.</p>
-                    </div>
-                    <div class="auth-example" aria-label="Пример проекта: школьная медиастудия, этап 3 из 5">
-                        <p class="auth-example-tag">ПРИМЕР ПРОЕКТА</p>
-                        <h3>Школьная медиастудия</h3>
-                        <p class="auth-example-copy">От замысла — к первому выпуску</p>
-                        <div class="auth-example-progress" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
-                        <div class="auth-example-meta"><span>Этап 3 из 5</span><span>Работа над проектом</span></div>
-                    </div>
-                    <p class="auth-story-note">Ученик и учитель — в одном пространстве</p>
-                </aside>
+                {access_aside('login' if is_login else 'register')}
             </div>
             <footer class="auth-page-footer"><a href="/settings">Настройки оформления</a></footer>
         </div>
@@ -1154,7 +1180,7 @@ def auth_attempt(action, username):
     if 'auth_browser' not in session:
         session['auth_browser'] = secrets.token_urlsafe(24)
     source = client_source(request.remote_addr, request.headers.get('X-Forwarded-For', ''), TRUSTED_AUTH_PROXIES)
-    return reserve_attempt(get_db, SECRET_KEY, action, username, source, session['auth_browser'])
+    return reserve_attempt(get_db, SECRET_KEY, action, name_key(username), source, session['auth_browser'])
 
 
 def establish_session(user_id, token):
@@ -1176,10 +1202,7 @@ def login_for_role(role):
             return auth_wait('login', role, retry)
 
         with closing(get_db()) as conn:
-            user = conn.execute(
-                "SELECT * FROM users WHERE username = ?",
-                (username if len(username) <= 256 else '',)
-            ).fetchone()
+            user = login_user(conn, username if len(username) <= 256 else '')
         valid_password = check_password_hash(user['password'] if user else DUMMY_PASSWORD_HASH,
                                              password if len(password) <= 256 else '')
         if user is None or not valid_password or len(password) > 256:
@@ -1212,6 +1235,15 @@ def register_for_role(role):
         if retry:
             return auth_wait('register', role, retry)
 
+        if role == 'teacher':
+            expected = teacher_registration_code()
+            supplied = request.form.get('teacher_code', '')
+            if not expected:
+                return render_auth_page('register', error='Регистрация учителей закрыта.', role=role), 403
+            if (not supplied or len(supplied) > 256
+                    or not secrets.compare_digest(expected.encode('utf-8'), supplied.encode('utf-8'))):
+                return render_auth_page('register', error='Укажите действующий код регистрации от организатора.', role=role, field='teacher_code'), 400
+
         if not username or not password:
             return render_auth_page("register", error="Заполните все поля.", role=role)
 
@@ -1228,8 +1260,7 @@ def register_for_role(role):
         with closing(get_db()) as conn:
             try:
                 begin_auth_write(conn)
-                existing = conn.execute('SELECT id FROM users WHERE username=?', (username,)).fetchone()
-                if existing is not None:
+                if name_taken(conn, username):
                     return render_auth_page("register", error="Такой логин уже занят. Выберите другой или войдите в существующий аккаунт.", role=role, field="username")
                 new_user_id = insert_id(conn,
                     'INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
@@ -1244,6 +1275,8 @@ def register_for_role(role):
                 raise DatabaseUnavailable('Регистрация временно недоступна. Повторите попытку позже.') from None
 
         establish_session(new_user_id, token)
+        if app.config['MAIL_SETTINGS']:
+            flash('Для восстановления доступа добавьте и подтвердите почту в профиле: «Почта и восстановление».')
         return redirect("/teacher" if role == "teacher" else "/")
 
     return render_auth_page("register", role=role)
@@ -1269,6 +1302,141 @@ def teacher_register():
     return register_for_role("teacher")
 
 
+@app.route('/data')
+def data_notice_page():
+    user = get_current_user()
+    header = render_header(user) if user else '<header class="main-header"><a class="brand" href="/login">M-Flow.</a><a href="/login">К входу</a></header>'
+    body = render_data_notice(os.environ.get('M_FLOW_OPERATOR_NAME', ''), os.environ.get('M_FLOW_SUPPORT_EMAIL', ''))
+    return render_page(PAGE_STYLE + f'<div class="container">{header}<main class="team-page">{body}</main></div>', title='Данные и помощь · M-Flow')
+
+
+def mail_limit(identity, purpose):
+    if 'auth_browser' not in session:
+        session['auth_browser'] = secrets.token_urlsafe(24)
+    source = client_source(request.remote_addr, request.headers.get('X-Forwarded-For', ''), TRUSTED_AUTH_PROXIES)
+    return account_mail.reserve_mail(get_db, SECRET_KEY, identity, source, session['auth_browser'], purpose)
+
+
+def mail_response(title, intro, fields, button, error='', notice='', token_form=False, ready=True, status=200):
+    html = mail_form(title, intro, fields, csrf_token(), button, error, notice, token_form, ready)
+    response = app.make_response((render_page(html, title=title + ' · M-Flow'), status))
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    return response
+
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    settings = app.config['MAIL_SETTINGS']
+    notice, error, status = '', '', 200
+    if not settings:
+        notice = 'Восстановление по почте пока не подключено. Если вы вошли на другом устройстве, смените пароль в профиле; иначе обратитесь к организатору M-Flow.'
+        status = 503 if request.method == 'POST' else 200
+    elif request.method == 'POST':
+        try:
+            address = account_mail.normalize_email(request.form.get('email', ''))
+            username = request.form.get('username', '').strip()
+            if not 1 <= len(username) <= 30:
+                raise ValueError('Укажите логин вашего аккаунта.')
+            retry = mail_limit(address, 'reset-mail')
+            if retry:
+                response = mail_response('Восстановить доступ', 'Используйте заранее подтверждённую почту.', '', '',
+                                         error=f'Слишком много запросов. Повторите через {retry} сек.', ready=False, status=429)
+                response.headers['Retry-After'] = str(retry)
+                return response
+            account_mail.schedule_reset(get_db, SECRET_KEY, settings, app.config['MAIL_DISPATCHER'], username, address)
+            notice = account_mail.GENERIC_REQUEST
+        except ValueError as exc:
+            error, status = str(exc), 400
+    fields = '''<label for="recover-name">Логин</label><input id="recover-name" name="username" autocomplete="username" maxlength="30" required>
+        <label for="recover-email">Подтверждённая почта</label><input id="recover-email" name="email" type="email" autocomplete="email" maxlength="254" required>'''
+    return mail_response('Восстановить доступ', 'Ссылка придёт только на почту, которую вы заранее подтвердили в профиле.', fields,
+                         'Отправить ссылку', error, notice, ready=bool(settings), status=status)
+
+
+@app.route('/reset-password', methods=['GET', 'POST'])
+def reset_password_page():
+    error, status = '', 200
+    raw = request.form.get('token', '') if request.method == 'POST' else ''
+    if request.method == 'POST':
+        retry = mail_limit(fingerprint(SECRET_KEY, 'reset-input', raw[:256]), 'reset-token')
+        if retry:
+            error, status = f'Слишком много попыток. Повторите через {retry} сек.', 429
+        else:
+            try:
+                result = account_mail.reset_password(get_db, SECRET_KEY, raw, request.form.get('password', ''), request.form.get('repeat_password', ''))
+                if session.get('user_id') == result['id']:
+                    session.clear()
+                settings = app.config['MAIL_SETTINGS']
+                if settings and result['email']:
+                    try:
+                        app.config['MAIL_DISPATCHER'].submit(lambda send: send(settings, result['email'], 'Пароль M-Flow изменён',
+                            f'Аккаунт: {result["display_name"]}\nПароль вашего аккаунта M-Flow изменён. Все прежние сеансы завершены. Если это сделали не вы, снова запросите восстановление доступа.'))
+                    except DatabaseUnavailable:
+                        app.logger.warning('Password reset notice could not be queued; details omitted.')
+                return mail_response('Пароль изменён', 'Все прежние сеансы завершены. Войдите с новым паролем через обычную форму.', '', '', ready=False)
+            except ValueError as exc:
+                error, status = str(exc), 400
+    fields = token_field(raw if account_mail.TOKEN.fullmatch(raw) else '') + '''<label for="reset-password">Новый пароль</label><input id="reset-password" name="password" type="password" minlength="8" maxlength="256" autocomplete="new-password" required>
+        <label for="reset-repeat">Повторите пароль</label><input id="reset-repeat" name="repeat_password" type="password" minlength="8" maxlength="256" autocomplete="new-password" required>'''
+    response = mail_response('Новый пароль', 'Откройте ссылку из письма или вставьте код из него. Ссылка одноразовая и действует 20 минут.', fields,
+                            'Сменить пароль', error=error, token_form=True, status=status)
+    if status == 429:
+        response.headers['Retry-After'] = str(retry)
+    return response
+
+
+@app.route('/email/confirm', methods=['GET', 'POST'])
+def confirm_email_page():
+    error, notice, status = '', '', 200
+    if request.method == 'POST':
+        raw = request.form.get('token', '')
+        retry = mail_limit(fingerprint(SECRET_KEY, 'verify-input', raw[:256]), 'verify-token')
+        if retry:
+            response = mail_response('Подтверждение почты', '', '', '', error=f'Повторите через {retry} сек.', ready=False, status=429)
+            response.headers['Retry-After'] = str(retry)
+            return response
+        try:
+            complete = account_mail.confirm_email(get_db, SECRET_KEY, raw)
+            notice = 'Почта подтверждена. Теперь она доступна для восстановления пароля.' if complete else 'Подтверждение получено. Для завершения смены подтвердите второй ящик.'
+        except ValueError as exc:
+            error, status = str(exc), 400
+    return mail_response('Подтверждение почты', 'Подтвердите действие, которое вы запросили в профиле. Простое открытие ссылки ничего не меняет.', token_field(),
+                         'Подтвердить', error, notice, token_form=True, ready=not bool(notice), status=status)
+
+
+@app.route('/profile/email', methods=['GET', 'POST'])
+@login_required
+def profile_email():
+    user, error, notice, status = get_current_user(), '', '', 200
+    settings = app.config['MAIL_SETTINGS']
+    if request.method == 'POST':
+        if not settings:
+            error, status = 'Отправка почты пока не подключена.', 503
+        else:
+            source = client_source(request.remote_addr, request.headers.get('X-Forwarded-For', ''), TRUSTED_AUTH_PROXIES)
+            retry = reserve_supervision_attempt(get_db, SECRET_KEY, user['id'], source, purpose='email-change-password')
+            if retry:
+                error, status = f'Слишком много попыток. Повторите через {retry} сек.', 429
+            else:
+                try:
+                    address = account_mail.normalize_email(request.form.get('email', ''))
+                    retry = mail_limit(address, 'verify-mail')
+                    if retry:
+                        error, status = f'Повторите отправку через {retry} сек.', 429
+                    else:
+                        account_mail.request_email(get_db, SECRET_KEY, settings, app.config['MAIL_DISPATCHER'], user['id'], address, request.form.get('password', ''))
+                        notice = 'Подтверждение поставлено на отправку. Проверьте почту и папку «Спам». При смене адреса письмо придёт в оба ящика.'
+                except ValueError as exc:
+                    error, status = str(exc), 400
+    with closing(get_db()) as conn:
+        email = account_mail.email_for(conn, user['id'])
+    body = email_panel(email, csrf_token(), error, notice, ready=bool(settings), submitted=request.form.get('email', '')[:254] if error else None)
+    response = app.make_response(render_collaboration_page(user, 'Почта и восстановление', body, status=status, back_url='/profile', back_label='В профиль'))
+    if status == 429:
+        response.headers['Retry-After'] = str(retry)
+    return response
+
+
 @app.route("/profile", methods=["GET", "POST"])
 @login_required
 def profile():
@@ -1292,11 +1460,12 @@ def profile():
     projects_count = len(get_projects())
     skills_link = '<p><a class="teacher-primary-link" href="/skills">Мой класс, направление и навыки</a></p>' if user["role"] == "student" else ''
 
-    message_html = f'<div class="ok">{message}</div>' if message else ""
-    error_html = f'<div class="error">{error}</div>' if error else ""
+    message_html = f'<div class="ok" role="status">{escape(message)}</div>' if message else ""
+    error_html = f'<div class="error" role="alert" tabindex="-1" data-account-password-error>{escape(error)}</div>' if error else ""
 
     return render_page(
         PAGE_STYLE
+        + account_assets()
         + f"""
         <div class="container">
             {render_header(user)}
@@ -1312,20 +1481,20 @@ def profile():
                     <dd>{projects_count}</dd>
                 </dl>
                 {skills_link}
+                <p><a class="back" href="/profile/email">Почта и восстановление доступа {icon('arrow')}</a></p>
                 <p><a class="back" href="/settings">Настройки оформления и анимаций {icon('arrow')}</a></p>
-                <h3>Смена пароля</h3>
+                <div class="account-access-layout account-password-layout"><section class="account-security-panel" data-account-form>
+                <h2>Смена пароля</h2>
                 {message_html}
                 {error_html}
                 <form method="post">
                     {csrf_input()}
-                    <label for="old-password">Старый пароль</label>
-                    <input id="old-password" type="password" name="old_password" autocomplete="current-password" required>
-                    <label for="new-password">Новый пароль</label>
-                    <input id="new-password" type="password" name="new_password" autocomplete="new-password" minlength="8" maxlength="256" required>
-                    <label for="repeat-password">Повторите новый пароль</label>
-                    <input id="repeat-password" type="password" name="repeat_password" autocomplete="new-password" minlength="8" maxlength="256" required>
-                    <button type="submit" data-ui-icon="settings">Сменить пароль</button>
-                </form>
+                    {account_password_control('old-password', 'old_password', 'Старый пароль', 'current-password')}
+                    {account_password_control('new-password', 'new_password', 'Новый пароль', 'new-password', ' minlength="8" maxlength="256"', 'От 8 до 256 символов')}
+                    {account_password_control('repeat-password', 'repeat_password', 'Повторите новый пароль', 'new-password', ' minlength="8" maxlength="256"')}
+                    <button type="submit" data-ui-icon="settings" data-pending-label="Сохраняем…">Сменить пароль</button>
+                </form><p class="auth-submit-status" role="status" aria-live="polite"></p>
+                </section>{access_aside('password')}</div>
             </main>
         </div>
         """
@@ -2626,7 +2795,7 @@ def site_settings():
         <p class="settings-intro">Оформление сохраняется в этом браузере и действует на всех страницах. Настройки аккаунта остаются в профиле.</p>
         <section class="card settings-card" aria-labelledby="appearance-heading">
             <h2 id="appearance-heading">Оформление</h2>
-            <form id="site-preferences" onsubmit="return false">
+            <form id="site-preferences">
                 <label for="site-theme">Тема сайта</label>
                 <select id="site-theme" name="theme">
                     <option value="system">Как в системе</option><option value="light">Светлая</option><option value="dark">Тёмная</option>

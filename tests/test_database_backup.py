@@ -88,6 +88,8 @@ class DatabaseBackupTests(unittest.TestCase):
                 VALUES(2,1,'test:review','Этап принят','Закрытый комментарий — тест','/project/1/stages')""")
             conn.execute("INSERT INTO auth_limits(bucket,hits,expires) VALUES('test-hmac-bucket',2,1900000000)")
             conn.execute("INSERT INTO auth_sessions(token_hash,user_id,expires) VALUES('test-hmac-session',2,1900000000)")
+            conn.execute("INSERT INTO account_emails(user_id,email,revision) VALUES(2,'test-only@example.org',1)")
+            conn.execute("INSERT INTO account_email_tokens(token_hash,user_id,purpose,email,version,expires) VALUES('test-only-token-hmac',2,'reset','test-only@example.org','test-only-version',1900000000)")
             conn.commit()
 
     def snapshot(self, path):

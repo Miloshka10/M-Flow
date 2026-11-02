@@ -21,6 +21,7 @@ from board_cases import TaskBoardCases
 from workspace_cases import ProjectWorkCases
 from preparation_cases import DefensePreparationCases
 from review_cases import QualityReviewCases
+from account_recovery_cases import AccountRecoveryCases
 
 
 class FormTokens(HTMLParser):
@@ -45,7 +46,7 @@ class FormTokens(HTMLParser):
             self.current = None
 
 
-class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, NavigationCases, WorkHistoryCases, TaskBoardCases, ProjectWorkCases, DefensePreparationCases, QualityReviewCases, unittest.TestCase):
+class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, NavigationCases, WorkHistoryCases, TaskBoardCases, ProjectWorkCases, DefensePreparationCases, QualityReviewCases, AccountRecoveryCases, unittest.TestCase):
     def test_result_pages_show_moscow_update_time_for_both_roles(self):
         self.stage_post(3)
         self.defense_post()
@@ -842,7 +843,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             "teacher_test_app", Path(__file__).resolve().parents[1] / "app.py")
         cls.module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.module)
-        cls.module.app.config.update(TESTING=True)
+        cls.module.app.config.update(TESTING=True, TEACHER_REGISTRATION_CODE='isolated-teacher-enrollment-code')
         cls.password = generate_password_hash("test-password")
 
     @classmethod
@@ -856,7 +857,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
 
     def setUp(self):
         conn = self.module.get_db()
-        for table in ("project_defense_plans", "work_history", "work_history_sources", "learning_group_invitations", "learning_group_members", "learning_groups", "supervision_requests", "teacher_invitations", "auth_sessions", "auth_limits", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
+        for table in ("account_email_tokens", "account_emails", "project_defense_plans", "work_history", "work_history_sources", "learning_group_invitations", "learning_group_members", "learning_groups", "supervision_requests", "teacher_invitations", "auth_sessions", "auth_limits", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
             conn.execute(f"DELETE FROM {table}")
         conn.executemany("INSERT INTO users(id, username, password, role) VALUES(?, ?, ?, ?)", [
             (1, "teacher-one", self.password, "teacher"),
@@ -953,6 +954,10 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         else:
             kwargs['data'] = dict(kwargs.get('data', {}))
             kwargs['data'].setdefault('csrf_token', token)
+            if path.split('?', 1)[0] == '/teacher/register':
+                # Existing functional scenarios use authorized teacher enrollment.
+                # Gate regressions explicitly supply empty/invalid codes below.
+                kwargs['data'].setdefault('teacher_code', self.module.app.config['TEACHER_REGISTRATION_CODE'])
             if path.split('?', 1)[0].endswith('/assessment') and 'assessment_version' not in kwargs['data']:
                 # Read the current form as a browser would; explicit stale versions remain untouched.
                 page = self.client.get(path.split('?', 1)[0] + '?student_id=' + str(kwargs['data'].get('student_id', ''))).text
@@ -1347,9 +1352,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
             page = self.client.get(path).text
             self.assertEqual(page.count('/static/product-design.css'), 1)
-            self.assertIn('class="auth-example" aria-label="Пример проекта:', page)
-            self.assertIn('Школьная медиастудия', page)
-            self.assertIn('Этап 3 из 5', page)
+            self.assertIn('aria-label="Полезно знать"', page)
+            self.assertNotIn('Школьная медиастудия', page)
             self.assertEqual(page.count('/static/interface.css'), 1)
             self.assertIn('К содержимому', page)
         self.sign_in(3)
@@ -1414,8 +1418,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
             page = self.client.get(path).text
             self.assertEqual(page.count('/static/graphics.css'), 1)
-            self.assertIn('class="auth-example" aria-label="Пример проекта:', page)
-            self.assertIn('Школьная медиастудия', page)
+            self.assertIn('aria-label="Полезно знать"', page)
+            self.assertNotIn('Школьная медиастудия', page)
             self.assertNotIn('by Minich', page)
             self.assertNotIn('project-kit.svg', page)
         self.sign_in(3)
@@ -1580,7 +1584,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             self.assertTrue(response.text.startswith('<!doctype html><html lang="ru">'))
             self.assertEqual(response.text.count('name="viewport"'), 1)
             self.assertEqual(response.text.count('/static/mflow-theme.css'), 1)
-            self.assertLess(response.text.index('class="auth-form-side"'), response.text.index('class="auth-hero"'))
+            self.assertLess(response.text.index('class="auth-form-side"'), response.text.index('class="auth-access-aside"'))
             self.assertNotIn('by Minich', response.text)
             self.assertIn('name="username"', response.text)
             self.assertIn('type="password"', response.text)
@@ -1660,6 +1664,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
                     client = self.module.app.test_client()
                     page = client.get(f'{prefix}/register').text
                     token = FormTokens(page).forms[0]['tokens'][0]
+                    if prefix == '/teacher':
+                        values['teacher_code'] = self.module.app.config['TEACHER_REGISTRATION_CODE']
                     response = client.post(f'{prefix}/register', data={**values, 'csrf_token': token})
                     self.assertEqual(response.status_code, 200)
                     class Fields(HTMLParser):
