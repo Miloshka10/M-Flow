@@ -31,7 +31,10 @@ def access_aside(kind):
         'password': ('Обновите доступ к аккаунту', 'Текущий пароль подтверждает, что изменение запрашиваете вы.', 'Текущий сеанс сохранится', 'Другие сеансы этого аккаунта после смены будут завершены.', 'Проекты и оценки сохранятся', 'Смена пароля сохраняет проекты, историю и оценки.'),
     }
     title, intro, heading, detail, heading2, detail2 = content[kind]
-    return f'''<aside class="auth-access-aside" aria-label="Полезно знать"><p class="auth-eyebrow">ПОЧТА И ДОСТУП</p><h2>{title}</h2><p class="auth-access-copy">{intro}</p><div class="auth-access-note"><h3>{heading}</h3><p>{detail}</p></div><div class="auth-access-extra"><h3>{heading2}</h3><p>{detail2}</p></div></aside>'''
+    notes = f'<div class="auth-access-note"><h3>{heading}</h3><p>{detail}</p></div><div class="auth-access-extra"><h3>{heading2}</h3><p>{detail2}</p></div>'
+    if kind in ('login', 'register'):
+        notes = f'<details class="auth-access-guide"><summary>Как устроен доступ</summary>{notes}</details>'
+    return f'''<aside class="auth-access-aside" aria-label="Полезно знать"><p class="auth-eyebrow">ПОЧТА И ДОСТУП</p><h2>{title}</h2><p class="auth-access-copy">{intro}</p>{notes}</aside>'''
 
 
 def token_field(value=''):

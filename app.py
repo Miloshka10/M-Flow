@@ -45,6 +45,7 @@ from learning_groups import (initialize_groups, create_group, preview_code as pr
 from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue
 from dashboard_view import student_dashboard
 from graphics import illustration
+from scenery import scenery
 from project_workspace import render_workspace, task_deadline
 from project_work import render_project_work
 from navigation import project_navigation
@@ -166,6 +167,13 @@ def render_page(html, title=None):
     skip_target = 'main-content' if '<main' in html else 'page-content'
     body_class = 'mf-v2 ui-authenticated' if 'data-interface-shell=' in html else 'mf-v2'
     suite_attribute = ' data-design-suite' if 'data-interface-shell=' in html else ''
+    endpoint = request.endpoint or ''
+    scenery_layout = ('access' if endpoint in ('forgot_password', 'reset_password_page', 'confirm_email_page')
+                      else 'auth' if endpoint in ('login', 'register', 'teacher_login', 'teacher_register')
+                      else 'workspace')
+    scenery_context = ('together' if endpoint in ('learning_groups_page', 'learning_group_page', 'teams_directory', 'project_team')
+                       else 'review' if endpoint.startswith('teacher_') or
+                       ('data-interface-shell="teacher"' in html) else 'workshop')
     auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261102-layout-review">'
                    '<script src="/static/auth.js?v=20261102-layout-review" defer></script>'
                    if 'class="auth-page ' in html else '')
@@ -193,8 +201,10 @@ def render_page(html, title=None):
         '<script src="/static/form-guard.js?v=20261029" defer></script>'
         '<link rel="stylesheet" href="/static/design-suite.css?v=20261101-mail-ui">'
         '<script src="/static/design-suite.js?v=20261031-final" defer></script>'
-            + auth_assets +
-            f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-design-page="{escape(request.endpoint or "", quote=True)}"><a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
+            + auth_assets + '<link rel="stylesheet" href="/static/scenery.css?v=20261102-ink-world">' +
+            f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-scenery="{scenery_context}" data-scenery-layout="{scenery_layout}" data-design-page="{escape(endpoint, quote=True)}">'
+            + scenery(scenery_context, layout=scenery_layout)
+            + f'<a class="skip-link" href="#{skip_target}">К содержимому</a>' + html + '</body></html>')
 
 
 DATABASE_SETTINGS = DatabaseSettings.from_environment(app.root_path)
