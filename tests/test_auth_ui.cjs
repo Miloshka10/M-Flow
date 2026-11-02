@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname, '../static/auth.js'), 'utf8');
 
-function setup({error = false, page = true} = {}) {
+function setup({error = false, page = true, account = false} = {}) {
   const events = {};
   const inputs = ['password', 'repeat_password'].map(name => ({name, type:'password', readOnly:false, value:'unchanged-test-value',
     parentElement:{classList:{add(c) { this.added = c; }}}}));
@@ -23,7 +23,7 @@ function setup({error = false, page = true} = {}) {
     querySelector(selector) { return selector === 'form' ? form : selector === '.auth-submit-status' ? status : error ? invalid : null; },
     addEventListener(k,fn) { this.listeners[k] = fn; }};
   vm.runInNewContext(source, {
-    document:{querySelector:() => page ? element : null,
+    document:{querySelector:selector => (selector === '.auth-page' && page) || (selector === '[data-account-form]' && account) ? element : null,
       getElementById:id => inputs[Number(id.split('-')[1])]},
     window:{addEventListener(k,fn) { (events[k] ||= []).push(fn); }}
   });
@@ -78,4 +78,12 @@ assert.ok(ui.buttons.every(button => !button.disabled));
 const retry = event(); ui.form.listeners.submit(retry);
 assert.equal(retry.defaultPrevented, false, 'Back/Forward restores a usable submit');
 assert.doesNotThrow(() => setup({page:false}));
+const protectedUI = setup({page:false,account:true});
+protectedUI.buttons[0].listeners.click();
+assert.equal(protectedUI.inputs[0].type,'text','Protected account forms share password visibility controls');
+protectedUI.events.pageshow.forEach(fn=>fn());
+assert.equal(protectedUI.inputs[0].type,'password','Back conceals protected form passwords too');
+protectedUI.form.listeners.submit(event());
+assert.equal(protectedUI.submit.disabled,true);
+assert.ok(protectedUI.inputs.every(input=>!input.disabled&&input.value==='unchanged-test-value'),'Protected POST values remain successful controls');
 console.log('Auth UI: visibility, values, accessibility, error focus, ordinary POST, pending/duplicate submit and history restoration passed');

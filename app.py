@@ -28,7 +28,7 @@ from auth_security import (initialize_auth, reserve_attempt, client_source, prox
                            new_session, revoke_session, replace_password, fingerprint, SESSION_SECONDS, begin_auth_write)
 from account_names import name_key, name_taken, login_user
 import account_mail
-from account_mail_view import public_form as mail_form, token_field, email_panel
+from account_mail_view import public_form as mail_form, token_field, email_panel, access_aside, password_control as account_password_control, account_assets
 from data_notice import render_data_notice
 from collections import defaultdict
 from deadlines import business_today, deadline_info, deadline_text, parse_deadline, urgent_tasks, TIMEZONE_LABEL, format_timestamp
@@ -166,8 +166,8 @@ def render_page(html, title=None):
     skip_target = 'main-content' if '<main' in html else 'page-content'
     body_class = 'mf-v2 ui-authenticated' if 'data-interface-shell=' in html else 'mf-v2'
     suite_attribute = ' data-design-suite' if 'data-interface-shell=' in html else ''
-    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261101-mail-ui">'
-                   '<script src="/static/auth.js?v=20261030" defer></script>'
+    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261102-access">'
+                   '<script src="/static/auth.js?v=20261102-access" defer></script>'
                    if 'class="auth-page ' in html else '')
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -1091,8 +1091,11 @@ def render_auth_page(mode, error=None, role="student", field=None):
                        ('Введите пароль' if is_login else 'Не менее 8 символов'))
         limits = ' minlength="8" maxlength="256"' if not is_login else ''
         hint = 'auth-password-hint' if not is_login and not repeat else None
+        label_html = f'<label for="{input_id}">{label}</label>'
+        if is_login and not repeat:
+            label_html = f'<div class="auth-label-row">{label_html}<a href="/forgot-password">Забыли пароль?</a></div>'
         return f'''
-            <label for="{input_id}">{label}</label>
+            {label_html}
             <div class="auth-password-control">
                 <input id="{input_id}" name="{name}" type="password" placeholder="{placeholder}" autocomplete="{autocomplete}"{limits}{field_attributes(name, hint)} required>
                 <button class="auth-password-toggle" type="button" aria-controls="{input_id}" aria-pressed="false" aria-label="Показать {"повтор пароля" if repeat else "пароль"}" hidden>Показать</button>
@@ -1155,25 +1158,11 @@ def render_auth_page(mode, error=None, role="student", field=None):
                     {error_html}
                     {auth_form}
                     <p class="auth-footer">{switch_text} <a href="{prefix}/{switch_mode}">{switch_label}</a></p>
-                    {('<p class="auth-footer"><a href="/forgot-password">Забыли пароль?</a></p>' if is_login else '')}
+
                     <p class="auth-footer"><a href="/data">Данные и помощь</a></p>
                     </div>
                 </main>
-                <aside class="auth-hero" aria-label="О проекте M-Flow">
-                    <div class="auth-story">
-                        <p class="auth-product-tag">ПРОЕКТНАЯ РАБОТА БЕЗ ХАОСА</p>
-                        <h2 class="auth-logo">Большие идеи<br>начинаются<br>с первого шага.</h2>
-                        <p class="auth-story-copy">Планируйте задачи, следите за этапами и двигайтесь к результату.</p>
-                    </div>
-                    <div class="auth-example" aria-label="Пример проекта: школьная медиастудия, этап 3 из 5">
-                        <p class="auth-example-tag">ПРИМЕР ПРОЕКТА</p>
-                        <h3>Школьная медиастудия</h3>
-                        <p class="auth-example-copy">От замысла — к первому выпуску</p>
-                        <div class="auth-example-progress" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
-                        <div class="auth-example-meta"><span>Этап 3 из 5</span><span>Работа над проектом</span></div>
-                    </div>
-                    <p class="auth-story-note">Ученик и учитель — в одном пространстве</p>
-                </aside>
+                {access_aside('login' if is_login else 'register')}
             </div>
             <footer class="auth-page-footer"><a href="/settings">Настройки оформления</a></footer>
         </div>
@@ -1476,7 +1465,7 @@ def profile():
 
     return render_page(
         PAGE_STYLE
-        + '<script src="/static/account-mail.js?v=20261101-profile-feedback" defer></script>'
+        + account_assets()
         + f"""
         <div class="container">
             {render_header(user)}
@@ -1494,19 +1483,18 @@ def profile():
                 {skills_link}
                 <p><a class="back" href="/profile/email">Почта и восстановление доступа {icon('arrow')}</a></p>
                 <p><a class="back" href="/settings">Настройки оформления и анимаций {icon('arrow')}</a></p>
-                <h3>Смена пароля</h3>
+                <div class="account-access-layout account-password-layout"><section class="account-security-panel" data-account-form>
+                <h2>Смена пароля</h2>
                 {message_html}
                 {error_html}
                 <form method="post">
                     {csrf_input()}
-                    <label for="old-password">Старый пароль</label>
-                    <input id="old-password" type="password" name="old_password" autocomplete="current-password" required>
-                    <label for="new-password">Новый пароль</label>
-                    <input id="new-password" type="password" name="new_password" autocomplete="new-password" minlength="8" maxlength="256" required>
-                    <label for="repeat-password">Повторите новый пароль</label>
-                    <input id="repeat-password" type="password" name="repeat_password" autocomplete="new-password" minlength="8" maxlength="256" required>
-                    <button type="submit" data-ui-icon="settings">Сменить пароль</button>
-                </form>
+                    {account_password_control('old-password', 'old_password', 'Старый пароль', 'current-password')}
+                    {account_password_control('new-password', 'new_password', 'Новый пароль', 'new-password', ' minlength="8" maxlength="256"', 'От 8 до 256 символов')}
+                    {account_password_control('repeat-password', 'repeat_password', 'Повторите новый пароль', 'new-password', ' minlength="8" maxlength="256"')}
+                    <button type="submit" data-ui-icon="settings" data-pending-label="Сохраняем…">Сменить пароль</button>
+                </form><p class="auth-submit-status" role="status" aria-live="polite"></p>
+                </section>{access_aside('password')}</div>
             </main>
         </div>
         """

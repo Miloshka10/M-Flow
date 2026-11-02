@@ -1352,9 +1352,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
             page = self.client.get(path).text
             self.assertEqual(page.count('/static/product-design.css'), 1)
-            self.assertIn('class="auth-example" aria-label="Пример проекта:', page)
-            self.assertIn('Школьная медиастудия', page)
-            self.assertIn('Этап 3 из 5', page)
+            self.assertIn('aria-label="Полезно знать"', page)
+            self.assertNotIn('Школьная медиастудия', page)
             self.assertEqual(page.count('/static/interface.css'), 1)
             self.assertIn('К содержимому', page)
         self.sign_in(3)
@@ -1419,8 +1418,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
             page = self.client.get(path).text
             self.assertEqual(page.count('/static/graphics.css'), 1)
-            self.assertIn('class="auth-example" aria-label="Пример проекта:', page)
-            self.assertIn('Школьная медиастудия', page)
+            self.assertIn('aria-label="Полезно знать"', page)
+            self.assertNotIn('Школьная медиастудия', page)
             self.assertNotIn('by Minich', page)
             self.assertNotIn('project-kit.svg', page)
         self.sign_in(3)
@@ -1585,7 +1584,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             self.assertTrue(response.text.startswith('<!doctype html><html lang="ru">'))
             self.assertEqual(response.text.count('name="viewport"'), 1)
             self.assertEqual(response.text.count('/static/mflow-theme.css'), 1)
-            self.assertLess(response.text.index('class="auth-form-side"'), response.text.index('class="auth-hero"'))
+            self.assertLess(response.text.index('class="auth-form-side"'), response.text.index('class="auth-access-aside"'))
             self.assertNotIn('by Minich', response.text)
             self.assertIn('name="username"', response.text)
             self.assertIn('type="password"', response.text)

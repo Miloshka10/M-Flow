@@ -1,7 +1,7 @@
 /* Progressive enhancement: ordinary POST forms also work without JavaScript. */
 (() => {
   'use strict';
-  const page = document.querySelector('.auth-page');
+  const page = document.querySelector('.auth-page') || document.querySelector('[data-account-form]');
   if (!page) return;
   page.querySelectorAll('.auth-password-toggle').forEach(button => {
     const input = document.getElementById(button.getAttribute('aria-controls'));

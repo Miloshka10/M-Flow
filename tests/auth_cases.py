@@ -21,6 +21,40 @@ class _AccessibilityTags(HTMLParser):
 
 
 class AuthSecurityCases:
+    def test_access_release_preserves_forms_and_makes_recovery_discoverable(self):
+        before = self.database_snapshot()
+        for path in ('/login', '/teacher/login'):
+            page = self.client.get(path).text
+            self.assertEqual(page.count('href="/forgot-password"'), 1)
+            self.assertLess(page.index('for="auth-password"'), page.index('Забыли пароль?'))
+            self.assertLess(page.index('Забыли пароль?'), page.index('id="auth-password"'))
+            self.assertIn('aria-label="Полезно знать"', page)
+            self.assertIn('name="csrf_token"', page)
+        for path in ('/register', '/teacher/register'):
+            page = self.client.get(path).text
+            self.assertNotIn('type="email"', page)
+            self.assertIn('name="repeat_password"', page)
+            self.assertIn('name="teacher_code"', page) if path.startswith('/teacher') else self.assertNotIn('name="teacher_code"', page)
+        page = self.client.get('/reset-password').text
+        self.assertIn('Пароль для следующего входа', page)
+        self.assertIn('name="token"', page)
+        self.assertNotIn('aria-controls="mail-token"', page)
+        self.assertIn('aria-controls="reset-password"', page)
+        self.assertIn('aria-controls="reset-repeat"', page)
+        self.assertIn('data-email-token-form', page)
+        self.assertNotIn('Укажите адрес', page)
+        self.assertEqual(self.database_snapshot(), before)
+        for user_id in (1, 3):
+            self.sign_in(user_id)
+            profile = self.client.get('/profile').text
+            for name in ('old_password', 'new_password', 'repeat_password'):
+                self.assertIn(f'name="{name}"', profile)
+            self.assertIn('Текущий сеанс сохранится', profile)
+            self.assertIn('data-account-form', profile)
+            email = self.client.get('/profile/email').text
+            self.assertIn('Неподтверждённый адрес', email)
+            self.assertNotIn('student@example.org', email)
+
     def test_profile_password_feedback_is_accessible_and_safe_for_both_roles(self):
         for user_id in (1, 3):
             self.sign_in(user_id)
