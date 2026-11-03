@@ -3,34 +3,36 @@
 html body.mf-v2[data-scenery] {
   min-height:100dvh;
   --scenery-landscape:var(--scenery-landscape-day);
-  --scenery-portrait:var(--scenery-portrait-day);
+  --scenery-wide:var(--scenery-wide-day);
   --scenery-mobile:url('/static/scenery/mobile-day-720.webp');
   --scenery-image:var(--scenery-landscape);
+  --scenery-focus:80%;
   --scenery-card-shadow:0 16px 48px #2939570a,0 2px 8px #29395704;
 }
 html[data-theme="dark"] body.mf-v2[data-scenery] {
   --scenery-landscape:var(--scenery-landscape-night);
-  --scenery-portrait:var(--scenery-portrait-night);
+  --scenery-wide:var(--scenery-wide-night);
   --scenery-mobile:url('/static/scenery/mobile-night-720.webp');
   --scenery-card-shadow:0 16px 48px #00000020,0 2px 8px #00000012;
 }
 html body.mf-v2[data-scenery="workshop"] {
   --scenery-landscape-day:url('/static/scenery/workshop-day-960.webp');
   --scenery-landscape-night:url('/static/scenery/workshop-night-960.webp');
-  --scenery-portrait-day:url('/static/scenery/portrait-workshop-day-480.webp');
-  --scenery-portrait-night:url('/static/scenery/portrait-workshop-night-480.webp');
+  --scenery-wide-day:url('/static/scenery/workshop-day-1600.webp');
+  --scenery-wide-night:url('/static/scenery/workshop-night-1600.webp');
 }
 html body.mf-v2[data-scenery="together"] {
   --scenery-landscape-day:url('/static/scenery/together-day-960.webp');
   --scenery-landscape-night:url('/static/scenery/together-night-960.webp');
-  --scenery-portrait-day:url('/static/scenery/portrait-together-day-480.webp');
-  --scenery-portrait-night:url('/static/scenery/portrait-together-night-480.webp');
+  --scenery-wide-day:url('/static/scenery/together-day-1600.webp');
+  --scenery-wide-night:url('/static/scenery/together-night-1600.webp');
 }
 html body.mf-v2[data-scenery="review"] {
+  --scenery-focus:100%;
   --scenery-landscape-day:url('/static/scenery/review-day-960.webp');
   --scenery-landscape-night:url('/static/scenery/review-night-960.webp');
-  --scenery-portrait-day:url('/static/scenery/portrait-review-day-480.webp');
-  --scenery-portrait-night:url('/static/scenery/portrait-review-night-480.webp');
+  --scenery-wide-day:url('/static/scenery/review-day-1600.webp');
+  --scenery-wide-night:url('/static/scenery/review-night-1600.webp');
 }
 
 /* The default is an ordinary footer after all working content. */
@@ -163,13 +165,14 @@ html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-page-footer {
   html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-access-aside { padding:0 24px 24px; }
 }
 
-/* Public access screens gain a portrait rail as soon as the form and rail
-   can both keep their full, independent widths. */
+/* Keep the approved panoramic artwork. Scale by viewport height, rather
+   than squeezing the scene into a narrow portrait slot. Panorama edges
+   are cropped; the left form keeps its own opaque rectangle. */
 @media (min-width:1100px) {
   html body.mf-v2[data-scenery]:is([data-scenery-layout="auth"],[data-scenery-layout="access"]) {
-    --scenery-rail:clamp(280px,32vw,520px);
+    --scenery-rail:clamp(46vw,84dvh,54vw);
     --scenery-gap:24px;
-    --scenery-image:var(--scenery-portrait);
+    --scenery-image:var(--scenery-wide);
   }
   html body.mf-v2[data-scenery]:is([data-scenery-layout="auth"],[data-scenery-layout="access"]) > .mf-scenery {
     display:block;
@@ -184,7 +187,8 @@ html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-page-footer {
   html body.mf-v2[data-scenery]:is([data-scenery-layout="auth"],[data-scenery-layout="access"]) .mf-scenery-art {
     width:100%;
     height:100%;
-    background-position:center;
+    background-size:auto 100%;
+    background-position:var(--scenery-focus) center;
   }
   html body.mf-v2[data-scenery]:is([data-scenery-layout="auth"],[data-scenery-layout="access"]) .auth-page {
     width:calc(100% - var(--scenery-rail) - var(--scenery-gap));
@@ -194,13 +198,13 @@ html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-page-footer {
   }
 }
 
-/* Authenticated pages reserve the entire right rectangle for the portrait;
+/* Authenticated pages reserve the entire right rectangle for the scene;
    the content width accounts for both the existing left navigation and it. */
 @media (min-width:1440px) {
   html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] {
-    --scenery-rail:clamp(260px,20vw,360px);
+    --scenery-rail:clamp(42vw,88dvh,46vw);
     --scenery-gap:24px;
-    --scenery-image:var(--scenery-portrait);
+    --scenery-image:var(--scenery-wide);
   }
   html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] > .mf-scenery {
     display:block;
@@ -215,7 +219,8 @@ html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-page-footer {
   html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] .mf-scenery-art {
     width:100%;
     height:100%;
-    background-position:center;
+    background-size:auto 100%;
+    background-position:var(--scenery-focus) center;
   }
   html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] :is(.container,.app) {
     width:calc(100% - var(--ui-sidebar) - var(--scenery-rail) - var(--scenery-gap));
@@ -225,16 +230,30 @@ html body.mf-v2[data-scenery][data-scenery-layout="auth"] .auth-page-footer {
     padding:0 32px;
   }
 }
-@media (min-width:1440px) and (max-width:1700px) {
+@media (min-width:1440px) {
   html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] :is(.project-grid,.team-directory,.group-list) {
-    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-columns:minmax(0,1fr);
   }
-  html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] :is(.teacher-dashboard-grid,.ds-home-columns,.pw-grid) {
+  html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] :is(.teacher-dashboard-grid,.ds-home-columns,.pw-grid,.ui-project-overview-grid) {
     grid-template-columns:minmax(0,1fr);
   }
   html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] .team-filters {
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
+}
+@media (min-width:1440px) and (max-width:1700px) {
+  html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] .t-stats {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] .ds-feature {
+    grid-template-columns:minmax(0,1fr);
+    gap:16px;
+  }
+  html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] .ds-feature-art { transform:none; }
+  /* The decorative cover yields to the title and action; the real stage
+     progress and accepted-stage count remain visible below them. */
+  html body.mf-v2[data-scenery].ui-authenticated[data-scenery-layout="workspace"] .ds-feature-art .ds-cover { display:none; }
 }
 
 /* Removing the illustration also returns its reserved width to the content.
