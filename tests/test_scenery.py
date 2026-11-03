@@ -13,10 +13,29 @@ class SceneryTags(HTMLParser):
     def __init__(self, html):
         super().__init__()
         self.tags = []
+        self.body_children = []
+        self.body_depth = None
         self.feed(html)
 
     def handle_starttag(self, tag, attrs):
-        self.tags.append((tag, dict(attrs)))
+        attrs = dict(attrs)
+        self.tags.append((tag, attrs))
+        if tag == 'body':
+            self.body_depth = 0
+        elif self.body_depth is not None:
+            if self.body_depth == 0:
+                self.body_children.append((tag, attrs))
+            if tag not in ('area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+                           'link', 'meta', 'param', 'source', 'track', 'wbr'):
+                self.body_depth += 1
+
+    def handle_endtag(self, tag):
+        if tag == 'body':
+            self.body_depth = None
+        elif self.body_depth is not None and tag not in (
+                'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+                'link', 'meta', 'param', 'source', 'track', 'wbr'):
+            self.body_depth = max(0, self.body_depth - 1)
 
 
 def webp_size_and_alpha(data):
@@ -91,6 +110,21 @@ class SceneryAssetTests(unittest.TestCase):
             self.assertNotIn('..', url)
             self.assertTrue((ROOT / url.lstrip('/')).is_file(), url)
 
+    def test_portrait_art_keeps_its_vertical_composition_and_transparency(self):
+        total = 0
+        for context in ('workshop', 'together', 'review'):
+            for tone in ('day', 'night'):
+                name = f'portrait-{context}-{tone}-480.webp'
+                with self.subTest(name=name):
+                    data = (ROOT / 'static' / 'scenery' / name).read_bytes()
+                    width, height, alpha = webp_size_and_alpha(data)
+                    self.assertEqual(width, 480)
+                    self.assertLessEqual(abs(height - width * 3), 2)
+                    self.assertTrue(alpha)
+                    self.assertLess(len(data), 300_000)
+                    total += len(data)
+        self.assertLess(total, 1_500_000)
+
 
 class SceneryPageTests(unittest.TestCase):
     @classmethod
@@ -118,13 +152,18 @@ class SceneryPageTests(unittest.TestCase):
 
     def assert_scene(self, response, context, layout):
         self.assertEqual(response.status_code, 200)
-        tags = SceneryTags(response.text).tags
+        document = SceneryTags(response.text)
+        tags = document.tags
         body = next(attrs for tag, attrs in tags if tag == 'body')
         self.assertEqual(body.get('data-scenery'), context)
         self.assertEqual(body.get('data-scenery-layout'), layout)
         layers = [attrs for tag, attrs in tags if 'mf-scenery' in attrs.get('class', '').split()]
         self.assertEqual(len(layers), 1)
         self.assertEqual(layers[0].get('aria-hidden'), 'true')
+        # At widths without a side rail, artwork follows the content in normal
+        # flow. Putting it before the content recreates the overlay regression.
+        self.assertEqual(document.body_children[-1][0], 'div')
+        self.assertIn('mf-scenery', document.body_children[-1][1].get('class', '').split())
         self.assertIn('href="/static/scenery.css', response.text)
         # Decorating the document must not displace secured POST form tokens.
         from test_teacher_cabinet import FormTokens

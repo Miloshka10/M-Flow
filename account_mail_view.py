@@ -32,9 +32,10 @@ def access_aside(kind):
     }
     title, intro, heading, detail, heading2, detail2 = content[kind]
     notes = f'<div class="auth-access-note"><h3>{heading}</h3><p>{detail}</p></div><div class="auth-access-extra"><h3>{heading2}</h3><p>{detail2}</p></div>'
+    intro_html = f'<p class="auth-eyebrow">ПОЧТА И ДОСТУП</p><h2>{title}</h2><p class="auth-access-copy">{intro}</p>'
     if kind in ('login', 'register'):
-        notes = f'<details class="auth-access-guide"><summary>Как устроен доступ</summary>{notes}</details>'
-    return f'''<aside class="auth-access-aside" aria-label="Полезно знать"><p class="auth-eyebrow">ПОЧТА И ДОСТУП</p><h2>{title}</h2><p class="auth-access-copy">{intro}</p>{notes}</aside>'''
+        return f'<aside class="auth-access-aside" aria-label="Полезно знать"><details class="auth-access-guide"><summary>Как устроен доступ</summary><div class="auth-access-guide-content">{intro_html}{notes}</div></details></aside>'
+    return f'<aside class="auth-access-aside" aria-label="Полезно знать">{intro_html}{notes}</aside>'
 
 
 def token_field(value=''):
