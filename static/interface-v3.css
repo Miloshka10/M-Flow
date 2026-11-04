@@ -183,6 +183,19 @@ html body.mf-v2[data-interface-v3][data-scenery] .ds-avatar {border-radius:12px;
 html body.mf-v2[data-interface-v3][data-scenery] .assessment-table :is(th,td) {padding:14px;font-size:14px;line-height:1.7}
 html body.mf-v2[data-interface-v3][data-scenery] :is(.history-item,.result-item) {line-height:1.8}
 html body.mf-v2[data-interface-v3][data-scenery] .result-item h3 {font-size:23px}
+html body.mf-v2[data-interface-v3][data-scenery] .ui-header-context>[data-shell-location] {margin:0;color:inherit}
+html.ds-enhanced body.mf-v2[data-interface-v3][data-scenery] [data-suite-view="projects"] #my-projects>.section-title>h2,
+html.ds-enhanced body.mf-v2[data-interface-v3][data-scenery] [data-suite-view="results"] #results-title {display:none}
+html.ds-enhanced body.mf-v2[data-interface-v3][data-scenery] :is([data-suite-view="projects"],[data-suite-view="results"])>.ds-home-only {display:none}
+html body.mf-v2[data-interface-v3][data-scenery] .project-people-links {display:flex;gap:12px 24px;flex-wrap:wrap;margin:12px 0 22px}
+html body.mf-v2[data-interface-v3][data-scenery] .project-context-actions {display:flex;justify-content:flex-end;margin:6px 0}
+html body.mf-v2[data-interface-v3][data-scenery] .project-context-actions a {display:inline-flex;gap:8px;align-items:center;min-height:44px;font-size:13px;color:var(--mf-muted)}
+html body.mf-v2[data-interface-v3][data-scenery] .project-context-actions a[aria-current] {color:var(--mf-accent)}
+html body.mf-v2[data-interface-v3][data-scenery] .supervision-context {padding:20px 24px;margin:20px 0;border:1px solid var(--mf-line);border-radius:12px;background:var(--mf-card)}
+html body.mf-v2[data-interface-v3][data-scenery] .home-welcome .ui-hello-empty :is(h2,.action-link) {color:var(--mf-text)}
+html body.mf-v2[data-interface-v3][data-scenery] .home-welcome .welcome-actions>.btn {background:var(--mf-action);color:var(--ui-on-action)}
+html body.mf-v2[data-interface-v3][data-scenery] :is(#my-projects,#student-results) {scroll-margin-top:140px}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-card-body .tile-alert {display:block;margin-top:8px}
 
 @media(max-width:1200px) {
   html body.mf-v2[data-interface-v3][data-scenery].ui-authenticated :is(.container,.app) {padding:0 28px}
@@ -209,6 +222,9 @@ html body.mf-v2[data-interface-v3][data-scenery] .result-item h3 {font-size:23px
   html body.mf-v2[data-interface-v3][data-scenery] .ui-page-heading {margin:26px 0 22px}
   html body.mf-v2[data-interface-v3][data-scenery] .project-navigation {gap:20px;flex-wrap:wrap}
   html body.mf-v2[data-interface-v3][data-scenery] .project-navigation a {font-size:13px}
+  html body.mf-v2[data-interface-v3][data-scenery] .project-navigation {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 16px;margin:10px 0 24px}
+  html body.mf-v2[data-interface-v3][data-scenery] .project-navigation a {justify-content:center;text-align:center;padding:10px 4px}
+  html body.mf-v2[data-interface-v3][data-scenery] .project-navigation>a:nth-child(n) {grid-column:auto}
   html body.mf-v2[data-interface-v3][data-scenery] .auth-access-aside h2 {font-size:27px}
 }
 @media(max-width:600px) {

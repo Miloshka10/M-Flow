@@ -191,14 +191,16 @@ def render_profile(profile, token, form=None):
 
 def render_directory(candidates, projects, invitations, token, filters, is_student):
     body = '<div class="team-toolbar"><a class="teacher-primary-link" href="/skills">Мои навыки</a></div>' if is_student else ''
-    if invitations:
-        body += '<section class="card"><h2>Приглашения в команды</h2>'
+    if is_student:
+        body += '<section class="card" id="team-invitations" tabindex="-1"><h2>Приглашения в команды</h2>'
+        if not invitations:
+            body += '<p>Приглашений пока нет. Когда участник пригласит вас в проект, приглашение появится здесь.</p>'
         for item in invitations:
             body += f'''<article class="team-invite"><h3>{escape(item['project_name'])}</h3><p>От {escape(item['sender_name'])} · Роль: {escape(item['role_text'] or 'Обсудите с командой')}</p>
                 <p class="team-text">{escape(item['message'])}</p><form method="post" action="/teams/invitations/{item['id']}/respond" class="team-actions">{hidden_token(token)}
                 <button name="action" value="accept" data-ui-icon="check">Принять приглашение</button><button class="secondary" name="action" value="decline" data-ui-icon="close">Отказаться</button></form></article>'''
         body += '</section>'
-    body += f'''<form method="get" class="team-filters"><input name="q" aria-label="Поиск учеников" placeholder="Логин, навык или интерес" value="{escape(filters['q'], quote=True)}">
+    body += f'''<h2 id="people" tabindex="-1">Найти участников</h2><form method="get" class="team-filters"><input name="q" aria-label="Поиск учеников" placeholder="Логин, навык или интерес" value="{escape(filters['q'], quote=True)}">
         <input name="skill" aria-label="Навык" placeholder="Навык: например Python" value="{escape(filters['skill'], quote=True)}">
         <input name="direction" aria-label="Направление" placeholder="Направление" value="{escape(filters['direction'], quote=True)}">
         <input name="class_name" aria-label="Класс" placeholder="Класс (необязательно)" value="{escape(filters['class_name'], quote=True)}">
@@ -229,7 +231,7 @@ def render_team(conn, project_id, owner, token):
         WHERE u.id IN (SELECT user_id FROM project_members WHERE project_id=?)
         OR u.id=(SELECT owner_id FROM projects WHERE id=?) ORDER BY u.role,u.username""", (project_id, project_id, project_id, project_id)).fetchall()
     directory_label = 'Подобрать участников по навыкам' if owner else 'Каталог учеников'
-    body = f'<details class="ds-guide"><summary>Об участии в проекте</summary><p>Команда общая для проекта: классы и направления не ограничивают участие.</p></details><a class="teacher-primary-link" href="/teams">{directory_label}</a><div class="team-directory">'
+    body = f'<details class="ds-guide"><summary>Об участии в проекте</summary><p>Команда общая для проекта: классы и направления не ограничивают участие.</p></details><a class="teacher-primary-link" href="/teams#people">{directory_label}</a><div class="team-directory">'
     for member in members:
         body += f'<section class="card team-person"><span class="ds-avatar ds-avatar-{member["role"]}" aria-hidden="true">{escape(initials(member["username"]))}</span><h2>{escape(member["username"])}</h2><p>{"Учитель" if member["role"] == "teacher" else "Ученик"}</p>'
         if member['discoverable']:

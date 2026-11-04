@@ -1,5 +1,6 @@
 """Bounded, read-only projection of existing results on the student's home page."""
 from interface import icon
+from navigation import stage_result_target
 from collections import defaultdict
 from html import escape
 from urllib.parse import urlencode
@@ -213,7 +214,7 @@ def render_results(result, params, projects):
             pid, category, kind = item['project_id'], item['category'], item['kind']
             base = f'/project/{pid}'
             title = f'Этап {item["item_id"]}: {dict(STAGES)[item["item_id"]]}' if kind == 'stage' else 'Видеозащита' if kind == 'defense' else 'Твоя личная оценка'
-            href = f'{base}/stages#stage-{item["item_id"]}' if kind == 'stage' else f'{base}/defense' if kind == 'defense' else f'{base}/assessment'
+            href = f'{base}/stages#stage-{item["item_id"]}-result' if kind == 'stage' else f'{base}/defense' if kind == 'defense' else f'{base}/assessment'
             label = 'Опубликовано' if kind == 'grade' else 'Принято' if category == 'accepted' else STATES[category]
             comment = item['comment'] or ''
             feedback = ''
@@ -240,7 +241,7 @@ def render_results(result, params, projects):
                     feedback += '<p class="result-comment">' + escape(comment) + '</p>'
             teacher = f'<p class="t-muted">Учитель: {escape(item["teacher_name"])}</p>' if item['teacher_name'] and category != 'review' else ''
             step = result['steps'][pid]
-            target = step['target']
+            target = stage_result_target(step['target'])
             step_href = (base + target if target.startswith('#') else target if target.startswith('/') else f'{base}/{target}') if target else base
             step_link = (f'<a class="action-link" href="{step_href}">{step["action"] or "Открыть сводку проекта"} {icon('arrow')}</a>'
                          if step_href != href else '')

@@ -6,25 +6,39 @@ document.addEventListener('DOMContentLoaded', () => {
   const main = document.querySelector('[data-suite-dashboard]');
   if (main) {
     const initial = main.dataset.suiteView;
-    function view() {
+    const heading = main.querySelector('#dashboard-title');
+    const initialTitle = document.title;
+    function view(focus = false) {
       const hash = location.hash.slice(1);
       const next = hash === 'my-projects' || hash === 'project-create' ? 'projects'
         : hash === 'student-results' ? 'results' : initial;
       main.dataset.suiteView = next;
       if (next === 'results') main.querySelector('.home-details').open = true;
+      const label = next === 'projects' ? 'Мои проекты' : next === 'results' ? 'Мои результаты' : 'Главная';
+      document.querySelectorAll('[data-nav-key]').forEach(link => {
+        if (link.dataset.navKey === (next === 'home' ? 'home' : next)) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+      });
+      const context = document.querySelector('[data-shell-location]');
+      if (context) context.textContent = label;
+      document.title = next === 'home' ? initialTitle : label + ' — M-Flow';
+      if (heading) {
+        heading.textContent = next === 'home' ? heading.dataset.homeTitle : label;
+        if (focus) heading.focus();
+      }
     }
-    view();
-    window.addEventListener('hashchange', view);
-    window.addEventListener('popstate', view);
+    view(location.hash === '#my-projects' || location.hash === '#student-results');
+    window.addEventListener('hashchange', () => view(true));
+    window.addEventListener('popstate', () => view(true));
     document.querySelectorAll('[data-open-project]').forEach(link => link.addEventListener('click', () => {
       main.dataset.suiteView = 'projects';
       document.getElementById('project-create').scrollIntoView({block: 'center'});
     }));
     const tools = main.querySelector('.ds-project-tools');
-    tools.hidden = false;
     const search = tools.querySelector('[data-project-search]');
     const filter = tools.querySelector('[data-project-filter]');
     const cards = [...main.querySelectorAll('.ds-project-card')];
+    tools.hidden = cards.length === 0;
     function applyFilter() {
       const query = search.value.trim().toLocaleLowerCase('ru');
       cards.forEach(card => {

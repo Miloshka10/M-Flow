@@ -6,7 +6,7 @@ from html import escape
 from grading import MAX_SCORE, load_scores, summarize
 from project_stages import stage_summary, stage_label, stage_needs_revision, STAGE_DESCRIPTIONS
 from video_defense import DEFENSE_STATES
-from navigation import project_navigation
+from navigation import project_navigation, stage_result_target
 
 
 def task_deadline(tasks, today=None):
@@ -78,7 +78,9 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
     has_teacher = any(member['role'] == 'teacher' for member in members)
     step = next_step(stages, user['role'], owner, has_teacher, defense, bool(assessments))
     base = f'/project/{project_id}'
-    target = step['target']
+    target = stage_result_target(step['target'])
+    if target == '/supervision':
+        target = f'/supervision?project={project_id}'
     action_url = target if target and target.startswith(('#', '/')) else f'{base}/{target}' if target else None
     action = f'<a class="btn" href="{action_url}">{step["action"]} {icon('arrow')}</a>' if action_url else ''
     member_list = ''.join(f'<li>{escape(m["username"])} <span>{"Учитель" if m["role"] == "teacher" else "Ученик"}</span></li>' for m in members)
@@ -91,13 +93,13 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
         updated = f' · Последнее обновление этапа: {format_timestamp(current["updated_at"])}' if current['updated_at'] else ''
         feedback = f'''<aside class="journey-feedback" aria-label="Замечание учителя"><strong>Что исправить · этап {current['number']}</strong>
             <small>{reviewer}{updated}</small><p tabindex="0" aria-label="Замечание учителя; длинный текст можно прокрутить">{escape(current['teacher_comment'] or 'Комментарий не указан. Уточните, что нужно исправить, у учителя проекта.')}</p>
-            <a href="{base}/stages#stage-{current['number']}">{'Перейти к доработке' if user['role'] == 'student' else 'Открыть результат и замечание'} {icon('arrow')}</a></aside>'''
+            <a href="{base}/stages#stage-{current['number']}-result">{'Перейти к доработке' if user['role'] == 'student' else 'Открыть результат и замечание'} {icon('arrow')}</a></aside>'''
     else:
         accepted = next((stage for stage in reversed(stages) if stage['state'] == 'done'), None)
         if accepted:
             comment = accepted['teacher_comment'] or 'Принято без комментария. Следующий доступный шаг указан выше.'
             feedback += f'''<aside class="journey-feedback" aria-label="Принятый этап"><strong>Этап {accepted['number']} принят учителем</strong>
-                <p tabindex="0">{escape(comment)}</p><a href="{base}/stages#stage-{accepted['number']}">Посмотреть принятое решение {icon('arrow')}</a></aside>'''
+                <p tabindex="0">{escape(comment)}</p><a href="{base}/stages#stage-{accepted['number']}-result">Посмотреть принятое решение {icon('arrow')}</a></aside>'''
     if defense['state'] in ('returned', 'accepted'):
         comment = defense['teacher_comment'] or 'Комментарий не указан. При необходимости уточните решение у учителя проекта.'
         returned = defense['state'] == 'returned'
@@ -146,7 +148,7 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
             <div class="project-progress" aria-hidden="true"><div data-project-progress-fill style="width:{progress}%"></div></div></section>
         <section class="project-supervisor" aria-labelledby="supervisor-title"><h2 id="supervisor-title">Руководитель проекта</h2>
             <p>{escape(', '.join(m['username'] for m in members if m['role'] == 'teacher')) if has_teacher else 'Учитель пока не подключён. Черновики можно готовить уже сейчас.'}</p>
-            <a class="action-link" href="/supervision">Приглашения и согласование {icon('arrow')}</a></section></aside></div>
+            <a class="action-link" href="/supervision?project={project_id}">Подключение и согласования {icon('arrow')}</a></section></aside></div>
         <details class="journey-route" open><summary data-ui-icon="stages">Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
             <p class="journey-explanation">Задачи помогают выполнять работу. Этап принимается только после решения учителя; защита и оценки проверяются отдельно.</p><ol>{route}</ol></details>
         <section class="project-finish" aria-labelledby="finish-title"><h2 id="finish-title">Завершение проекта</h2>

@@ -53,7 +53,7 @@ class NavigationCases:
         for path, title in (('/notifications','Уведомления'), ('/supervision','Руководитель проекта')):
             page = self.client.get(path).text
             header = page.split('<header class="main-header')[1].split('</header>')[0]
-            self.assertIn(f'/</span>{title}', header)
+            self.assertIn(f'<span data-shell-location>{title}</span>', header)
             self.assertNotRegex(page, r'data-nav-key="home"[^>]*aria-current=')
 
     def test_shared_workspace_covers_all_existing_sections_without_get_writes(self):
@@ -196,7 +196,7 @@ class NavigationCases:
             conn.commit()
         focus = self.home_focus()
         self.assertIn('data-home-step="teacher-missing"', focus)
-        self.assertIn('href="/supervision"', focus)
+        self.assertIn('href="/supervision?project=2"', focus)
         self.sign_in(3)
         page = self.client.get('/?project=1&result_state=review').text
         self.assertIn('name="project" value="1"', page)
@@ -234,3 +234,79 @@ class NavigationCases:
         self.assertIn('Добавление и удаление участников доступны в разделе «Управление составом» ниже.', team)
         self.assertNotIn('Удаление участников доступно на доске проекта.', team)
         self.assertEqual(self.database_snapshot(), before)
+
+    def test_structure_four_sections_and_role_specific_return(self):
+        from html.parser import HTMLParser
+        class Links(HTMLParser):
+            def __init__(self, text):
+                super().__init__(); self.items = []; self.feed(text)
+            def handle_starttag(self, tag, attrs):
+                if tag == 'a': self.items.append(dict(attrs))
+        for uid, expected, target in (
+            (3, ['home','projects','groups','results'], '/?project=2#my-projects'),
+            (1, ['home','review','projects','groups'], '/teacher#teacher-projects')):
+            self.sign_in(uid)
+            page = self.client.get('/project/2').text
+            sidebar = page.split('aria-label="Основные разделы">')[1].split('</nav>')[0]
+            self.assertEqual([a['data-nav-key'] for a in Links(sidebar).items], expected)
+            self.assertIn(f'href="{target}" class="back"', page)
+            nav = page.split('<nav class="project-navigation"')[1].split('</nav>')[0]
+            self.assertEqual(nav.count('data-project-tab='), 4)
+            self.assertNotIn('/history', nav)
+            self.assertIn('/project/2/history', page)
+            self.assertIn('/project/2/assessment', self.client.get('/project/2/preparation').text)
+
+    def test_structure_result_actions_and_old_notifications_open_the_result(self):
+        from notifications import notification_target
+        with closing(self.module.get_db()) as conn:
+            conn.execute("INSERT INTO project_stages(project_id,number,state,reviewed_by,teacher_comment) VALUES(2,1,'progress',1,'Уточните цель')")
+            conn.commit()
+        self.sign_in(3)
+        for path in ('/?project=2','/project/2','/?result_project=2#student-results'):
+            self.assertIn('href="/project/2/stages#stage-1-result"', self.client.get(path).text)
+        for target in ('/project/2/stages', '/project/2/stages#stage-1'):
+            self.assertEqual(notification_target(dict(target=target, project_id=2, event_key='stage:2:1:2')), '/project/2/stages#stage-1-result')
+        self.sign_in(1)
+        self.assertRegex(self.client.get('/teacher').text, r'Текущий этап 1:[^<]+Нужна доработка')
+
+    def test_structure_supervision_context_is_scoped_without_granting_access(self):
+        code = self.supervision_code(teacher=2)
+        self.sign_in(3)
+        before = self.database_snapshot()
+        page = self.client.get('/supervision?project=2')
+        self.assertEqual(page.status_code, 200)
+        self.assertIn('aria-label="Выбранный проект"', page.text)
+        self.assertIn('href="/project/2"', page.text)
+        self.assertEqual(self.client.get('/supervision?project=3').status_code, 403)
+        self.assertEqual(self.client.get('/supervision?project=0').status_code, 400)
+        self.assertEqual(self.database_snapshot(), before)
+        preview = self.post('/supervision?project=2', data=dict(action='preview',code=code))
+        self.assertEqual(preview.status_code, 200)
+        self.assertIn('<option value="2" selected>', preview.text)
+        self.assertNotIn('<option value="3"', preview.text)
+        with closing(self.module.get_db()) as conn:
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM supervision_requests').fetchone()[0], 0)
+
+    def test_structure_new_student_keeps_team_invitations_without_duplicate_join(self):
+        self.add_candidate(); self.sign_in(4)
+        page = self.client.get('/').text
+        self.assertEqual(page.count('href="/groups#group-code"'), 1)
+        self.assertIn('href="/teams#team-invitations"', page)
+        self.assertIn('href="/teams#people"', page)
+        directory = self.client.get('/teams').text
+        self.assertIn('id="team-invitations"', directory)
+        self.assertIn('id="people"', directory)
+        self.assertIn('Приглашений пока нет', directory)
+
+    def test_structure_submission_returns_to_its_result_not_hidden_mobile_tab(self):
+        from html import unescape
+        self.sign_in(3)
+        page = self.client.get('/project/2/stages').text
+        form = re.search(r'<form method="post" action="/project/2/stages".*?</form>', page, re.S).group(0)
+        target = unescape(re.search(r'name="return_to" value="([^"]+)"', form).group(1))
+        response = self.post('/project/2/stages', data=dict(number=1, revision=0, action='submit',
+                                                        result='Тема и план проекта', return_to=target))
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.location.endswith('#stage-1-result'))
+        with closing(self.module.get_db()) as conn:
+            self.assertEqual(conn.execute('SELECT state FROM project_stages WHERE project_id=2 AND number=1').fetchone()[0], 'review')

@@ -65,7 +65,7 @@ def render_project_work(pid, user, owner, members, stages, defense, assessments,
         rows = [t for t in tasks if t['stage_number'] == number]
         values = submitted if submitted is not None and submitted.get('number') == str(number) else None
         result = render_stages(stages, user, token, values, has_teacher, pid,
-                               only_number=number, compact=True, return_to=location(number).replace('&amp;', '&'))
+                               only_number=number, compact=True, return_to=location(number, f'stage-{number}-result').replace('&amp;', '&'))
         panels.append(f'''<section class="pw-stage pw-stage-{kind}" id="stage-{number}" data-work-panel="{number}">
             <header class="pw-stage-heading"><span class="eyebrow">ЭТАП {number} / 5{' · ТЕКУЩИЙ' if current and number == current['number'] else ''}</span>
             <h2>{escape(s['title'])}</h2><p>{STAGE_DESCRIPTIONS[number]}</p></header>
@@ -87,4 +87,4 @@ def render_project_work(pid, user, owner, members, stages, defense, assessments,
         <div class="pw-tools" data-work-tools {'hidden' if not all_tasks else ''}>{filters}<p class="board-filter-summary">Показано {len(tasks)} из {len(all_tasks)} задач во всём проекте. Выберите нужный этап выше.</p>{'<p role="status">Нет задач по выбранным условиям. Измените фильтры или нажмите «Сбросить».</p>' if not tasks and all_tasks else ''}</div>
         {create}<p id="board-status" role="status" aria-live="polite" hidden></p>{''.join(panels)}{unassigned}
         <div class="pw-finish"><div><h3>Видеозащита и итоговая оценка</h3><p>Отдельный шаг завершения. Доступен на любом этапе.</p></div>
-        <a class="action-link" href="{base}/defense">Защита и результат {icon('arrow')}</a></div>''', selected
+        <a class="action-link" href="{base}/preparation">Защита и результат {icon('arrow')}</a></div>''', selected

@@ -3,6 +3,7 @@ from html import escape
 from deadlines import deadline_text, TIMEZONE_LABEL
 from interface import icon
 from design_suite import project_cover, stage_track, compact_stage_route
+from navigation import stage_result_target
 
 
 def student_dashboard(user, projects, token, header, messages, results='', focus=None, results_open=False, groups=(), project_states=None):
@@ -42,8 +43,9 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
         p, step = focus['project'], focus['step']
         state = project_states.get(p['id'], dict(label='В работе', tone='work', stages_done=0))
         base, target = f'/project/{p["id"]}', step['target']
-        if target and target.startswith('stages#stage-'):
-            target += '-result'
+        target = stage_result_target(target)
+        if target == '/supervision':
+            target = f'/supervision?project={p["id"]}'
         url = base + target if target and target.startswith('#') else target if target and target.startswith('/') else f'{base}/{target}' if target else base
         options = ''.join(f'<option value="{item["id"]}" {"selected" if item["id"] == p["id"] else ""}>{escape(item["name"])}</option>' for item in projects)
         switch = (f'<form class="focus-switch ds-home-only" method="get" action="/"><label for="current-project">Текущий проект</label>'
@@ -73,16 +75,18 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
             <h2>Здесь начнётся ваш проект</h2><p>Если учитель создал группу, введите её код. Для своей идеи можно сразу создать проект.</p>
             <div class="welcome-actions"><a class="btn" href="/groups#group-code">Ввести код группы</a>
             <a class="action-link" href="#project-create" data-open-project>Создать проект</a></div>
-            <a class="action-link" href="/teams">Или найти команду</a></div></section>'''
+            <a class="action-link" href="/teams#team-invitations">Приглашения в команды</a></div></section>'''
     projects_html = f'''<section class="workspace-projects" id="my-projects"><div class="section-title"><h2>Мои проекты</h2>
         <a class="action-link" href="#project-create" data-open-project>{icon('plus')} Новый проект</a></div>
+        <nav class="project-people-links" aria-label="Участники и приглашения"><a class="action-link" href="/teams#people">Найти участников</a>
+        <a class="action-link" href="/teams#team-invitations">Приглашения в команды</a></nav>
         <div class="ds-project-tools" hidden><label>Поиск проектов<input type="search" data-project-search placeholder="Найти проект…"></label>
         <label>Состояние<select data-project-filter><option value="all">Все</option><option value="work">В работе</option>
         <option value="review">На проверке</option><option value="revision">Нужна доработка</option><option value="accepted">Защита принята</option></select></label></div>
         <div class="projects-list project-grid">{''.join(cards)}</div><p data-project-empty hidden role="status">Проекты не найдены.</p>
         {create}</section>'''
-    groups_html = '' if focus else group_widget
+    groups_html = group_widget if not focus and groups else ''
     secondary = f'<details class="home-details" {"open" if results_open else ""}><summary data-ui-icon="results">Мои результаты</summary>{results}</details>'
     return f'''<div class="container workspace student-workspace">{header}<main id="main-content" class="simple-home" data-suite-dashboard data-suite-view="{'results' if results_open else 'home'}">
-        {messages}<div class="ui-page-heading ds-home-only"><h1>Привет, {escape(user["username"])}.</h1></div>
+        {messages}<div class="ui-page-heading"><h1 id="dashboard-title" tabindex="-1" data-home-title="Привет, {escape(user["username"], quote=True)}.">Привет, {escape(user["username"])}.</h1></div>
         {hero}{projects_html}{groups_html}{secondary}</main></div>'''

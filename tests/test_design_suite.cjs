@@ -31,15 +31,20 @@ const cards = [element({dataset: {projectName: 'Умная теплица', proj
   element({dataset: {projectName: 'Карта школы', projectTone: 'review'}})];
 const empty = element(), results = element({open: false});
 const tools = element({hidden: true, querySelector: selector => selector.includes('search') ? search : filter});
+const heading = element({dataset:{homeTitle:'Привет, ученик.'},focus(){this.focused=true;}});
+const context = element();
 const main = element({dataset: {suiteView: 'home'},
-  querySelector: selector => ({'.ds-project-tools': tools, '.home-details': results, '[data-project-empty]': empty})[selector],
+  querySelector: selector => ({'#dashboard-title':heading,'.ds-project-tools': tools, '.home-details': results, '[data-project-empty]': empty})[selector],
   querySelectorAll: () => cards});
 const location = {hash: '#my-projects'};
-const document = {body: {hasAttribute: () => true, dataset: {}},
-  querySelector: selector => selector === '[data-suite-dashboard]' ? main : null,
+const document = {title:'Привет, ученик. — M-Flow',body: {hasAttribute: () => true, dataset: {}},
+  querySelector: selector => selector === '[data-suite-dashboard]' ? main : selector==='[data-shell-location]'?context:null,
   querySelectorAll: () => []};
 const window = run(document, location);
 assert.equal(main.dataset.suiteView, 'projects');
+assert.equal(heading.textContent,'Мои проекты');
+assert.equal(document.title,'Мои проекты — M-Flow');
+assert.equal(context.textContent,'Мои проекты');
 assert.equal(tools.hidden, false);
 search.value = '  ТЕПЛИЦА  '; search.handlers.input();
 assert.deepEqual(cards.map(card => card.hidden), [false, true]);
@@ -49,8 +54,15 @@ search.value = ''; search.handlers.input();
 assert.deepEqual(cards.map(card => card.hidden), [true, false]);
 location.hash = '#student-results'; window.handlers.hashchange();
 assert.equal(main.dataset.suiteView, 'results'); assert.equal(results.open, true);
+assert.equal(heading.textContent,'Мои результаты');assert.equal(heading.focused,true);
+assert.equal(context.textContent,'Мои результаты');
 location.hash = ''; window.handlers.popstate();
 assert.equal(main.dataset.suiteView, 'home');
+assert.equal(heading.textContent,'Привет, ученик.');
+assert.equal(document.title,'Привет, ученик. — M-Flow');
+main.querySelectorAll=()=>[];
+run(document);
+assert.equal(tools.hidden,true,'An empty project list must not show useless filters');
 
 // Switching preparation parts preserves every original field in the secured form.
 const fields = Array.from({length: 5}, (_, index) => element({name: 'part_' + index, value: 'Saved text ' + index}));

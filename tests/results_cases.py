@@ -255,7 +255,7 @@ class StudentResultsCases:
         before = self.database_snapshot()
         self.sign_in(3)
         page = self.client.get('/notifications')
-        self.assertIn('href="/project/1/stages#stage-1"',page.text)
+        self.assertIn('href="/project/1/stages#stage-1-result"',page.text)
         self.assertEqual(self.database_snapshot(),before)
         for key in ('stage:9:1:1','stage:1:6:1','stage:1:1:bad','report:1:1'):
             row = dict(project_id=1,target='/project/1/stages',event_key=key)
