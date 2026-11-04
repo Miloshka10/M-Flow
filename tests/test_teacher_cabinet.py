@@ -1379,7 +1379,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.add_candidate()
         self.sign_in(4)
         page = self.client.get('/').text
-        self.assertIn('Начни свой проект.', page)
+        self.assertIn('Здесь начнётся ваш проект', page)
         self.assertNotIn('Прогресс задач', page)
         self.assertNotIn('project-row project-tile', page)
 
@@ -1442,7 +1442,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.add_candidate()
         self.sign_in(4)
         page = self.client.get('/').text
-        self.assertIn('Начни свой проект.', page)
+        self.assertIn('Здесь начнётся ваш проект', page)
         self.assertIn('data-suite-dashboard', page)
         self.assertIn('data-open-project', page)
         for name in ('blank-study.svg', 'team-study.svg'):

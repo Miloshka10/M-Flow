@@ -2,7 +2,7 @@
 from html import escape
 from deadlines import deadline_text, TIMEZONE_LABEL
 from interface import icon
-from design_suite import project_cover, stage_track
+from design_suite import project_cover, stage_track, compact_stage_route
 
 
 def student_dashboard(user, projects, token, header, messages, results='', focus=None, results_open=False, groups=(), project_states=None):
@@ -34,32 +34,46 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
         <input type="hidden" name="csrf_token" value="{escape(token, quote=True)}"><label for="project-name">Название проекта</label>
         <input id="project-name" name="name" placeholder="Название проекта" maxlength="80" required>
         <button type="submit" data-ui-icon="plus">Создать</button></form></details>'''
+    group_cards = ''.join(f'<a class="ui-group-teaser" href="/groups/{g["id"]}"><h3>{escape(g["name"])}</h3><p>{escape(g["teacher_name"])}</p></a>' for g in list(groups)[:3])
+    if not group_cards:
+        group_cards = '<p class="t-muted">Присоединитесь к учебной группе по коду учителя.</p><a class="action-link" href="/groups#group-code">Ввести код группы</a>'
+    group_widget = f'<details class="ds-home-groups v3-home-group ds-home-only" open><summary>Учебные группы</summary>{group_cards}<a class="action-link" href="/groups">Все группы {icon("arrow")}</a></details>'
     if focus:
         p, step = focus['project'], focus['step']
-        state = project_states.get(p['id'], dict(label='В работе', stages_done=0))
+        state = project_states.get(p['id'], dict(label='В работе', tone='work', stages_done=0))
         base, target = f'/project/{p["id"]}', step['target']
+        if target and target.startswith('stages#stage-'):
+            target += '-result'
         url = base + target if target and target.startswith('#') else target if target and target.startswith('/') else f'{base}/{target}' if target else base
         options = ''.join(f'<option value="{item["id"]}" {"selected" if item["id"] == p["id"] else ""}>{escape(item["name"])}</option>' for item in projects)
         switch = (f'<form class="focus-switch ds-home-only" method="get" action="/"><label for="current-project">Текущий проект</label>'
                   f'<select id="current-project" name="project">{options}</select><button class="secondary">Выбрать</button></form>') if len(projects) > 1 else ''
-        feedback = (f'<aside class="focus-feedback ds-feedback"><h2>Замечание учителя</h2><p>{escape(focus["comment"])}</p>'
-                    f'<a class="action-link" href="{url}">Открыть замечание {icon("arrow")}</a></aside>') if focus['comment'] else ''
+        feedback = (f'<aside class="focus-feedback ds-feedback"><h3>Замечание учителя</h3>'
+                    f'{"<small>" + escape(focus.get("reviewer", "")) + "</small>" if focus.get("reviewer") else ""}'
+                    f'<p>{escape(focus["comment"])}</p></aside>') if focus['comment'] else ''
+        stages = focus.get('stages', [])
+        current = next((s for s in stages if s['state'] != 'done'), None)
+        step_number = f'{current["number"]:02d}' if current else '05'
+        route = compact_stage_route(stages, p['id']) if stages else f'<div class="v3-route-aside">{stage_track(state["stages_done"])}</div>'
         hero = f'''{switch}<section class="home-focus ds-feature ds-home-only" aria-labelledby="focus-name">
-            <div class="ds-feature-main"><span class="eyebrow">ТЕКУЩИЙ ПРОЕКТ</span><h2 id="focus-name">{escape(p['name'])}</h2>
-            <div class="home-next" data-home-step="{step['key']}"><h3>{step['title']}</h3>
+            <div class="ds-feature-main"><div class="v3-focus-heading"><span class="eyebrow">ТЕКУЩИЙ ПРОЕКТ</span>
+            <span class="ui-state {state.get('tone', 'work')}">{escape(state['label'])}</span></div><h2 id="focus-name">{escape(p['name'])}</h2>
+            <div class="home-next" data-home-step="{step['key']}"><div class="v3-next-title"><span class="v3-stage-number" aria-hidden="true">{step_number}</span><h3>{step['title']}</h3></div>
+            {feedback}
             <details class="ds-guide"><summary>Что делать дальше</summary><p>{step['text']}</p></details>
             <a class="btn" href="{url}">{step['action'] or 'Открыть проект'} {icon('arrow')}</a>
             <a class="action-link" href="#my-projects">Все проекты</a></div></div>
-            <div class="ds-feature-art">{project_cover(p['name'], p['id'])}{stage_track(state['stages_done'])}
-            <span>Принято {state['stages_done']} из 5 этапов</span></div></section>
+            {route}</section>
             <div class="ds-home-columns ds-home-only"><section class="ui-agenda" aria-labelledby="upcoming-title">
-            <h2 id="upcoming-title">Нужен твой шаг</h2>{upcoming_html}
+            <h2 id="upcoming-title">Ближайшие задачи</h2>{upcoming_html}
             <details class="ds-guide"><summary>О сроках</summary><p>Твои задачи и задачи без ответственного · {TIMEZONE_LABEL}.
-            Показано {min(6,len(upcoming))} из {len(upcoming)}.</p></details></section>{feedback}</div>'''
+            Показано {min(6,len(upcoming))} из {len(upcoming)}.</p></details></section>{group_widget}</div>'''
     else:
         hero = '''<section class="home-focus home-welcome ds-home-only"><div class="ui-hello-empty">
-            <h2>Начни свой проект.</h2><div class="welcome-actions"><a class="btn" href="#project-create" data-open-project>Создать проект</a>
-            <a class="action-link" href="/groups#group-code">Ввести код группы</a></div></div></section>'''
+            <h2>Здесь начнётся ваш проект</h2><p>Если учитель создал группу, введите её код. Для своей идеи можно сразу создать проект.</p>
+            <div class="welcome-actions"><a class="btn" href="/groups#group-code">Ввести код группы</a>
+            <a class="action-link" href="#project-create" data-open-project>Создать проект</a></div>
+            <a class="action-link" href="/teams">Или найти команду</a></div></section>'''
     projects_html = f'''<section class="workspace-projects" id="my-projects"><div class="section-title"><h2>Мои проекты</h2>
         <a class="action-link" href="#project-create" data-open-project>{icon('plus')} Новый проект</a></div>
         <div class="ds-project-tools" hidden><label>Поиск проектов<input type="search" data-project-search placeholder="Найти проект…"></label>
@@ -67,10 +81,7 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
         <option value="review">На проверке</option><option value="revision">Нужна доработка</option><option value="accepted">Защита принята</option></select></label></div>
         <div class="projects-list project-grid">{''.join(cards)}</div><p data-project-empty hidden role="status">Проекты не найдены.</p>
         {create}</section>'''
-    group_cards = ''.join(f'<a class="ui-group-teaser" href="/groups/{g["id"]}"><h3>{escape(g["name"])}</h3><p>{escape(g["teacher_name"])}</p></a>' for g in list(groups)[:3])
-    if not group_cards:
-        group_cards = '<a href="/groups#group-code">Ввести код группы</a>'
-    groups_html = f'<details class="ds-home-groups ds-home-only"><summary>Учебные группы</summary>{group_cards}</details>'
+    groups_html = '' if focus else group_widget
     secondary = f'<details class="home-details" {"open" if results_open else ""}><summary data-ui-icon="results">Мои результаты</summary>{results}</details>'
     return f'''<div class="container workspace student-workspace">{header}<main id="main-content" class="simple-home" data-suite-dashboard data-suite-view="{'results' if results_open else 'home'}">
         {messages}<div class="ui-page-heading ds-home-only"><h1>Привет, {escape(user["username"])}.</h1></div>

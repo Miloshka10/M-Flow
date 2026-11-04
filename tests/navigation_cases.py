@@ -186,7 +186,7 @@ class NavigationCases:
         self.sign_in(4)
         before = self.database_snapshot()
         page = self.client.get('/').text
-        for text in ('Начни свой проект.', '/groups#group-code', 'Ввести код группы', 'Создать проект', '/teams'):
+        for text in ('Здесь начнётся ваш проект', '/groups#group-code', 'Ввести код группы', 'Создать проект', '/teams'):
             self.assertIn(text, page)
         self.assertIn('id="student-results"', page)  # The sidebar result link must have a target even before the first project.
         self.assertIn('id="my-projects"', page)
