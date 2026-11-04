@@ -8,6 +8,28 @@ document.addEventListener('DOMContentLoaded', () => {
   const tools = board.querySelector('[data-work-tools]');
   const general = board.querySelector('.pw-unassigned');
   let selected = board.dataset.selectedStage || '1';
+  const errorStage = /^[1-5]$/.test(board.dataset.resultErrorStage || '') ? board.dataset.resultErrorStage : null;
+  if (errorStage) {
+    // Validation belongs to the failed result, even after an old task/stage link.
+    const url = new URL(location.href);
+    url.searchParams.set('view_stage', errorStage);
+    url.hash = 'stage-' + errorStage + '-result';
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }
+  function revealError() {
+    if (!errorStage) return;
+    const error = board.querySelector('[data-work-error]');
+    if (!error) return;
+    const dialog = document.getElementById('result-editor-' + errorStage);
+    // The student's editor is modal; its error must be inside the same dialog.
+    if (dialog?.open) dialog.querySelector('.pw-editor-content').prepend(error);
+    error.focus({preventScroll: true});
+    error.scrollIntoView({block: 'center'});
+  }
+  window.addEventListener('pageshow', () => {
+    // Native fragment navigation can focus the result container after DOM ready.
+    if (errorStage && location.hash === '#stage-' + errorStage + '-result') revealError();
+  });
   function setView(panel, view) {
     panel.dataset.workView = view;
     panel.querySelectorAll('[data-work-view-button]').forEach(button => {
@@ -84,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('popstate', fromHash);
   fromHash();
 
-  if (typeof HTMLDialogElement === 'undefined') return;
+  if (typeof HTMLDialogElement === 'undefined') {revealError(); return;}
   board.querySelectorAll('.pw-editor').forEach(details => {
     const trigger = details.querySelector('summary'), content = details.querySelector('.pw-editor-content');
     const wasOpen = details.open;
@@ -121,4 +143,5 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   // Direct links may load a new document; its result dialog must exist first.
   fromHash();
+  revealError();
 });

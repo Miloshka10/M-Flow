@@ -4,6 +4,7 @@ from deadlines import deadline_text, TIMEZONE_LABEL
 from interface import icon
 from design_suite import project_cover, stage_track, compact_stage_route
 from navigation import stage_result_target
+from ui_components import state_badge
 
 
 def student_dashboard(user, projects, token, header, messages, results='', focus=None, results_open=False, groups=(), project_states=None):
@@ -19,7 +20,7 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
         cards.append(f'''<article class="ds-project-card" data-project-name="{escape(p['name'], quote=True)}" data-project-tone="{state['tone']}">
             <a class="project-row project-tile" href="/project/{p['id']}"{selected}>
             {project_cover(p['name'], p['id'])}<div class="ds-card-body">
-            <span class="ui-state {state['tone']}">{escape(state['label'])}</span><h3>{escape(p['name'])}</h3>
+            {state_badge(state['label'], state['tone'])}<h3>{escape(p['name'])}</h3>
             {stage_track(state['stages_done'])}<span class="ds-stage-count">Принято {state['stages_done']} из 5 этапов</span>{overdue}
             <span class="ds-card-open">Открыть проект {icon('arrow')}</span></div></a>
             <details class="ds-card-details"><summary>Задачи</summary><p>{details}</p></details></article>''')
@@ -59,7 +60,7 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
         route = compact_stage_route(stages, p['id']) if stages else f'<div class="v3-route-aside">{stage_track(state["stages_done"])}</div>'
         hero = f'''{switch}<section class="home-focus ds-feature ds-home-only" aria-labelledby="focus-name">
             <div class="ds-feature-main"><div class="v3-focus-heading"><span class="eyebrow">ТЕКУЩИЙ ПРОЕКТ</span>
-            <span class="ui-state {state.get('tone', 'work')}">{escape(state['label'])}</span></div><h2 id="focus-name">{escape(p['name'])}</h2>
+            {state_badge(state['label'], state.get('tone', 'work'))}</div><h2 id="focus-name">{escape(p['name'])}</h2>
             <div class="home-next" data-home-step="{step['key']}"><div class="v3-next-title"><span class="v3-stage-number" aria-hidden="true">{step_number}</span><h3>{step['title']}</h3></div>
             {feedback}
             <details class="ds-guide"><summary>Что делать дальше</summary><p>{step['text']}</p></details>

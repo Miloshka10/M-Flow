@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync(require('node:path').join(__dirname,'../static/project-work.js'),'utf8');
-function setup(validation=false) {
+function setup(validation=false, resultError=false) {
   const handlers={}, routeHandlers={};
   const location=new URL('https://preview.test/project/1?mine=1&view_stage=2#stage-2');
   const stageField={value:'2'}, view={value:'2'}, returnField={value:'/project/1?mine=1#task-board'};
@@ -14,17 +14,18 @@ function setup(validation=false) {
     buttons:['tasks','result'].map(view=>({dataset:{workViewButton:view},attrs:{},setAttribute(k,v){this.attrs[k]=v;},addEventListener(k,f){this[k]=f;}})),
     querySelectorAll(){return this.buttons;}}));
   const links=panels.map(p=>({dataset:{workStage:p.dataset.workPanel},href:'https://preview.test/project/1#stage-'+p.dataset.workPanel,attrs:{},setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},addEventListener(k,f){routeHandlers[this.dataset.workStage]=f;}}));
-  const board={classList:{add(){}},dataset:{projectUrl:'/project/1',selectedStage:'2',openCreate:validation?'1':'0'},
-    querySelector(s){if(s==='[data-work-tools]')return tools;if(s==='.pw-unassigned')return general;if(s.includes('#drawer-task-create'))return stageField;return null;},
+  const error={focused:false,focus(){this.focused=true;},scrollIntoView(){}};
+  const board={classList:{add(){}},dataset:{projectUrl:'/project/1',selectedStage:'2',resultErrorStage:resultError?'1':'',openCreate:validation?'1':'0'},
+    querySelector(s){if(s==='[data-work-error]')return resultError?error:null;if(s==='[data-work-tools]')return tools;if(s==='.pw-unassigned')return general;if(s.includes('#drawer-task-create'))return stageField;return null;},
     querySelectorAll(s){return s==='[data-work-panel]'?panels:s==='[data-work-stage]'?links:s==='input[name="return_to"]'?[returnField]:[];}};
   const document={querySelector:()=>board,getElementById:()=>null,addEventListener:(k,f)=>handlers[k]=f};
   const window={addEventListener:(k,f)=>handlers[k]=f,dispatchEvent:e=>handlers[e.type]?.()};
-  const history={pushState(_,__,url){location.href=new URL(url,location).href;}};
+  const history={pushState(_,__,url){location.href=new URL(url,location).href;},replaceState(_,__,url){location.href=new URL(url,location).href;}};
   vm.runInNewContext(source,{document,window,location,history,URL,Event:class{constructor(type){this.type=type;}}});
   handlers.DOMContentLoaded();
-  return {stageField,view,quick,returnField,panels,links,location,select(n){routeHandlers[n]({preventDefault(){}});},
+  return {stageField,view,quick,returnField,panels,links,location,error,select(n){routeHandlers[n]({preventDefault(){}});},
     switchView(n,view){panels[n-1].buttons.find(b=>b.dataset.workViewButton===view).click();},
-    followHash(hash){location.hash=hash;handlers.hashchange();}};
+    followHash(hash){location.hash=hash;handlers.hashchange();},pageshow(){handlers.pageshow();}};
 }
 const app=setup();app.select('5');
 assert.equal(app.stageField.value,'5','The create form in its dialog follows the selected stage');
@@ -44,4 +45,13 @@ app.followHash('#stage-2-tasks');
 assert.equal(app.panels[1].dataset.workView,'tasks','Task links reveal the task list even after viewing a result');
 const recovering=setup(true);recovering.select('5');
 assert.equal(recovering.stageField.value,'2','Validation recovery never replaces the submitted task stage');
+const failedResult=setup(false,true);
+assert.equal(failedResult.panels[0].hidden,false,'The failed result overrides an old stage link');
+assert.equal(failedResult.panels[0].dataset.workView,'result','Result validation must be visible on mobile');
+assert.equal(failedResult.location.hash,'#stage-1-result');
+assert.equal(failedResult.error.focused,true,'The error is announced without searching through hidden tabs');
+failedResult.error.focused=false;failedResult.pageshow();
+assert.equal(failedResult.error.focused,true,'Fragment autofocus after loading must not replace the validation error focus');
+failedResult.select('3');
+assert.equal(failedResult.panels[2].hidden,false,'An initial error does not lock subsequent stage navigation');
 console.log('Project work checks passed: stage selection, moved create form, filters, return URLs and validation recovery.');

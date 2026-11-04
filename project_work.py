@@ -76,7 +76,7 @@ def render_project_work(pid, user, owner, members, stages, defense, assessments,
             {f'<a class="board-add action-link" href="#task-create">{icon("plus")} Задача</a>' if owner else ''}</div>
             <div data-work-tools-slot></div>{task_list(rows, number)}<div data-unassigned-slot></div></section>
             <aside class="pw-result" id="stage-{number}-result" tabindex="-1" aria-label="Результат этапа {number}">
-            {f'<p class="error" role="alert">{escape(error)}</p>{unsaved}' if error and (number == current_number) else ''}{result}
+            {f'<p class="error" role="alert" tabindex="-1" data-work-error>{escape(error)}</p>{unsaved}' if error and (number == current_number) else ''}{result}
             <details class="pw-next pw-{kind}" data-next-step="{key}"><summary>{escape(title)}</summary>
             <p>{escape(text)}</p>{f'<a class="action-link" href="{target}">{escape(action)} {icon("arrow")}</a>' if target else ''}</details></aside></div></section>''')
     general = [t for t in tasks if t['stage_number'] is None]

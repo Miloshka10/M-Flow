@@ -49,6 +49,7 @@ from scenery import scenery
 from project_workspace import render_workspace, task_deadline
 from project_work import render_project_work
 from navigation import project_navigation, project_list_url
+from ui_components import notice
 from interface import shell_header, document_title, icon
 from student_results import parameters as result_parameters, load_results, render_results, load_focus, load_project_states
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores, assessment_version
@@ -202,7 +203,8 @@ def render_page(html, title=None):
         '<link rel="stylesheet" href="/static/design-suite.css?v=20261101-mail-ui">'
         '<script src="/static/design-suite.js?v=20261104-navigation" defer></script>'
             + auth_assets + '<link rel="stylesheet" href="/static/scenery.css?v=20261104-calm-background">'
-            '<link rel="stylesheet" href="/static/interface-v3.css?v=20261104-navigation">' +
+            '<link rel="stylesheet" href="/static/components.css?v=20261104-system">'
+            '<link rel="stylesheet" href="/static/interface-v3.css?v=20261104-components">' +
             f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-interface-v3 data-scenery="{scenery_context}" data-scenery-layout="{scenery_layout}" data-design-page="{escape(endpoint, quote=True)}">'
             + f'<a class="skip-link" href="#{skip_target}">К содержимому</a>' + html
             + scenery(scenery_context, layout=scenery_layout) + '</body></html>')
@@ -2150,7 +2152,7 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
         PAGE_STYLE
         + f"""
         <link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">
-        <link rel="stylesheet" href="/static/task-board.css?v=20261031"><link rel="stylesheet" href="/static/project-work.css?v=20261031-tasks"><script src="/static/project-work.js?v=20261031" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
+        <link rel="stylesheet" href="/static/task-board.css?v=20261031"><link rel="stylesheet" href="/static/project-work.css?v=20261031-tasks"><script src="/static/project-work.js?v=20261104-validation" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
         <div class="container">
             {render_header(current_user)}
             <main class="project-workspace" data-project-views data-work-default="{int(work_mode)}">
@@ -2184,7 +2186,7 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
                 </section>
 
 
-                <div class="project-work" id="task-board" data-workspace="1" data-work-active="{int(bool(filters_active or board_state['view_stage'] or sort_mode != 'priority'))}" data-selected-stage="{selected_stage}" data-project-url="/project/{project_id}" data-board-location="{escape(board_location,quote=True)}" data-board-refresh="1" data-column="{column}" data-open-create="{int(create_values is not None)}">
+                <div class="project-work" id="task-board" data-workspace="1" data-work-active="{int(bool(filters_active or board_state['view_stage'] or sort_mode != 'priority'))}" data-selected-stage="{selected_stage}" data-result-error-stage="{selected_stage if stage_error else ''}" data-project-url="/project/{project_id}" data-board-location="{escape(board_location,quote=True)}" data-board-refresh="1" data-column="{column}" data-open-create="{int(create_values is not None)}">
                     {work_html}
                 </div>
 
@@ -2996,11 +2998,11 @@ def render_unsaved_result(form, user, target, defense=False):
 
 
 def render_collaboration_page(user, title, body, project_id=None, error="", status=200, back_url=None, back_label=None):
-    messages = ''.join(f'<div class="success" role="status">{escape(message)}</div>' for message in get_flashed_messages())
+    messages = ''.join(notice(message) for message in get_flashed_messages())
     back = f'<a class="back" href="/project/{project_id}">{icon('arrow-left')} К обзору проекта</a>' if project_id else f'<a class="back" href="{project_list_url(user['role'])}">{icon('arrow-left')} К моим проектам</a>'
     if back_url:
         back = f'<a class="back" href="{escape(back_url, quote=True)}">{icon('arrow-left')} {escape(back_label or "Назад")}</a>'
-    error_html = f'<div class="error" role="alert">{escape(error)}</div>' if error else ''
+    error_html = notice(error, error=True) if error else ''
     return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/teamwork.css"><div class="container">{render_header(user)}
         <main class="team-page">{back}<h1>{escape(title)}</h1>{project_navigation(project_id, request.path.rsplit('/', 1)[-1]) if project_id else ""}{messages}{error_html}{body}</main></div>'''), status
 

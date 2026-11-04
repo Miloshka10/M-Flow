@@ -1,6 +1,7 @@
 """Bounded, read-only projection of existing results on the student's home page."""
 from interface import icon
 from navigation import stage_result_target
+from ui_components import state_badge
 from collections import defaultdict
 from html import escape
 from urllib.parse import urlencode
@@ -247,7 +248,7 @@ def render_results(result, params, projects):
                          if step_href != href else '')
             action = 'Перейти к доработке' if category == 'revision' else 'Открыть результат' if kind != 'grade' else 'Посмотреть критерии и баллы'
             html += f'''<article class="result-item result-{category}" data-result-key="{kind}-{pid}-{item['item_id']}" data-result-state="{category}">
-                <div class="result-heading"><span class="result-state">{label}</span><a href="{base}">{escape(item['project_name'])} {icon('arrow')}</a></div>
+                <div class="result-heading">{state_badge(label, category, result=True)}<a href="{base}">{escape(item['project_name'])} {icon('arrow')}</a></div>
                 <h3>{escape(title)}</h3><details class="ds-result-meta"><summary>Дата и учитель</summary><p class="t-muted">{result_date(item)}</p>{teacher}</details>{feedback}
                 <a class="action-link" href="{href}">{action} {icon('arrow')}</a>
                 <details class="ds-result-next"><summary>Следующий шаг проекта</summary><div class="result-next"><strong>{step['title']}</strong><p>{step['text']}</p>{step_link}</div></details></article>'''

@@ -1,0 +1,46 @@
+<main id="main-content" class="component-gallery">
+  <header class="gallery-heading">
+    <p class="eyebrow">M-FLOW · СИСТЕМА ЭЛЕМЕНТОВ</p>
+    <h1>Одни правила.<br>Знакомые действия.</h1>
+    <p>Рабочий образец общих элементов. Это отдельный стенд: формы не сохраняют данные проекта.</p>
+    <nav class="ui-actions" aria-label="Просмотр стенда"><a class="action-link" href="/settings">Изменить тему</a><a class="action-link" href="/login">Посмотреть вход</a></nav>
+  </header>
+  <div class="gallery-grid">
+    <section class="ui-surface" aria-labelledby="gallery-actions">
+      <p class="eyebrow">01 · ДЕЙСТВИЯ</p><h2 id="gallery-actions">Понятный приоритет</h2>
+      <p class="t-muted">Главное действие выделено, остальные остаются рядом.</p>
+      <div class="ui-actions"><button type="button" data-ui-icon="arrow">Отправить результат</button><button type="button" class="secondary">Сохранить черновик</button><a class="action-link" href="#gallery-fields">К полям формы</a></div>
+      <hr><div class="ui-actions"><button type="button" disabled>Пока недоступно</button><button type="button" class="secondary" disabled>Недоступное второстепенное</button></div>
+      <form aria-busy="true"><p class="t-muted">Ожидание ответа</p><button type="button" class="auth-submit" disabled>Сохраняем…</button></form>
+      <hr><button type="button" class="ui-button-danger">Удалить пример</button>
+    </section>
+    <section class="ui-surface" aria-labelledby="gallery-fields">
+      <p class="eyebrow">02 · ПОЛЯ</p><h2 id="gallery-fields">Один ритм формы</h2>
+      <div class="gallery-stack">
+        <div class="ui-field"><label for="gallery-title">Название проекта</label><input id="gallery-title" placeholder="Например, школьная медиастудия" aria-describedby="gallery-title-hint"><span id="gallery-title-hint" class="ui-field-hint">Короткое название, понятное всей команде.</span></div>
+        <div class="ui-field"><label for="gallery-invalid">Ссылка на материал</label><input id="gallery-invalid" value="пример без адреса" aria-invalid="true" aria-describedby="gallery-field-error"><span class="ui-field-error" id="gallery-field-error">Укажите полный адрес, начинающийся с https://.</span></div>
+        <label class="ui-field">Исполнитель<select><option>Вся команда</option><option>Моя задача</option></select></label>
+        <label class="ui-field">Замечание<textarea rows="3" placeholder="Что уже получилось и что нужно уточнить"></textarea></label>
+        <label class="ui-field">Только для чтения<input readonly value="Результат отправлен на проверку"></label>
+        <label class="ui-field">Недоступное поле<input disabled value="Ожидается решение учителя"></label>
+        <label class="gallery-check"><input type="checkbox"> Показать мои задачи</label>
+      </div>
+    </section>
+    <section class="ui-surface" aria-labelledby="gallery-states">
+      <p class="eyebrow">03 · СОСТОЯНИЯ</p><h2 id="gallery-states">Состояние видно словами</h2>
+      <div class="ui-actions"><span class="ui-status" data-ui-tone="neutral">Черновик</span><span class="ui-status" data-ui-tone="info">На проверке</span><span class="ui-status" data-ui-tone="warning">Нужна доработка</span><span class="ui-status" data-ui-tone="success">Принято</span></div>
+      <p class="t-muted">Выполненные задачи, принятие этапа, защита и личная оценка остаются разными результатами.</p>
+      <div class="ui-notice"><strong>Работа на проверке</strong><p>Можно продолжать задачи. Результат станет доступен для редактирования после возврата.</p></div>
+      <div class="ui-notice" data-ui-tone="warning"><strong>Есть несохранённые изменения</strong><p>Сохраните черновик перед уходом со страницы.</p></div>
+      <div class="success" role="status">Черновик сохранён.</div>
+      <div class="error" role="alert">Не удалось сохранить. Введённый текст остаётся в форме.</div>
+    </section>
+    <section class="ui-surface" aria-labelledby="gallery-detail">
+      <p class="eyebrow">04 · ПОВЕРХНОСТИ И ПОЯСНЕНИЯ</p><h2 id="gallery-detail">Детали — по запросу</h2>
+      <details class="ds-guide"><summary>Как работает проверка</summary><p>Учитель получает конкретную отправленную версию. Новая сдача не меняет старые решения.</p></details>
+      <hr><h3>Пока нет результатов</h3><p class="t-muted">Начните с темы проекта. После первой сдачи здесь появятся работа и обратная связь.</p><a class="action-link" href="#gallery-actions">Посмотреть главное действие</a>
+      <hr><h3>Исследование городской среды и разработка школьного маршрута без барьеров</h3><p class="t-muted">Длинные названия переносятся внутри карточки. Размер текста и подписи остаются читаемыми на телефоне.</p>
+    </section>
+  </div>
+</main>
+<link rel="stylesheet" href="/design/interface-components/gallery.css">

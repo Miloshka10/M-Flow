@@ -310,3 +310,23 @@ class NavigationCases:
         self.assertTrue(response.location.endswith('#stage-1-result'))
         with closing(self.module.get_db()) as conn:
             self.assertEqual(conn.execute('SELECT state FROM project_stages WHERE project_id=2 AND number=1').fetchone()[0], 'review')
+
+    def test_result_validation_reveals_the_failed_stage_without_changing_work(self):
+        self.sign_in(3)
+        before = self.database_snapshot()
+        response = self.post('/project/2/stages', data=dict(number=1, revision=0,
+            action='submit', result='', return_to='/project/2?view_stage=5#stage-5-tasks'))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('data-result-error-stage="1"', response.text)
+        self.assertIn('role="alert" tabindex="-1" data-work-error', response.text)
+        self.assertEqual(self.database_snapshot(), before)
+        self.assertEqual(self.post('/project/2/stages', data=dict(number=1, revision=0,
+            action='submit', result='Тема и план исследования')).status_code, 302)
+        self.sign_in(1)
+        before = self.database_snapshot()
+        response = self.post('/project/2/stages', data=dict(number=1, revision=1,
+            action='return', teacher_comment='', return_to='/project/2?view_stage=5#stage-5-tasks'))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('data-result-error-stage="1"', response.text)
+        self.assertIn('При возврате укажите, что исправить.', response.text)
+        self.assertEqual(self.database_snapshot(), before)
