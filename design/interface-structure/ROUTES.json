@@ -1,0 +1,369 @@
+{
+  "source_commit": "17ccc6bbd13ecef0896d94ded59780d5d5b4a9ff",
+  "source": "app.py",
+  "note": "Static inventory of explicit route decorators; not a security or browser coverage report. Implicit Flask static routes are excluded.",
+  "routes": [
+    {
+      "path": "/health",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "health",
+      "line": 224
+    },
+    {
+      "path": "/login",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "login",
+      "line": 1297
+    },
+    {
+      "path": "/register",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "register",
+      "line": 1302
+    },
+    {
+      "path": "/teacher/login",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "teacher_login",
+      "line": 1307
+    },
+    {
+      "path": "/teacher/register",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "teacher_register",
+      "line": 1312
+    },
+    {
+      "path": "/data",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "data_notice_page",
+      "line": 1317
+    },
+    {
+      "path": "/forgot-password",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "forgot_password",
+      "line": 1339
+    },
+    {
+      "path": "/reset-password",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "reset_password_page",
+      "line": 1368
+    },
+    {
+      "path": "/email/confirm",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "confirm_email_page",
+      "line": 1400
+    },
+    {
+      "path": "/profile/email",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "profile_email",
+      "line": 1420
+    },
+    {
+      "path": "/profile",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "profile",
+      "line": 1453
+    },
+    {
+      "path": "/logout",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "logout",
+      "line": 1523
+    },
+    {
+      "path": "/",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "index",
+      "line": 1542
+    },
+    {
+      "path": "/add_project",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "create_project",
+      "line": 1581
+    },
+    {
+      "path": "/project/<int:project_id>",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "project",
+      "line": 1628
+    },
+    {
+      "path": "/project/<int:project_id>/add_member",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "add_member",
+      "line": 2229
+    },
+    {
+      "path": "/project/<int:project_id>/remove_member/<int:user_id>",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "remove_member",
+      "line": 2376
+    },
+    {
+      "path": "/project/<int:project_id>/add",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "add_project_task",
+      "line": 2469
+    },
+    {
+      "path": "/project/<int:project_id>/status",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "change_task_status",
+      "line": 2527
+    },
+    {
+      "path": "/project/<int:project_id>/task/<int:task_id>/update",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "submit_task_update",
+      "line": 2604
+    },
+    {
+      "path": "/project/<int:project_id>/priority",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "change_task_priority",
+      "line": 2652
+    },
+    {
+      "path": "/project/<int:project_id>/delete/<int:task_id>",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "delete_project_task",
+      "line": 2721
+    },
+    {
+      "path": "/notifications",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "notifications_page",
+      "line": 2768
+    },
+    {
+      "path": "/notifications/<int:notification_id>/read",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "read_notifications",
+      "line": 2795
+    },
+    {
+      "path": "/notifications/read-all",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "read_notifications",
+      "line": 2795
+    },
+    {
+      "path": "/settings",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "site_settings",
+      "line": 2803
+    },
+    {
+      "path": "/groups",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "learning_groups_page",
+      "line": 2840
+    },
+    {
+      "path": "/groups/<int:group_id>",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "learning_group_page",
+      "line": 2873
+    },
+    {
+      "path": "/supervision",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "supervision_page",
+      "line": 2916
+    },
+    {
+      "path": "/skills",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "skill_profile",
+      "line": 2996
+    },
+    {
+      "path": "/teams",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "teams_directory",
+      "line": 3019
+    },
+    {
+      "path": "/teams/invite",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "send_team_invitation",
+      "line": 3038
+    },
+    {
+      "path": "/teams/invitations/<int:invitation_id>/respond",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "answer_team_invitation",
+      "line": 3056
+    },
+    {
+      "path": "/project/<int:project_id>/team",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "project_team",
+      "line": 3077
+    },
+    {
+      "path": "/project/<int:project_id>/history",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "project_work_history",
+      "line": 3109
+    },
+    {
+      "path": "/project/<int:project_id>/preparation",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "project_defense_preparation",
+      "line": 3128
+    },
+    {
+      "path": "/project/<int:project_id>/defense",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "project_video_defense",
+      "line": 3153
+    },
+    {
+      "path": "/project/<int:project_id>/stages",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "project_stage_page",
+      "line": 3183
+    },
+    {
+      "path": "/project/<int:project_id>/assessment",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "endpoint": "project_assessment",
+      "line": 3215
+    },
+    {
+      "path": "/teacher",
+      "methods": [
+        "GET"
+      ],
+      "endpoint": "teacher_cabinet",
+      "line": 3638
+    },
+    {
+      "path": "/teacher/projects",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "create_teacher_project",
+      "line": 3803
+    },
+    {
+      "path": "/project/<int:project_id>/transfer",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "transfer_legacy_project",
+      "line": 3809
+    },
+    {
+      "path": "/project/<int:project_id>/edit/<int:task_id>",
+      "methods": [
+        "POST"
+      ],
+      "endpoint": "edit_project_task",
+      "line": 3846
+    }
+  ]
+}
