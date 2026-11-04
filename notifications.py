@@ -3,6 +3,7 @@ from html import escape
 import re
 from database import execute_schema
 from interface import icon
+from navigation import stage_result_target
 
 
 def initialize_notifications(conn):
@@ -79,8 +80,8 @@ def notification_target(row):
     if target == f'/project/{row["project_id"]}/stages':
         match = re.fullmatch(r'stage:' + str(row['project_id']) + r':([1-5]):[0-9]+', row['event_key'])
         if match:
-            return target + '#stage-' + match[1]
-    return target
+            return target + '#stage-' + match[1] + '-result'
+    return stage_result_target(target)
 
 
 def render_items(rows, token):

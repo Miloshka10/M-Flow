@@ -1426,7 +1426,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         page = self.client.get('/').text
         self.assertIn('class="ds-cover ds-', page)
         self.assertIn('aria-hidden="true"', page)
-        self.assertIn('href="/teams"', page)
+        self.assertIn('href="/teams#people"', page)
         self.assertNotIn('blank-study.svg', page)  # Existing projects, not an empty state.
         self.assertIn('data-home-step=', page)
         self.assertIn('100%', page)

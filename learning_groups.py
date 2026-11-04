@@ -1,5 +1,6 @@
 """Voluntary classroom rosters. Group membership never grants project access."""
 from interface import icon
+from navigation import stage_result_target
 import hashlib
 import re
 import secrets
@@ -349,17 +350,18 @@ def render_group(conn, user, group, data, token, code=None):
             AND target_id=? AND state='pending' AND expires>? LIMIT 1""", (selected, user['id'], group['teacher_id'], int(time.time()))).fetchone() if selected in owned_ids else None
         connected = bool(data['rows'] and data['rows'][0]['teacher_connected'])
         options = '<option value="">Проект не выбран</option>' + ''.join(f'<option value="{p["id"]}" {"selected" if p["id"] == selected else ""}>{escape(p["name"])}</option>' for p in projects)
+        hub_url = f'/supervision?project={selected}' if selected in owned_ids else '/supervision'
         if not group['archived']:
             proposal = '<button name="action" value="propose" class="secondary">Предложить сопровождение учителю</button>'
             hint = 'Если руководитель уже есть, предложение создаёт обычный запрос на согласованную смену. Учителя не меняются автоматически.'
             if connected or pending_request:
                 proposal = ''
-                hint = ('Учитель группы уже сопровождает выбранный проект.' if connected else 'Предложение отправлено. Дождитесь согласования в разделе «Руководство».') + ' Чтобы предложить другой проект, сначала сохраните новый выбор.'
+                hint = ('Учитель группы уже сопровождает выбранный проект.' if connected else 'Предложение отправлено. Дождитесь согласования в разделе «Руководитель проекта».') + ' Чтобы предложить другой проект, сначала сохраните новый выбор.'
             selector = f'''<form method="post" class="group-form">{hidden_token(token)}<label>Мой проект<select name="project_id">{options}</select></label><div class="group-actions">
                 <button name="action" value="select" data-ui-icon="save">Сохранить выбор проекта</button>{proposal}</div></form>''' if projects else f'<p>У тебя пока нет собственного проекта. Сначала создай его, затем выбери для группы.</p><a href="/#project-create">Создать проект {icon('arrow')}</a>'
             body += f'''<section class="group-panel"><h2>Мой проект в группе</h2>
                 {selector}<details class="ds-guide"><summary>Проект и доступ учителя</summary><p>Выберите один собственный проект. Учитель увидит его название. Работы и оценки доступны только действующему руководителю.</p>
-                <p>{hint}</p></details><a href="/supervision">Мои согласования руководства {icon('arrow')}</a></section>'''
+                <p>{hint}</p></details><a href="{hub_url}">Руководитель проекта и согласования {icon('arrow')}</a></section>'''
         if selected in owned_ids:
             states = get_stages(conn, selected)
             defense = defense_for(conn, selected)
@@ -367,12 +369,12 @@ def render_group(conn, user, group, data, token, code=None):
             published = conn.execute("SELECT 1 FROM project_assessments WHERE project_id=? AND student_id=? AND state='published' LIMIT 1", (selected, user['id'])).fetchone() is not None
             step = next_step(states, 'student', True, has_teacher, defense, published)
             if step['key'] == 'teacher-missing' and not group['archived']:
-                step.update(title='Согласуй сопровождение проекта', text='Предложи проект учителю группы кнопкой выше. После его подтверждения можно отправлять результаты на проверку.', target='/supervision', action='Проверить согласования')
+                step.update(title='Согласуй сопровождение проекта', text='Предложи проект учителю группы кнопкой выше. После его подтверждения можно отправлять результаты на проверку.', target=hub_url, action='Проверить согласования')
             if pending_request:
                 step.update(title='Сопровождение ожидает согласования',
                     text='Учитель группы должен подтвердить предложение.' + (' При смене также нужны согласия текущих руководителей.' if pending_request['kind'] == 'change' else '') + ' Повторно отправлять запрос не нужно.',
-                    target='/supervision', action='Открыть согласование')
-            target = step['target']
+                    target=hub_url, action='Открыть согласование')
+            target = stage_result_target(step['target'])
             if not target:
                 target = f'/project/{selected}'
             elif not target.startswith('/'):
@@ -391,7 +393,7 @@ def render_group(conn, user, group, data, token, code=None):
             project = f'<a href="/project/{pid}">{project}</a>'
             stages = f'{row["completed"]} из 5 приняты<br>{escape(row["stage"])}'
             review = f'Ожидают решения: {row["pending"]}' if row['pending'] else 'Нет ожидающих проверок'
-            stage_target = f'/project/{pid}/stages' + (f'#stage-{row["current_number"]}' if row['current_number'] else '')
+            stage_target = f'/project/{pid}/stages' + (f'#stage-{row["current_number"]}-result' if row['current_number'] else '')
             if row['pending'] and not row['stage_review']:
                 actions = f'<a href="/project/{pid}/defense">Проверить видеозащиту {icon('arrow')}</a>'
             else:
@@ -424,5 +426,5 @@ def render_group(conn, user, group, data, token, code=None):
             <label>Название группы<input name="name" maxlength="120" required value="{escape(group['name'], quote=True)}"></label><label>Описание для учеников<textarea name="description" maxlength="600" rows="3">{escape(group['description'])}</textarea></label><button data-ui-icon="save">Сохранить настройки группы</button></form>
             {form('restore' if group['archived'] else 'archive', '<button class="secondary" data-ui-icon="archive">' + ('Восстановить группу' if group['archived'] else 'Отправить группу в архив') + '</button>')}</details>'''
     else:
-        body += '<details class="group-panel"><summary>Выход из группы</summary><p>Выход скроет вас из списка класса. Проект, команда, оценки, действующий руководитель и отдельные запросы сопровождения сохранятся. Запрос можно отменить в разделе «Руководство».</p>' + form('leave', '<button class="secondary" data-ui-icon="logout">Выйти из группы</button>') + '</details>'
+        body += '<details class="group-panel"><summary>Выход из группы</summary><p>Выход скроет вас из списка класса. Проект, команда, оценки, действующий руководитель и отдельные запросы сопровождения сохранятся. Запрос можно отменить в разделе «Руководитель проекта».</p>' + form('leave', '<button class="secondary" data-ui-icon="logout">Выйти из группы</button>') + '</details>'
     return body

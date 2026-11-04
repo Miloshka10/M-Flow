@@ -261,10 +261,13 @@ def preview_invite(conn, code):
     return row['teacher_name']
 
 
-def render_hub(conn, user, token, before=None, preview=None, code=None):
+def render_hub(conn, user, token, before=None, preview=None, code=None, context=None):
     now = int(time.time())
     teacher = user['role'] == 'teacher'
     body = '<p>Проект создаёт ученик. Учитель подключается только по согласованию с владельцем конкретного проекта. Существующие связи сохранены.</p>'
+    if context:
+        body = (f'<section class="supervision-context" aria-label="Выбранный проект"><strong>Проект: {escape(context["name"])}</strong>'
+                '<p>Контекст помогает выбрать проект. Подключение и смена руководителя требуют прежних согласований.</p></section>') + body
     if teacher:
         body += f'<section class="card"><h2>Пригласить ученика</h2><form method="post">{hidden_token(token)}<button name="action" value="create" data-ui-icon="plus">Создать одноразовый код</button></form><p>Код действует 24 часа и показывается один раз. Передайте его ученику лично; не публикуйте в общем доступе.</p>'
         if code:
@@ -278,7 +281,7 @@ def render_hub(conn, user, token, before=None, preview=None, code=None):
         body += f'<section class="card"><h2>Приглашение учителя</h2><form method="post" class="team-profile-form">{hidden_token(token)}<label>Код от учителя<input name="code" maxlength="32" autocomplete="off" required></label><button name="action" value="preview" data-ui-icon="review">Проверить приглашение</button></form>'
         if preview:
             projects = conn.execute('SELECT id,name FROM projects WHERE owner_id=? ORDER BY id DESC', (user['id'],)).fetchall()
-            options = ''.join(f'<option value="{p["id"]}">{escape(p["name"])}</option>' for p in projects)
+            options = '<option value="">Выберите свой проект</option>' + ''.join(f'<option value="{p["id"]}" {"selected" if context and p["id"] == context["id"] else ""}>{escape(p["name"])}</option>' for p in projects)
             body += f'<h3>Учитель: {escape(preview[0])}</h3><p>Учитель увидит только выбранный проект и ваш логин после подтверждения. Если руководитель уже есть, будет создан запрос на смену, а не добавлен второй.</p><form method="post" class="team-profile-form">{hidden_token(token)}<input type="hidden" name="code" value="{escape(preview[1], quote=True)}">'
             if projects:
                 body += f'<label>Мой проект<select name="project_id">{options}</select></label><button name="action" value="request" data-ui-icon="check">Подтвердить проект</button> '
@@ -297,7 +300,7 @@ def render_hub(conn, user, token, before=None, preview=None, code=None):
         SELECT 1 FROM project_members m JOIN users u ON u.id=m.user_id WHERE m.project_id=p.id AND u.role='teacher') ORDER BY p.id DESC""", (user['id'],)).fetchall() if not teacher else conn.execute("""SELECT p.id,p.name FROM projects p JOIN users owner ON owner.id=p.owner_id
         WHERE owner.role='student' AND EXISTS(SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?) ORDER BY p.id DESC""", (user['id'],)).fetchall()
     if owned:
-        options = ''.join(f'<option value="{p["id"]}">{escape(p["name"])}</option>' for p in owned)
+        options = ''.join(f'<option value="{p["id"]}" {"selected" if context and p["id"] == context["id"] else ""}>{escape(p["name"])}</option>' for p in owned)
         body += f'<details><summary>Запросить завершение сопровождения</summary><form method="post" class="team-profile-form">{hidden_token(token)}<label>Проект<select name="project_id">{options}</select></label><button class="secondary" name="action" value="end" data-ui-icon="plus">Создать запрос завершения</button></form><p>Окончание требует всех согласий. Для смены примите код нового учителя вместо завершения.</p></details>'
     if not rows:
         body += '<p>Ожидающих согласований нет. Для нового подключения передайте или примите код учителя.</p>'

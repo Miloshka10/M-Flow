@@ -102,11 +102,10 @@ def shell_header(user, path, bell, logout, query=None):
         selected = path.split('/')[2]
     project_home = (f'/?project={selected}' if isinstance(selected, str) and selected.isascii()
                     and selected.isdigit() and len(selected) <= 18 and int(selected) > 0 else '/')
-    items = ([('home', 'home', 'Кабинет', home), ('projects', 'folder', 'Проекты учеников', '/teacher#teacher-projects'),
-              ('groups', 'groups', 'Учебные группы', '/groups'), ('review', 'review', 'Проверка работ', '/teacher#review-queue'),
-              ('results', 'assessment', 'Оценивание', '/teacher#teacher-projects')]
+    items = ([('home', 'home', 'Кабинет', home), ('review', 'review', 'Проверка работ', '/teacher#review-queue'), ('projects', 'folder', 'Проекты учеников', '/teacher#teacher-projects'),
+              ('groups', 'groups', 'Учебные группы', '/groups')]
              if teacher else [('home', 'home', 'Главная', '/'), ('projects', 'folder', 'Мои проекты', project_home + '#my-projects'),
-                              ('groups', 'groups', 'Учебные группы', '/groups'), ('team', 'team', 'Команды и люди', '/teams'),
+                              ('groups', 'groups', 'Учебные группы', '/groups'),
                               ('results', 'results', 'Мои результаты', project_home + '#student-results')])
     def links():
         return ''.join(f'<a href="{url}" class="ui-nav-link" data-nav-key="{key}"'
@@ -117,7 +116,7 @@ def shell_header(user, path, bell, logout, query=None):
     secondary = ''.join(f'<a class="ui-nav-link" href="/{key}"'
                         + (' aria-current="page"' if current == key else '')
                         + f'>{icon(key, navigation=True)}<span>{label}</span></a>' for key, label in [('profile', 'Мой профиль'), ('settings', 'Настройки')])
-    title = next((label for key, _, label, _ in items if key == current),
+    title = {'/teams':'Участники и приглашения', '/skills':'Мои навыки'}.get(path) or next((label for key, _, label, _ in items if key == current),
                  {'/profile':'Мой профиль', '/settings':'Настройки', '/notifications':'Уведомления',
                   '/supervision':'Руководитель проекта'}.get(path, 'Рабочее пространство'))
     return f'''<aside class="ui-sidebar" aria-label="Боковая навигация">
@@ -131,7 +130,7 @@ def shell_header(user, path, bell, logout, query=None):
             <div class="ui-mobile-panel" id="ui-mobile-panel" aria-label="Навигация"><div class="ui-mobile-panel-top"><span class="ui-mobile-wordmark">M-Flow<span>.</span></span><button type="button" class="ui-icon-button" data-close-navigation aria-label="Закрыть меню">{icon('close')}</button></div>
             <p class="ui-workspace-label">{role}</p><nav aria-label="Мобильные разделы">{links()}{secondary}</nav></div>
             <button class="ui-mobile-backdrop" type="button" data-close-navigation aria-label="Закрыть навигацию"></button>
-        </details>{logo}<span class="ui-header-context">Моё пространство<span>/</span>{title}</span></div>
+        </details>{logo}<span class="ui-header-context">Моё пространство<span>/</span><span data-shell-location>{title}</span></span></div>
         <div class="header-actions">{bell}<details class="account-menu"><summary aria-controls="account-panel">Мой аккаунт</summary>
             <div class="account-panel" id="account-panel"><div class="account-identity"><strong>{escape(user['username'])}</strong><small>{role}</small></div>
             <a href="/profile">{icon('profile')}Мой профиль</a><a href="/settings">{icon('settings')}Настройки</a>{logout}</div></details></div></header>'''

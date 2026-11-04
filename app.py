@@ -48,11 +48,11 @@ from graphics import illustration
 from scenery import scenery
 from project_workspace import render_workspace, task_deadline
 from project_work import render_project_work
-from navigation import project_navigation
+from navigation import project_navigation, project_list_url
 from interface import shell_header, document_title, icon
 from student_results import parameters as result_parameters, load_results, render_results, load_focus, load_project_states
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores, assessment_version
-from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, change_stage, render_stages, STATE_LABELS
+from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, stage_label, change_stage, render_stages, STATE_LABELS
 from teamwork import (initialize_teamwork, profile_for, save_profile, directory, invite_student,
                       respond_to_invitation, change_team, render_profile as render_skill_profile,
                       render_directory, render_team)
@@ -200,9 +200,9 @@ def render_page(html, title=None):
         '<script src="/static/interface.js?v=20261027-work" defer></script>'
         '<script src="/static/form-guard.js?v=20261029" defer></script>'
         '<link rel="stylesheet" href="/static/design-suite.css?v=20261101-mail-ui">'
-        '<script src="/static/design-suite.js?v=20261031-final" defer></script>'
+        '<script src="/static/design-suite.js?v=20261104-navigation" defer></script>'
             + auth_assets + '<link rel="stylesheet" href="/static/scenery.css?v=20261104-calm-background">'
-            '<link rel="stylesheet" href="/static/interface-v3.css?v=20261104-release">' +
+            '<link rel="stylesheet" href="/static/interface-v3.css?v=20261104-navigation">' +
             f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-interface-v3 data-scenery="{scenery_context}" data-scenery-layout="{scenery_layout}" data-design-page="{escape(endpoint, quote=True)}">'
             + f'<a class="skip-link" href="#{skip_target}">К содержимому</a>' + html
             + scenery(scenery_context, layout=scenery_layout) + '</body></html>')
@@ -2154,7 +2154,7 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
         <div class="container">
             {render_header(current_user)}
             <main class="project-workspace" data-project-views data-work-default="{int(work_mode)}">
-                <a href="/" class="back">{icon('arrow-left')} Все проекты</a>
+                <a href="{project_list_url(current_user['role'], project_id)}" class="back">{icon('arrow-left')} Все проекты</a>
                 {messages}
                 {workspace_html}
 
@@ -2915,6 +2915,11 @@ def learning_group_page(group_id):
 @login_required
 def supervision_page():
     user = get_current_user()
+    selected = request.args.get('project')
+    try:
+        selected_id = form_database_id(selected) if selected is not None else None
+    except ValueError:
+        return render_error_page('Некорректный проект', 'Откройте раздел руководителя из проекта.', 400)
     before = request.args.get('before', type=int)
     if 'before' in request.args and not valid_database_id(before):
         return render_error_page('Некорректная страница', 'Откройте раздел руководства заново.', 400)
@@ -2927,6 +2932,13 @@ def supervision_page():
                 error=f'Слишком много попыток. Повторите через {retry} сек.', status=429)[0], 429, {'Retry-After': str(retry)}
     error, status, code, preview = '', 200, None, None
     with closing(get_db()) as conn:
+        context = None
+        if selected_id is not None:
+            context = conn.execute('''SELECT p.id,p.name,p.owner_id FROM projects p WHERE p.id=?
+                AND (p.owner_id=? OR EXISTS(SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?))''',
+                (selected_id, user['id'], user['id'])).fetchone()
+            if context is None:
+                return render_error_page('Нет доступа', 'Вы не участвуете в этом проекте.', 403)
         try:
             if request.method == 'POST':
                 if action == 'create':
@@ -2956,8 +2968,10 @@ def supervision_page():
         except (PermissionError, ValueError) as exc:
             conn.rollback()
             error, status = str(exc), 403 if isinstance(exc, PermissionError) else 400
-        body = render_hub(conn, user, csrf_token(), before=before, preview=preview, code=code)
-    return render_collaboration_page(user, 'Руководитель проекта', body, error=error, status=status)
+        body = render_hub(conn, user, csrf_token(), before=before, preview=preview, code=code, context=context)
+    return render_collaboration_page(user, 'Руководитель проекта', body, error=error, status=status,
+                                     back_url=f'/project/{selected_id}' if context else None,
+                                     back_label='К обзору проекта' if context else None)
 
 
 def render_unsaved_result(form, user, target, defense=False):
@@ -2983,7 +2997,7 @@ def render_unsaved_result(form, user, target, defense=False):
 
 def render_collaboration_page(user, title, body, project_id=None, error="", status=200, back_url=None, back_label=None):
     messages = ''.join(f'<div class="success" role="status">{escape(message)}</div>' for message in get_flashed_messages())
-    back = f'<a class="back" href="/project/{project_id}">{icon('arrow-left')} К обзору проекта</a>' if project_id else f'<a class="back" href="/">{icon('arrow-left')} К моим проектам</a>'
+    back = f'<a class="back" href="/project/{project_id}">{icon('arrow-left')} К обзору проекта</a>' if project_id else f'<a class="back" href="{project_list_url(user['role'])}">{icon('arrow-left')} К моим проектам</a>'
     if back_url:
         back = f'<a class="back" href="{escape(back_url, quote=True)}">{icon('arrow-left')} {escape(back_label or "Назад")}</a>'
     error_html = f'<div class="error" role="alert">{escape(error)}</div>' if error else ''
@@ -3030,7 +3044,7 @@ def teams_directory():
         body = render_directory(candidates,projects,invitations,token,filters,user['role']=='student')
     finally:
         conn.close()
-    return render_collaboration_page(user,'Команды и участники',body)
+    return render_collaboration_page(user,'Участники и приглашения',body)
 
 
 @app.route('/teams/invite', methods=['POST'])
@@ -3545,7 +3559,7 @@ def render_teacher_project(project):
                      "done": "Задачи завершены", "normal": "Всё по плану", "empty": "Нет задач"}
     health = project["health"]
     stage = project["current_stage"]
-    stage_note = (f'Текущий этап {stage["number"]}: {escape(stage["title"])} · {STATE_LABELS[stage["state"]]}'
+    stage_note = (f'Текущий этап {stage["number"]}: {escape(stage["title"])} · {stage_label(stage)}'
                   if stage else 'Все пять этапов приняты учителем')
     access_note = '<span class="t-muted">Проверка результатов · задачами и командой управляет ученик-владелец</span>'
     if project['legacy_owner']:
