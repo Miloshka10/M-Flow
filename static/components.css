@@ -1,0 +1,145 @@
+/* M-Flow UI foundations. Page files own layout; this file owns shared elements.
+   Keep native controls, original forms, state labels and existing selector hooks. */
+html body.mf-v2[data-interface-v3][data-scenery] {
+  --mf-space-1:4px; --mf-space-2:8px; --mf-space-3:12px; --mf-space-4:16px;
+  --mf-space-5:20px; --mf-space-6:24px; --mf-space-8:32px; --mf-space-10:40px;
+  --mf-control-height:48px; --mf-control-compact:44px; --mf-control-comfort:52px;
+  --mf-radius-sm:8px; --mf-radius-control:9px; --mf-radius:16px; --mf-radius-lg:20px;
+  --mf-type-caption:12px; --mf-type-label:14px; --mf-type-body:15px;
+  --mf-type-input:16px; --mf-weight-medium:500; --mf-weight-strong:600;
+  --mf-bg:#f5f4ef; --mf-card:#fff; --mf-text:#252c3a; --mf-muted:#606c7e;
+  --mf-line:#e0e3e7; --mf-panel:#eeeff2; --mf-control-line:#8994a4;
+  --mf-action:#284be8; --mf-action-hover:#203ec7; --mf-accent:#284be8;
+  --mf-accent-hover:#203ec7; --mf-accent-soft:#edf0ff; --ui-brand:#284be8;
+  --ui-on-action:#fff; --mf-danger:#a93232; --mf-danger-bg:#fff1ef;
+  --mf-warning:#795522; --mf-warning-bg:#fbf1dd;
+  --mf-success:#40583c; --mf-success-bg:#eaf0e5;
+  --mf-info:var(--mf-accent); --mf-info-bg:var(--mf-accent-soft);
+  --ui-sage:var(--mf-success-bg); --ui-sage-ink:var(--mf-success);
+  --ds-sage:var(--mf-success-bg); --ds-sage-ink:var(--mf-success);
+  --ds-gold:var(--mf-warning-bg); --ds-gold-ink:var(--mf-warning);
+  --ui-warning-bg:var(--mf-warning-bg); --ui-success-bg:var(--mf-success-bg);
+  --ui-success:var(--mf-success);
+  font-size:var(--mf-type-body); line-height:1.6;
+}
+html[data-theme="dark"] body.mf-v2[data-interface-v3][data-scenery] {
+  --mf-bg:#161b24; --mf-card:#202733; --mf-text:#edf0f7; --mf-muted:#b0bbce;
+  --mf-line:#394251; --mf-panel:#2a3342; --mf-control-line:#7c899d;
+  --mf-action:#a2b3ff; --mf-action-hover:#b9c6ff; --mf-accent:#a2b3ff;
+  --mf-accent-hover:#b9c6ff; --mf-accent-soft:#2b3656; --ui-brand:#a2b3ff;
+  --ui-on-action:#192348; --mf-danger:#ffb4aa; --mf-danger-bg:#3b272c;
+  --mf-warning:#f1ce91; --mf-warning-bg:#3a3023;
+  --mf-success:#c5ddba; --mf-success-bg:#29382f;
+}
+
+/* Typography, focus and spacing use the same values in both themes. */
+html body.mf-v2[data-interface-v3][data-scenery] :is(h1,h2,h3,h4) {font-weight:var(--mf-weight-strong);line-height:1.25;overflow-wrap:anywhere}
+html body.mf-v2[data-interface-v3][data-scenery] h1 {font-size:clamp(29px,3vw,39px);line-height:1.17;letter-spacing:-1.2px}
+html body.mf-v2[data-interface-v3][data-scenery] h2 {font-size:24px;letter-spacing:-.65px}
+html body.mf-v2[data-interface-v3][data-scenery] h3 {font-size:18px;letter-spacing:-.25px}
+html body.mf-v2[data-interface-v3][data-scenery] :is(button,.btn,.action-link,.ui-nav-link) {transition:none}
+html body.mf-v2[data-interface-v3][data-scenery] :focus-visible {outline:3px solid var(--mf-accent);outline-offset:3px}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.t-muted,.subtle,.settings-intro) {color:var(--mf-muted);font-size:13px;line-height:1.7}
+html body.mf-v2[data-interface-v3][data-scenery] .eyebrow {font-size:11px;letter-spacing:1.4px;color:var(--mf-muted)}
+
+/* Actions: primary, secondary, text and destructive. Loading is separate from disabled. */
+html body.mf-v2[data-interface-v3][data-scenery] :is(button,.btn,input[type="submit"],.teacher-primary-link) {
+  min-height:var(--mf-control-height); max-width:100%; border-radius:var(--mf-radius-control);
+  font:inherit; font-size:var(--mf-type-label); font-weight:var(--mf-weight-strong);
+  line-height:1.4; padding:var(--mf-space-3) var(--mf-space-4); white-space:normal;
+  overflow-wrap:anywhere; cursor:pointer;
+}
+html body.mf-v2[data-interface-v3][data-scenery] :is(button.secondary,.btn.secondary,.stage-actions button[value="save"],.stage-actions button[value="return"],.assessment-actions button[value="draft"]) {
+  border:1px solid var(--mf-control-line); background:var(--mf-card); color:var(--mf-text);
+}
+html body.mf-v2[data-interface-v3][data-scenery] :is(button.secondary,.btn.secondary,.stage-actions button[value="save"],.stage-actions button[value="return"],.assessment-actions button[value="draft"]):hover {
+  background:var(--mf-panel); color:var(--mf-text);
+}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.task-delete,.delete-task button,.ui-button-danger) {
+  border:1px solid var(--mf-danger); background:var(--mf-card); color:var(--mf-danger);
+}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.task-delete,.delete-task button,.ui-button-danger):hover {background:var(--mf-danger-bg);color:var(--mf-danger)}
+html body.mf-v2[data-interface-v3][data-scenery] :is(button,button.secondary,input,select,textarea):disabled,
+html body.mf-v2[data-interface-v3][data-scenery] :is(button,button.secondary,input,select,textarea):disabled:hover {
+  background:var(--mf-panel);color:var(--mf-muted);border-color:var(--mf-control-line);cursor:not-allowed;opacity:1;
+}
+html body.mf-v2[data-interface-v3][data-scenery] form[aria-busy="true"] button.auth-submit:disabled {
+  background:var(--mf-action);color:var(--ui-on-action);border-color:transparent;cursor:wait;
+}
+html body.mf-v2[data-interface-v3][data-scenery] form[aria-busy="true"] button.auth-submit:disabled::before {
+  content:"";display:inline-block;width:16px;height:16px;flex:0 0 16px;margin-right:8px;
+  background:transparent;mask:none;-webkit-mask:none;border:2px solid currentColor;
+  border-right-color:transparent;border-radius:50%;animation:ui-busy-spin .8s linear infinite;
+}
+@keyframes ui-busy-spin {to {transform:rotate(360deg)}}
+html[data-animations="off"] body.mf-v2[data-interface-v3][data-scenery] form[aria-busy="true"] button.auth-submit:disabled::before {animation:none}
+@media(prefers-reduced-motion:reduce) {
+  html body.mf-v2[data-interface-v3][data-scenery] form[aria-busy="true"] button.auth-submit:disabled::before {animation:none}
+}
+html body.mf-v2[data-interface-v3][data-scenery] .action-link {font-size:var(--mf-type-label);min-height:var(--mf-control-compact)}
+html body.mf-v2[data-interface-v3][data-scenery] .ui-icon-button {width:var(--mf-control-compact);height:var(--mf-control-compact);min-width:var(--mf-control-compact);min-height:var(--mf-control-compact);padding:var(--mf-space-2)}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.stage-actions,.assessment-actions,.team-actions,.group-actions,.ui-actions) {display:flex;flex-wrap:wrap;align-items:center;gap:var(--mf-space-3)}
+
+/* Field boundaries stay visible on white cards. No red errors before validation. */
+html body.mf-v2[data-interface-v3][data-scenery] :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea) {
+  border:1px solid var(--mf-control-line);border-radius:var(--mf-radius-control);
+  background:var(--mf-card);color:var(--mf-text);min-width:0;max-width:100%;
+  font:inherit;font-size:var(--mf-type-body);line-height:1.5;
+}
+html body.mf-v2[data-interface-v3][data-scenery] :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select) {min-height:var(--mf-control-height);padding:11px 13px}
+html body.mf-v2[data-interface-v3][data-scenery] textarea {padding:var(--mf-space-3);line-height:1.8;resize:vertical}
+html body.mf-v2[data-interface-v3][data-scenery] :is(input,textarea)::placeholder {color:var(--mf-muted);opacity:1}
+html body.mf-v2[data-interface-v3][data-scenery] :is(input,textarea)[readonly] {background:var(--mf-panel)}
+html body.mf-v2[data-interface-v3][data-scenery] :is(input,select,textarea)[aria-invalid="true"] {border-color:var(--mf-danger);box-shadow:inset 3px 0 var(--mf-danger)}
+html body.mf-v2[data-interface-v3][data-scenery] :is(input[type="checkbox"],input[type="radio"]) {width:20px;height:20px;min-height:20px;margin:0;accent-color:var(--mf-action);vertical-align:middle;flex-shrink:0}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.auth-hint,.settings-hint,.ui-field-hint) {color:var(--mf-muted);font-size:13px;line-height:1.6}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.auth-field-error,.ui-field-error) {color:var(--mf-danger);font-size:13px;line-height:1.6}
+html body.mf-v2[data-interface-v3][data-scenery] .ui-field {display:grid;gap:var(--mf-space-2);min-width:0}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.auth-page,.account-access-layout) input:not([type="hidden"],[type="checkbox"],[type="radio"]) {min-height:var(--mf-control-comfort);font-size:var(--mf-type-input)}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.auth-form-inner,.account-access-layout) form>button {min-height:var(--mf-control-comfort)}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.auth-page,.account-access-layout) .auth-hint {font-size:13px;line-height:1.6}
+
+/* Static state badges never imply that a work item changed state. */
+html body.mf-v2[data-interface-v3][data-scenery] :is(.ui-state,.result-state,.ui-status) {
+  display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:4px 9px;
+  border-radius:var(--mf-radius-sm);font-size:var(--mf-type-caption);line-height:1.5;
+  font-weight:var(--mf-weight-medium);white-space:normal;overflow-wrap:anywhere;
+  background:var(--mf-panel);color:var(--mf-muted);
+}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.ui-state,.result-state,.ui-status)[data-ui-tone="info"] {background:var(--mf-info-bg);color:var(--mf-info)}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.ui-state,.result-state,.ui-status)[data-ui-tone="warning"] {background:var(--mf-warning-bg);color:var(--mf-warning)}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.ui-state,.result-state,.ui-status)[data-ui-tone="success"] {background:var(--mf-success-bg);color:var(--mf-success)}
+
+/* Errors, successful saves and notices are visually distinct, with text labels. */
+html body.mf-v2[data-interface-v3][data-scenery] :is(.error,.danger,.auth-error,.success,.ok,.message,.auth-access-status,.form-unsaved-note,.ui-notice) {
+  --ui-notice-ink:var(--mf-info);--ui-notice-bg:var(--mf-info-bg);
+  border:1px solid color-mix(in srgb,var(--ui-notice-ink) 28%,var(--mf-card));
+  border-left:3px solid var(--ui-notice-ink);border-radius:var(--mf-radius-sm);
+  padding:var(--mf-space-4) var(--mf-space-5);background:var(--ui-notice-bg);color:var(--ui-notice-ink);
+  font-size:var(--mf-type-label);line-height:1.7;overflow-wrap:anywhere;
+}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.error,.danger,.auth-error) {--ui-notice-ink:var(--mf-danger);--ui-notice-bg:var(--mf-danger-bg)}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.success,.ok,.auth-access-status) {--ui-notice-ink:var(--mf-success);--ui-notice-bg:var(--mf-success-bg)}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.form-unsaved-note,.ui-notice[data-ui-tone="warning"]) {--ui-notice-ink:var(--mf-warning);--ui-notice-bg:var(--mf-warning-bg)}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.error,.auth-error,.success,.ui-notice)>:first-child {margin-top:0}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.error,.auth-error,.success,.ui-notice)>:last-child {margin-bottom:0}
+
+/* Standard surfaces; page-specific compositions retain their layout rules. */
+html body.mf-v2[data-interface-v3][data-scenery] :is(.card,.teacher-panel,.group-panel,.team-person,.result-item,.settings-card,.ui-surface) {
+  border:1px solid var(--mf-line);border-radius:var(--mf-radius);padding:var(--mf-space-6);
+  background:var(--mf-card);color:var(--mf-text);box-shadow:none;min-width:0;
+}
+html body.mf-v2[data-interface-v3][data-scenery] summary {min-height:var(--mf-control-compact);cursor:pointer}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.account-panel,.notification-panel) {border-radius:var(--mf-radius);border-color:var(--mf-line);box-shadow:0 12px 36px #10162a1a}
+html body.mf-v2[data-interface-v3][data-scenery] .task-drawer {border-radius:var(--mf-radius-lg) 0 0 var(--mf-radius-lg)}
+html body.mf-v2[data-interface-v3][data-scenery] .task-drawer .drawer-close {min-width:var(--mf-control-compact);min-height:var(--mf-control-compact)}
+
+@media(max-width:600px) {
+  html body.mf-v2[data-interface-v3][data-scenery] :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea) {font-size:var(--mf-type-input)}
+  html body.mf-v2[data-interface-v3][data-scenery] :is(.card,.teacher-panel,.group-panel,.team-person,.result-item,.settings-card,.ui-surface) {padding:var(--mf-space-5)}
+  html body.mf-v2[data-interface-v3][data-scenery] .task-drawer {border-radius:0}
+}
+@media(forced-colors:active) {
+  html body.mf-v2[data-interface-v3][data-scenery] :is(button,.btn,input,select,textarea,.ui-state,.result-state,.error,.success,.ui-notice) {border-color:ButtonText}
+  html body.mf-v2[data-interface-v3][data-scenery] :is(input,select,textarea)[aria-invalid="true"] {outline:2px dashed CanvasText;outline-offset:2px;box-shadow:none}
+}

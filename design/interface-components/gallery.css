@@ -1,0 +1,11 @@
+/* Presentation of the development catalogue only. Components use production CSS. */
+.component-gallery {width:min(1180px,calc(100% - 48px));margin:0 auto;padding:64px 0}
+.gallery-heading {max-width:700px;margin-bottom:40px}
+.gallery-heading>p:not(.eyebrow) {max-width:600px;color:var(--mf-muted)}
+.gallery-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
+.gallery-grid h2 {margin-top:12px}
+.gallery-grid hr {border:0;border-top:1px solid var(--mf-line);margin:24px 0}
+.gallery-stack {display:grid;gap:24px}
+.gallery-check {display:flex;align-items:center;gap:12px;min-height:44px}
+.gallery-grid :is(.ui-notice,.success,.error) {margin-top:16px}
+@media(max-width:800px) {.gallery-grid {grid-template-columns:minmax(0,1fr)}.component-gallery {padding-top:32px}}
