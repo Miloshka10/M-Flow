@@ -201,7 +201,7 @@ def render_page(html, title=None):
         '<script src="/static/form-guard.js?v=20261029" defer></script>'
         '<link rel="stylesheet" href="/static/design-suite.css?v=20261101-mail-ui">'
         '<script src="/static/design-suite.js?v=20261031-final" defer></script>'
-            + auth_assets + '<link rel="stylesheet" href="/static/scenery.css?v=20261103-scenery-layout">' +
+            + auth_assets + '<link rel="stylesheet" href="/static/scenery.css?v=20261104-calm-background">' +
             f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-scenery="{scenery_context}" data-scenery-layout="{scenery_layout}" data-design-page="{escape(endpoint, quote=True)}">'
             + f'<a class="skip-link" href="#{skip_target}">К содержимому</a>' + html
             + scenery(scenery_context, layout=scenery_layout) + '</body></html>')
