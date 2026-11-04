@@ -67,7 +67,8 @@ def load_focus(conn, user, project):
     comment = current['teacher_comment'] if needs_revision else defense['teacher_comment'] if defense_returned else ''
     if (needs_revision or defense_returned) and not (comment or '').strip():
         comment = 'Комментарий не указан. Уточни у учителя, что нужно исправить.'
-    return dict(project=project, step=step, comment=comment)
+    return dict(project=project, step=step, comment=comment, stages=stages,
+                reviewer=(current.get('reviewer_name') if needs_revision else defense.get('reviewer_name') if defense_returned else '') or '')
 
 # Access is checked here, not inferred from a filter or a notification. There is
 # one current row per stage/defense; old notifications never manufacture results.

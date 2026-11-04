@@ -109,10 +109,12 @@ def render_queue(result, params):
         team = f'<p class="t-muted">Команда: {escape(item["team"])}</p>' if item['team'] else ''
         body = f'<p class="teacher-queue-body">{escape(item["body"])}</p>' if item['body'] else ''
         html += f'''<article class="teacher-attention-item teacher-queue-item" data-work-kind="{item['kind']}"
-            data-work-key="{item['key']}"><strong>{label}</strong><h4>{escape(item['title'])}</h4>
-            <p>{escape(item['project_name'])}</p><p class="t-muted">Автор: {author}</p>
-            <p class="t-muted">{date_html}</p><details class="ds-queue-material"><summary>Материал и команда</summary>{team}{body}</details>
-            <a class="action-link" href="{item['href']}">{item['action']} {icon('arrow')}</a></article>'''
+            data-work-key="{item['key']}"><span class="v3-submission-mark" aria-hidden="true">{icon('video' if item['kind'] == 'defense' else 'review')}</span>
+            <div class="v3-submission-main"><strong class="v3-submission-label">{label}</strong><h4>{escape(item['project_name'])}</h4>
+            <p class="v3-submission-type">{escape(item['title'])}</p><p class="t-muted">Автор: {author}</p>
+            <details class="ds-queue-material"><summary>Материал и команда</summary>{team}{body}</details></div>
+            <div class="v3-submission-side"><p class="t-muted">{date_html}</p>
+            <a class="action-link" href="{item['href'] + ('-result' if item['kind'] == 'stage' else '')}">{item['action']} {icon('arrow')}</a></div></article>'''
     if not result['items']:
         html += ('<p class="t-muted">Нет работ по выбранным условиям. '
                  '<a class="action-link" href="/teacher#review-queue">Сбросить фильтры</a>. '

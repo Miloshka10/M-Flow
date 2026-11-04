@@ -170,7 +170,7 @@ class StudentResultsCases:
         self.add_candidate()
         self.sign_in(4)
         html = self.client.get('/').text
-        self.assertIn('Начни свой проект.',html)
+        self.assertIn('Здесь начнётся ваш проект',html)
         self.assertIn('Ввести код группы',html)
         self.assertIn('id="student-results"',html)  # The result navigation remains usable before a first project.
 
