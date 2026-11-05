@@ -66,9 +66,12 @@ def render_project_work(pid, user, owner, members, stages, defense, assessments,
         values = submitted if submitted is not None and submitted.get('number') == str(number) else None
         result = render_stages(stages, user, token, values, has_teacher, pid,
                                only_number=number, compact=True, return_to=location(number, f'stage-{number}-result').replace('&amp;', '&'))
-        panels.append(f'''<section class="pw-stage pw-stage-{kind}" id="stage-{number}" data-work-panel="{number}">
+        default_view = 'result' if s['state'] in ('done', 'review') or kind == 'returned' else 'tasks'
+        panels.append(f'''<section class="pw-stage pw-stage-{kind}" id="stage-{number}" data-work-panel="{number}" data-default-view="{default_view}" data-review-role="{user['role']}">
             <header class="pw-stage-heading"><span class="eyebrow">ЭТАП {number} / 5{' · ТЕКУЩИЙ' if current and number == current['number'] else ''}</span>
             <h2>{escape(s['title'])}</h2><p>{STAGE_DESCRIPTIONS[number]}</p></header>
+            <div class="pw-next work-stage-next pw-{kind}" data-next-step="{key}"><div><strong>{escape(title)}</strong>
+            <p>{escape(text)}</p></div>{f'<a class="btn secondary" href="{target}">{escape(action)} {icon("arrow")}</a>' if target else ''}</div>
             <div class="pw-mobile-views" role="group" aria-label="Задачи и результат этапа {number}">
             <button type="button" data-work-view-button="tasks" aria-pressed="true" aria-controls="stage-{number}-tasks">Задачи</button>
             <button type="button" data-work-view-button="result" aria-pressed="false" aria-controls="stage-{number}-result">Результат этапа</button></div>
@@ -76,15 +79,13 @@ def render_project_work(pid, user, owner, members, stages, defense, assessments,
             {f'<a class="board-add action-link" href="#task-create">{icon("plus")} Задача</a>' if owner else ''}</div>
             <div data-work-tools-slot></div>{task_list(rows, number)}<div data-unassigned-slot></div></section>
             <aside class="pw-result" id="stage-{number}-result" tabindex="-1" aria-label="Результат этапа {number}">
-            {f'<p class="error" role="alert" tabindex="-1" data-work-error>{escape(error)}</p>{unsaved}' if error and (number == current_number) else ''}{result}
-            <details class="pw-next pw-{kind}" data-next-step="{key}"><summary>{escape(title)}</summary>
-            <p>{escape(text)}</p>{f'<a class="action-link" href="{target}">{escape(action)} {icon("arrow")}</a>' if target else ''}</details></aside></div></section>''')
+            {f'<p class="error" role="alert" tabindex="-1" data-work-error>{escape(error)}</p>{unsaved}' if error and (number == current_number) else ''}{result}</aside></div></section>''')
     general = [t for t in tasks if t['stage_number'] is None]
     unassigned = f'''<details class="pw-unassigned" id="tasks-without-stage"><summary>Без этапа · {len(general)}</summary>
         <p>Общие дела проекта. Владелец может привязать их к этапу.</p>{task_list(general, None)}</details>'''
     return f'''<div class="pw-route-caption"><h2>Путь проекта</h2><span>Принято {completed} из 5 этапов</span></div>
         <nav class="pw-route" aria-label="Пять этапов проекта">{route}</nav>
-        <div class="pw-tools" data-work-tools {'hidden' if not all_tasks else ''}>{filters}<p class="board-filter-summary">Показано {len(tasks)} из {len(all_tasks)} задач во всём проекте. Выберите нужный этап выше.</p>{'<p role="status">Нет задач по выбранным условиям. Измените фильтры или нажмите «Сбросить».</p>' if not tasks and all_tasks else ''}</div>
+        <div class="pw-tools" data-work-tools {'hidden' if not all_tasks else ''}>{filters}<details class="work-task-scope"><summary>Задачи во всём проекте</summary><p class="board-filter-summary">Показано {len(tasks)} из {len(all_tasks)} задач во всём проекте. Выберите нужный этап выше.</p></details>{'<p role="status">Нет задач по выбранным условиям. Измените фильтры или нажмите «Сбросить».</p>' if not tasks and all_tasks else ''}</div>
         {create}<p id="board-status" role="status" aria-live="polite" hidden></p>{''.join(panels)}{unassigned}
         <div class="pw-finish"><div><h3>Видеозащита и итоговая оценка</h3><p>Отдельный шаг завершения. Доступен на любом этапе.</p></div>
         <a class="action-link" href="{base}/preparation">Защита и результат {icon('arrow')}</a></div>''', selected

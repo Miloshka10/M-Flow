@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!panel) return;
   document.querySelectorAll('[data-open-project]').forEach(link => {
     link.addEventListener('click', event => {
+      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
       panel.open = true;
       document.getElementById('project-name').focus({preventScroll: true});

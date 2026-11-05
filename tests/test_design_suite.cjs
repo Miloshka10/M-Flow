@@ -33,13 +33,15 @@ const empty = element(), results = element({open: false});
 const tools = element({hidden: true, querySelector: selector => selector.includes('search') ? search : filter});
 const heading = element({dataset:{homeTitle:'Привет, ученик.'},focus(){this.focused=true;}});
 const context = element();
+const createLink=element(),createPanel=element({open:false,scrollIntoView(){}}),createName=element({focus(){this.focused=true;}});
 const main = element({dataset: {suiteView: 'home'},
   querySelector: selector => ({'#dashboard-title':heading,'.ds-project-tools': tools, '.home-details': results, '[data-project-empty]': empty})[selector],
   querySelectorAll: () => cards});
 const location = {hash: '#my-projects'};
 const document = {title:'Привет, ученик. — M-Flow',body: {hasAttribute: () => true, dataset: {}},
   querySelector: selector => selector === '[data-suite-dashboard]' ? main : selector==='[data-shell-location]'?context:null,
-  querySelectorAll: () => []};
+  getElementById:id=>id==='project-create'?createPanel:createName,
+  querySelectorAll: selector => selector==='[data-open-project]'?[createLink]:[]};
 const window = run(document, location);
 assert.equal(main.dataset.suiteView, 'projects');
 assert.equal(heading.textContent,'Мои проекты');
@@ -60,6 +62,17 @@ location.hash = ''; window.handlers.popstate();
 assert.equal(main.dataset.suiteView, 'home');
 assert.equal(heading.textContent,'Привет, ученик.');
 assert.equal(document.title,'Привет, ученик. — M-Flow');
+heading.focused=false;
+createLink.handlers.click({});
+assert.equal(location.hash,'#project-create');assert.equal(createPanel.open,true);
+assert.equal(main.dataset.suiteView,'projects');assert.equal(heading.textContent,'Мои проекты');
+assert.equal(context.textContent,'Мои проекты');assert.equal(createName.focused,true);
+window.handlers.hashchange();
+assert.equal(heading.focused,false,'The hash event must keep focus in the visible create field');
+location.hash='';window.handlers.popstate();
+assert.equal(main.dataset.suiteView,'home');
+createLink.handlers.click({ctrlKey:true});
+assert.equal(location.hash,'','Modified links keep native navigation');
 main.querySelectorAll=()=>[];
 run(document);
 assert.equal(tools.hidden,true,'An empty project list must not show useless filters');

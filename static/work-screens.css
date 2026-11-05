@@ -1,0 +1,140 @@
+/* Interface stage 4. Existing workflow, shell and shared tokens remain authoritative. */
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens] {padding-top:0}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens] .work-section-copy {
+  color:var(--mf-muted);font-size:14px;line-height:1.75;margin:8px 0 20px;
+}
+html body.mf-v2[data-interface-v3][data-scenery] .work-home .ui-page-heading {margin:28px 0 24px}
+html body.mf-v2[data-interface-v3][data-scenery] .work-home .focus-switch {align-items:center;margin-bottom:20px}
+html body.mf-v2[data-interface-v3][data-scenery] .work-home .focus-switch select {flex:0 1 460px}
+html body.mf-v2[data-interface-v3][data-scenery] .work-home .ds-feature {margin-top:0}
+html body.mf-v2[data-interface-v3][data-scenery] .work-home .work-next-copy {margin:14px 0 20px;font-size:15px;line-height:1.75;color:var(--mf-muted);max-width:650px}
+html body.mf-v2[data-interface-v3][data-scenery] .work-home .work-next-actions {margin-top:24px;gap:12px 24px}
+html body.mf-v2[data-interface-v3][data-scenery] .work-home .work-next-actions>.btn {margin:0}
+html body.mf-v2[data-interface-v3][data-scenery] .work-home .v3-stage-number>.ui-icon {width:30px;height:30px;margin:0}
+html body.mf-v2[data-interface-v3][data-scenery] .work-home .ds-feedback {margin-top:20px}
+html body.mf-v2[data-interface-v3][data-scenery] .work-home .ui-agenda h2 {margin:0 0 8px}
+html body.mf-v2[data-interface-v3][data-scenery] .work-home .welcome-actions {gap:12px;flex-wrap:wrap}
+
+/* The teacher starts from actual submissions; task deadlines stay secondary. */
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .teacher-hero {margin:16px 0 24px;align-items:center}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .teacher-hero h1 {margin:0 0 12px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .teacher-hero .work-section-copy {display:block;margin:0;max-width:650px}
+html body.mf-v2[data-interface-v3][data-scenery] .work-teacher-empty :is(.t-stats,.teacher-signal-strip,.ui-teacher-filters,#task-attention) {display:none}
+html body.mf-v2[data-interface-v3][data-scenery] .work-teacher-empty .teacher-dashboard-grid {grid-template-columns:minmax(0,1fr)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .t-stats {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 24px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .t-stat {display:grid;align-content:start;gap:4px;border:1px solid var(--mf-line);border-radius:12px;background:var(--mf-card);padding:16px 20px;text-decoration:none;color:var(--mf-text);min-width:0}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .t-stat:first-child {background:var(--mf-accent-soft);border-color:transparent}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .t-stat strong {font-size:28px;font-weight:600;line-height:1.2}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .t-stat span {font-size:13px;line-height:1.6}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] a.t-stat:hover {border-color:var(--mf-accent)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .teacher-dashboard-grid {grid-template-columns:minmax(0,1.7fr) minmax(260px,.8fr);gap:24px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .teacher-panel {padding:24px;min-width:0}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .teacher-panel>h2 {margin:8px 0 16px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .review-panel>h3 {margin:20px 0 12px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .teacher-queue-item {grid-template-columns:36px minmax(0,1fr) minmax(150px,180px);gap:16px;padding:24px 0;align-items:start}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .v3-submission-mark {width:36px;height:42px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .teacher-queue-item h4 {font-size:18px;margin:8px 0}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .teacher-queue-item p {font-size:13px;line-height:1.7}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .v3-submission-side {gap:12px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .v3-submission-side>.btn {min-width:150px;justify-content:center;gap:8px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .v3-submission-side .work-review-history {padding:8px 0;border:0;font-size:12px;color:var(--mf-accent);min-height:44px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .work-previous-decision {color:var(--mf-warning);font-size:12px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .ds-queue-material>summary {min-height:44px;padding:10px 0;font-size:13px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] #task-attention .teacher-attention-item {padding:16px 0}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] #task-attention .teacher-attention-item strong {font-size:14px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .work-empty {padding:24px;background:var(--mf-bg);border-radius:12px;margin:20px 0}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .work-empty h3 {margin:0 0 12px;font-size:20px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .work-empty p {margin:0;font-size:14px;line-height:1.8;color:var(--mf-muted)}
+
+/* Overview: a next action, supervisor and accepted stages; tasks have their own summary. */
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .journey-heading {margin:20px 0 12px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-project-returns {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .journey-heading h1 {max-width:1000px;margin:12px 0}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .journey-members>summary {min-height:44px;padding:10px 0}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .project-navigation {margin-top:12px;margin-bottom:24px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .journey-action h2 {font-size:28px;line-height:1.3;margin:12px 0}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .journey-action p {font-size:15px;line-height:1.8;margin:0 0 20px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .ui-project-progress {background:var(--mf-card);color:var(--mf-text);border:1px solid var(--mf-line)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .ui-progress-number {color:var(--mf-accent)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .ui-project-progress :is(.eyebrow,p,.ui-progress-number small) {color:var(--mf-muted)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .ui-task-summary {border:0;margin-top:0;padding-top:12px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .ui-project-progress .project-progress {background:var(--mf-panel)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .ui-project-progress .project-progress>div {background:var(--mf-action)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] [data-feedback-state="returned"] {background:var(--mf-warning-bg);border-left-color:var(--mf-warning)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-task-progress {margin-top:20px;border-top:1px solid var(--mf-line);padding-top:8px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-task-progress>summary {min-height:44px;cursor:pointer;padding:10px 0;font-size:13px;color:var(--mf-muted)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .project-supervisor h2 {font-size:20px;margin:0 0 12px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .project-supervisor p {font-size:14px;line-height:1.8}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .journey-route {margin-top:24px}
+
+/* Next action remains visible outside the mobile Tasks / Result switch. */
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-stage-heading {margin:24px 0 20px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-stage-next {display:flex;align-items:center;justify-content:space-between;gap:20px;margin:0 0 24px;padding:20px 24px;background:var(--mf-card);border:1px solid var(--mf-line);border-radius:12px;color:var(--mf-text)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-stage-next strong {font-size:16px;line-height:1.5;display:block}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-stage-next p {margin:8px 0 0;font-size:14px;line-height:1.75;color:var(--mf-muted);max-width:700px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-stage-next>.btn {flex-shrink:0;max-width:240px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-stage-returned>.work-stage-next {border-left:3px solid var(--mf-warning)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-stage-review>.work-stage-next {border-left:3px solid var(--mf-accent)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-stage[data-review-role="teacher"] .pw-grid {grid-template-columns:minmax(280px,.85fr) minmax(0,1.4fr)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] :is(.pw-tasks,.pw-result) {padding:24px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-task-count {font-size:13px;line-height:1.7;margin:16px 0}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-task-scope>summary {font-size:12px;color:var(--mf-muted);min-height:44px;padding:10px 0;cursor:pointer}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-task-scope p {margin:0 0 12px;font-size:13px;line-height:1.7}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-result-meta {display:block;line-height:1.75;font-size:12px;margin:16px 0 20px;color:var(--mf-muted)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-result .stage-text {line-height:1.85;font-size:15px;max-height:55vh;overscroll-behavior:contain}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-previous-feedback {border-top:1px solid var(--mf-line);border-bottom:1px solid var(--mf-line);padding:8px 0;margin:20px 0}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-previous-feedback>summary {font-size:13px;min-height:44px;padding:10px 0;cursor:pointer;color:var(--mf-muted)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-decision-heading {font-size:18px;margin:24px 0 16px;padding-top:20px;border-top:1px solid var(--mf-line)}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-result form label {font-size:14px;line-height:1.6}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-result form textarea {min-height:120px;padding:12px;font-size:15px;line-height:1.75}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-field-hint {font-size:13px;line-height:1.7;color:var(--mf-muted);margin:8px 0 16px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-result .stage-actions {grid-template-columns:minmax(0,1fr);gap:12px;margin-top:20px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-result-drawer .stage-actions {justify-content:flex-start;gap:12px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-result-drawer .stage-actions button {margin:0;min-height:48px}
+html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] [data-project-feedback] {margin:0 0 20px}
+
+@media(max-width:1200px) {
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .teacher-dashboard-grid,
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-stage[data-review-role="teacher"] .pw-grid {grid-template-columns:minmax(0,1fr)}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-stage[data-review-role="teacher"] .pw-result {order:-1}
+}
+@media(max-width:800px) {
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .teacher-hero {align-items:flex-start}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-stage-next {display:grid;gap:16px}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-stage-next>.btn {justify-self:start;max-width:100%}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-mobile-views button {min-height:48px;font-size:14px}
+}
+@media(max-width:600px) {
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .ui-page-heading {margin:20px 0 24px}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .focus-switch {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .focus-switch label {grid-column:1/-1}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .focus-switch select {width:100%;min-width:0}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .ds-feature-main {padding:24px 20px}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .work-next-copy {font-size:14px}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .work-next-actions {display:grid;gap:8px}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .work-next-actions>.btn {width:100%}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .v3-mini-route {grid-template-columns:minmax(0,1fr);gap:8px}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .v3-mini-route li {display:flex;align-items:center;gap:12px;min-height:44px}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .v3-mini-route a {position:static;inset:auto;font-size:13px;flex:1;min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .v3-mini-route a>* {position:static;width:auto;height:auto;clip-path:none;overflow:visible}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .v3-mini-route strong {font-size:13px;max-width:55%}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .v3-mini-route small {font-size:12px;text-align:right;margin:0}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .v3-route-dot {width:28px;height:28px;flex:0 0 28px;border-radius:50%;font-size:11px}
+  html body.mf-v2[data-interface-v3][data-scenery] .work-home .v3-route-dot .ui-icon {display:inline-flex;position:static;width:15px;height:15px}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .t-stats {grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .t-stat {padding:16px}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .teacher-queue-item {grid-template-columns:28px minmax(0,1fr);gap:12px}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .v3-submission-mark {width:28px;height:36px}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .v3-submission-side {grid-column:2;justify-items:start;text-align:left;gap:8px}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .v3-submission-side>.btn {width:100%;min-width:0}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="teacher"] .teacher-panel {padding:20px}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .work-stage-next,
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] :is(.pw-tasks,.pw-result) {padding:20px}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-route-step {grid-template-columns:26px minmax(0,1fr) minmax(0,95px);min-height:56px;padding:10px;gap:10px}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-route-step small {display:block;grid-column:3;grid-row:1;text-align:right;font-size:11px;line-height:1.5}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .pw-result form textarea {font-size:16px}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] #task-board :is(input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),select,textarea) {font-size:16px}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] :is(.pw-result,.pw-result-drawer) .stage-actions {display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] :is(.pw-result,.pw-result-drawer) .stage-actions button {width:100%;margin:0}
+  html body.mf-v2[data-interface-v3][data-scenery] [data-work-screens="project"] .journey-action h2 {font-size:24px}
+}

@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
   panels.forEach(panel => {
-    setView(panel, 'tasks');
+    setView(panel, panel.dataset.defaultView === 'result' ? 'result' : 'tasks');
     panel.querySelectorAll('[data-work-view-button]').forEach(button => {
       button.addEventListener('click', () => setView(panel, button.dataset.workViewButton));
     });
@@ -119,7 +119,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const top = document.createElement('div'); top.className = 'drawer-top'; top.append(close);
     dialog.append(top, content); details.after(dialog); details.open = false;
     trigger.setAttribute('aria-haspopup', 'dialog'); trigger.setAttribute('aria-controls', dialog.id); trigger.setAttribute('aria-expanded', 'false');
-    function open() {dialog.showModal(); trigger.setAttribute('aria-expanded', 'true'); document.documentElement.classList.add('board-dialog-open'); close.focus();}
+    function open() {
+      dialog.showModal(); trigger.setAttribute('aria-expanded', 'true');
+      // A save redirects back to the editor. Its server feedback must be inside
+      // the modal, whose background is inert, rather than hidden behind it.
+      content.prepend(...document.querySelectorAll('[data-project-feedback]'));
+      document.documentElement.classList.add('board-dialog-open'); close.focus();
+    }
     trigger.addEventListener('click', event => {event.preventDefault(); open();});
     close.addEventListener('click', () => dialog.close());
     dialog.addEventListener('click', event => {

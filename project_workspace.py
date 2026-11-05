@@ -91,9 +91,9 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
     if current and stage_needs_revision(current):
         reviewer = escape(current.get('reviewer_name') or 'Учитель проекта')
         updated = f' · Последнее обновление этапа: {format_timestamp(current["updated_at"])}' if current['updated_at'] else ''
-        feedback = f'''<aside class="journey-feedback" aria-label="Замечание учителя"><strong>Что исправить · этап {current['number']}</strong>
+        feedback = f'''<aside class="journey-feedback" data-feedback-state="returned" aria-label="Замечание учителя"><strong>Что исправить · этап {current['number']}</strong>
             <small>{reviewer}{updated}</small><p tabindex="0" aria-label="Замечание учителя; длинный текст можно прокрутить">{escape(current['teacher_comment'] or 'Комментарий не указан. Уточните, что нужно исправить, у учителя проекта.')}</p>
-            <a href="{base}/stages#stage-{current['number']}-result">{'Перейти к доработке' if user['role'] == 'student' else 'Открыть результат и замечание'} {icon('arrow')}</a></aside>'''
+            </aside>'''
     else:
         accepted = next((stage for stage in reversed(stages) if stage['state'] == 'done'), None)
         if accepted:
@@ -138,18 +138,18 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
         <div class="ui-project-overview-grid"><section class="ui-project-next" aria-label="Следующий шаг проекта">
             <div class="journey-action" data-next-step="{step['key']}"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span>
             <p>{current_name} · {current_label}</p><h2>{step['title']}</h2><p>{step['text']}</p>{action}</div>
-            {feedback}<p><a class="action-link" href="{base}/history">История отправок и решений {icon('arrow')}</a></p>
+            {feedback}
             <p class="ui-project-deadline"><span data-task-deadline>{task_deadline(tasks, today)}</span><br>Срок относится к задаче, не к этапу</p></section>
-        <aside class="ui-project-aside"><section class="ui-project-progress" aria-label="Прогресс проекта"><span class="eyebrow">ПУТЬ К ЗАЩИТЕ</span>
-            <div class="ui-progress-number">{done:02d} <small>/ 05</small></div><p>Принято {done} из 5 этапов · {done * 20}%</p>
+        <aside class="ui-project-aside"><section class="ui-project-progress" aria-label="Прогресс проекта"><span class="eyebrow">ПРИНЯТЫЕ ЭТАПЫ</span>
+            <div class="ui-progress-number">{done:02d} <small>/ 05</small></div><p>Принято {done} из 5 этапов</p>
             <div class="project-progress" aria-hidden="true"><div style="width:{done * 20}%"></div></div>
-            <div class="ui-task-summary"><span>Прогресс задач</span><strong data-project-progress>{progress}%</strong></div>
+            <details class="work-task-progress"><summary>Задачи команды</summary><div class="ui-task-summary"><span>Прогресс задач</span><strong data-project-progress>{progress}%</strong></div>
             <p data-project-progress-text>{completed_tasks} из {len(tasks)} задач выполнено</p>
-            <div class="project-progress" aria-hidden="true"><div data-project-progress-fill style="width:{progress}%"></div></div></section>
+            <div class="project-progress" aria-hidden="true"><div data-project-progress-fill style="width:{progress}%"></div></div></details></section>
         <section class="project-supervisor" aria-labelledby="supervisor-title"><h2 id="supervisor-title">Руководитель проекта</h2>
             <p>{escape(', '.join(m['username'] for m in members if m['role'] == 'teacher')) if has_teacher else 'Учитель пока не подключён. Черновики можно готовить уже сейчас.'}</p>
             <a class="action-link" href="/supervision?project={project_id}">Подключение и согласования {icon('arrow')}</a></section></aside></div>
-        <details class="journey-route" open><summary data-ui-icon="stages">Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
+        <details class="journey-route"><summary data-ui-icon="stages">Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
             <p class="journey-explanation">Задачи помогают выполнять работу. Этап принимается только после решения учителя; защита и оценки проверяются отдельно.</p><ol>{route}</ol></details>
         <section class="project-finish" aria-labelledby="finish-title"><h2 id="finish-title">Завершение проекта</h2>
             <p>Подготовьте выступление, отправьте видеозащиту и посмотрите итоговую оценку. Открыть эти разделы можно в любое время.</p>

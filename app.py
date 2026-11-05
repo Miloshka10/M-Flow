@@ -178,6 +178,7 @@ def render_page(html, title=None):
     auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261106-access">'
                    '<script src="/static/auth.js?v=20261106-access" defer></script>'
                    if 'class="auth-page ' in html else '')
+    work_assets = '<link rel="stylesheet" href="/static/work-screens.css?v=20261106-work">' if 'data-work-screens=' in html else ''
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<title>{escape(title) if title is not None else document_title(html)}</title>'
@@ -193,7 +194,7 @@ def render_page(html, title=None):
         '<link rel="stylesheet" href="/static/graphics.css?v=20261015">'
         '<link rel="stylesheet" href="/static/notifications.css?v=20261013">'
         '<link rel="stylesheet" href="/static/deadlines.css?v=20261013-filters">'
-        '<script src="/static/dashboard.js?v=20261006" defer></script>'
+        '<script src="/static/dashboard.js?v=20261106-work" defer></script>'
         '<link rel="stylesheet" href="/static/navigation.css?v=20261017-fixes">'
         '<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
         '<link rel="stylesheet" href="/static/icon-symbols.css?v=20261026-icons">'
@@ -201,10 +202,10 @@ def render_page(html, title=None):
         '<script src="/static/interface.js?v=20261027-work" defer></script>'
         '<script src="/static/form-guard.js?v=20261029" defer></script>'
         '<link rel="stylesheet" href="/static/design-suite.css?v=20261101-mail-ui">'
-        '<script src="/static/design-suite.js?v=20261104-navigation" defer></script>'
+        '<script src="/static/design-suite.js?v=20261106-work" defer></script>'
             + '<link rel="stylesheet" href="/static/scenery.css?v=20261104-calm-background">'
             '<link rel="stylesheet" href="/static/components.css?v=20261104-system">'
-            '<link rel="stylesheet" href="/static/interface-v3.css?v=20261104-components">' + auth_assets +
+            '<link rel="stylesheet" href="/static/interface-v3.css?v=20261104-components">' + work_assets + auth_assets +
             f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-interface-v3 data-scenery="{scenery_context}" data-scenery-layout="{scenery_layout}" data-design-page="{escape(endpoint, quote=True)}">'
             + f'<a class="skip-link" href="#{skip_target}">К содержимому</a>' + html
             + scenery(scenery_context, layout=scenery_layout) + '</body></html>')
@@ -2099,11 +2100,7 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
 
         category, text = message
 
-        messages += f"""
-        <div class="{category}">
-            {escape(text)}
-        </div>
-        """
+        messages += f'<div data-project-feedback>{notice(text, error=category == "error")}</div>'
 
 
     workspace_html = render_workspace(project_id, project_name, current_user, owner, members,
@@ -2117,11 +2114,12 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
         PAGE_STYLE
         + f"""
         <link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">
-        <link rel="stylesheet" href="/static/task-board.css?v=20261031"><link rel="stylesheet" href="/static/project-work.css?v=20261031-tasks"><script src="/static/project-work.js?v=20261104-validation" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
+        <link rel="stylesheet" href="/static/task-board.css?v=20261031"><link rel="stylesheet" href="/static/project-work.css?v=20261031-tasks"><script src="/static/project-work.js?v=20261106-work" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
         <div class="container">
             {render_header(current_user)}
-            <main class="project-workspace" data-project-views data-work-default="{int(work_mode)}">
-                <a href="{project_list_url(current_user['role'], project_id)}" class="back">{icon('arrow-left')} Все проекты</a>
+            <main class="project-workspace" data-work-screens="project" data-project-views data-work-default="{int(work_mode)}">
+                <div class="work-project-returns"><a href="{project_list_url(current_user['role'], project_id)}" class="back">{icon('arrow-left')} Все проекты</a>
+                {'<a class="action-link" href="/teacher#review-queue">К очереди проверки</a>' if current_user['role'] == 'teacher' else ''}</div>
                 {messages}
                 {workspace_html}
 
@@ -3664,7 +3662,7 @@ def teacher_cabinet():
     ]
     queue = queue_page(visible_projects, kind, sort, page, query_folded)
     queue_html = render_queue(queue, dict(q=query, focus=focus, kind=kind,
-                                         project=project_id, sort=sort))
+                                         project=project_id, sort=sort), has_projects=bool(overview))
     kind_options = ''.join(f'<option value="{v}" {"selected" if kind == v else ""}>{label}</option>'
                            for v, label in WORK_KINDS.items())
     sort_options = ''.join(f'<option value="{v}" {"selected" if sort == v else ""}>{label}</option>'
@@ -3731,21 +3729,21 @@ def teacher_cabinet():
         + f"""
         <div class="container workspace teacher-workspace">
             {render_header(user)}
-            <main>
+            <main data-work-screens="teacher" class="{'work-teacher-empty' if not overview else ''}">
                 <div class="workspace-intro"><span>РАБОЧЕЕ ПРОСТРАНСТВО УЧИТЕЛЯ</span><span>M-Flow / проверка</span></div>
                 <section class="teacher-hero workspace-hero">
                     <div class="hero-copy"><span class="hero-kicker">РАБОЧЕЕ ПРОСТРАНСТВО УЧИТЕЛЯ</span>
                         <h1>Кабинет учителя</h1>
-                        <p class="ds-teacher-count">На проверке: {review_count}</p>
+                        <p class="work-section-copy">{'Результаты для проверки и проекты ваших учеников.' if overview else 'Подключите первый проект, чтобы сопровождать работу учеников.'}</p>
                     </div>
-                    <a class="btn" href="/supervision">{icon('link')} Подключить проект</a>
+                    <a class="btn {'secondary' if overview else ''}" href="/supervision">{icon('link')} Подключить проект</a>
                 </section>
                 {messages}
-                <div class="t-stats">
-                    <div class="t-stat"><strong data-review-count="{review_count}">{review_count:02d}</strong><span>На проверке</span></div>
-                    <div class="t-stat"><strong>{len(overview)}</strong><span>Проектов</span></div>
+                <div class="t-stats" role="group" aria-label="Сводка по всем вашим проектам">
+                    <a class="t-stat" href="/teacher?focus=review#review-queue"><strong data-review-count="{review_count}">{review_count:02d}</strong><span>На проверке</span></a>
+                    <a class="t-stat" href="/teacher#teacher-projects"><strong>{len(overview)}</strong><span>Проектов</span></a>
                     <div class="t-stat"><strong>{len(student_ids)}</strong><span>Учеников</span></div>
-                    <div class="t-stat {overdue_class}"><strong>{overdue_tasks}</strong><span>Просрочено</span></div>
+                    <a class="t-stat {overdue_class}" href="/teacher?focus=overdue#task-attention"><strong>{overdue_tasks}</strong><span>Задач просрочено</span></a>
                 </div>
                 <details class="teacher-signal-strip"><summary>Сводка задач</summary>
                     <span>Выполнено задач: <b>{done_tasks} из {total_tasks}</b> · {percent(done_tasks, total_tasks)}%</span>

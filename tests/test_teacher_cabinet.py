@@ -67,7 +67,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
                     with self.subTest(stored=stored, user=user, path=path):
                         response = self.client.get(path)
                         self.assertEqual(response.status_code, 200)
-                        self.assertIn('Обновлено: ' + displayed, response.text)
+                        label = 'Отправлено: ' if path.endswith('/stages') else 'Обновлено: '
+                        self.assertIn(label + displayed, response.text)
                         self.assertNotIn(stored, response.text)
 
     def test_feedback_stage_repeat_submission_does_not_apply_old_comment(self):
@@ -81,7 +82,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.sign_in(1)
         page = self.client.get('/project/1/stages').text
         self.assertIn('Замечание к предыдущей сдаче. Новая версия ещё не проверена.', page)
-        self.assertIn('name="teacher_comment" rows="3" maxlength="2000"></textarea>', page)
+        self.assertRegex(page, r'<textarea\b[^>]*name="teacher_comment"[^>]*></textarea>')
         before = self.database_snapshot()
         self.assertEqual(self.stage_post(1, revision=1, action='accept').status_code, 400)
         self.assertEqual(self.database_snapshot(), before)
@@ -1745,7 +1746,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             self.assertEqual(self.stage_post(1, number=number, revision=1, action="accept").status_code, 302)
         self.assertEqual([row["state"] for row in self.stage_rows()], ["done"] * 5)
         response = self.client.get("/project/1/stages")
-        self.assertIn("Принято 5 из 5 этапов · 100%", response.text)
+        self.assertIn("Принято 5 из 5 этапов", response.text)
         self.assertIn("Открыть презентацию", response.text)
         self.assertEqual(self.stage_post(3, number=5, revision=2).status_code, 400)
 

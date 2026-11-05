@@ -28,11 +28,16 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     view(location.hash === '#my-projects' || location.hash === '#student-results');
-    window.addEventListener('hashchange', () => view(true));
+    window.addEventListener('hashchange', () => view(location.hash !== '#project-create'));
     window.addEventListener('popstate', () => view(true));
-    document.querySelectorAll('[data-open-project]').forEach(link => link.addEventListener('click', () => {
-      main.dataset.suiteView = 'projects';
-      document.getElementById('project-create').scrollIntoView({block: 'center'});
+    document.querySelectorAll('[data-open-project]').forEach(link => link.addEventListener('click', event => {
+      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      location.hash = '#project-create';
+      view();
+      const panel = document.getElementById('project-create');
+      panel.open = true;
+      panel.scrollIntoView({block: 'center'});
+      document.getElementById('project-name').focus({preventScroll: true});
     }));
     const tools = main.querySelector('.ds-project-tools');
     const search = tools.querySelector('[data-project-search]');

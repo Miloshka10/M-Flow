@@ -172,20 +172,24 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
         if locked and compact:
             html += f'<p>{explanation}</p>'
         if stage["result"]:
-            html += ('' if compact else f'<h3>{"Описание проекта" if number == 5 else "Результат этапа"}</h3>') + f'<p class="stage-text">{escape(stage["result"])}</p>'
+            html += ('' if compact else f'<h3>{"Описание проекта" if number == 5 else "Результат этапа"}</h3>') + f'<p class="stage-text" tabindex="0" aria-label="Текст результата этапа {number}">{escape(stage["result"])}</p>'
         if safe_web_url(stage["presentation_url"]):
             html += f'<p><a class="action-link" href="{escape(stage["presentation_url"], quote=True)}" target="_blank" rel="noopener noreferrer">Открыть презентацию {icon('external')}</a></p>'
         elif stage['presentation_url']:
             html += '<p>Формат сохранённой ссылки на презентацию не поддерживается.</p>'
         if stage.get("author_name"):
-            html += f'<small>Автор результата: {escape(stage["author_name"])} · Обновлено: {format_timestamp(stage["updated_at"])}</small>'
-        if stage.get("reviewer_name"):
-            html += f'<p>{"Учитель предыдущей сдачи" if stage["state"] == "review" else "Учитель"}: {escape(stage["reviewer_name"])}</p>'
+            html += f'<small class="work-result-meta">Автор результата: {escape(stage["author_name"])} · {"Отправлено" if stage["state"] == "review" else "Обновлено"}: {format_timestamp(stage["updated_at"])}</small>'
+        reviewer = f'<p>{"Учитель предыдущей сдачи" if stage["state"] == "review" else "Учитель"}: {escape(stage["reviewer_name"])}</p>' if stage.get('reviewer_name') else ''
+        comment_html = ''
         if stage["teacher_comment"]:
             heading = 'Замечание к предыдущей сдаче. Новая версия ещё не проверена.' if stage['state'] == 'review' else 'Комментарий учителя:'
-            html += f'<p class="stage-text stage-comment">{heading} {escape(stage["teacher_comment"])}</p>'
+            comment_html = f'<p class="stage-text stage-comment" tabindex="0">{heading} {escape(stage["teacher_comment"])}</p>'
         elif stage['state'] == 'done' or stage_needs_revision(stage):
-            html += '<p>Комментарий не указан. При необходимости уточните решение у учителя проекта.</p>'
+            comment_html = '<p>Комментарий не указан. При необходимости уточните решение у учителя проекта.</p>'
+        if compact and stage['state'] == 'review' and (reviewer or comment_html):
+            html += f'<details class="work-previous-feedback"><summary>Замечание к предыдущей сдаче</summary>{reviewer}{comment_html}</details>'
+        else:
+            html += reviewer + comment_html
         if stage['state'] == 'done':
             html += f'<p>Этап {number} принят учителем. {"Все пять этапов приняты." if number == 5 else "Можно продолжить маршрут проекта."} <a href="/project/{stage["project_id"]}">Посмотреть следующий шаг {icon('arrow')}</a></p>'
         if number == current_number:
@@ -209,7 +213,7 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
                     html += '</div></details>'
             elif user["role"] == "teacher" and stage["state"] == "review":
                 comment = submitted.get('teacher_comment', '') if submitted is not None else ''
-                html += prefix + f'<label>Комментарий учителя<textarea name="teacher_comment" rows="3" maxlength="2000">{escape(comment)}</textarea></label><div class="stage-actions"><button name="action" value="accept">{"Согласовать тему" if number == 1 else "Принять этап"}</button><button name="action" value="return" data-ui-icon="return">Вернуть на доработку</button></div></form>'
+                html += '<h4 class="work-decision-heading">Решение по этапу</h4>' + prefix + f'<label>Комментарий учителя<textarea name="teacher_comment" rows="3" maxlength="2000" aria-describedby="review-comment-hint-{number}">{escape(comment)}</textarea></label><p class="work-field-hint" id="review-comment-hint-{number}">Для возврата на доработку комментарий обязателен.</p><div class="stage-actions"><button name="action" value="accept">{"Согласовать тему" if number == 1 else "Принять этап"}</button><button name="action" value="return" data-ui-icon="return">Вернуть на доработку</button></div></form>'
             else:
                 html += f'<p>{"Ожидается проверка учителя. Пока результат менять нельзя." if stage["state"] == "review" else "Ожидается результат от учеников проекта."}</p>'
         pid = stage.get('project_id', project_id)
