@@ -28,7 +28,7 @@ from auth_security import (initialize_auth, reserve_attempt, client_source, prox
                            new_session, revoke_session, replace_password, fingerprint, SESSION_SECONDS, begin_auth_write)
 from account_names import name_key, name_taken, login_user
 import account_mail
-from account_mail_view import public_form as mail_form, token_field, email_panel, access_aside, password_control as account_password_control, account_assets
+from account_mail_view import profile_panel, public_form as mail_form, token_field, email_panel, access_aside, account_assets
 from data_notice import render_data_notice
 from collections import defaultdict
 from deadlines import business_today, deadline_info, deadline_text, parse_deadline, urgent_tasks, TIMEZONE_LABEL, format_timestamp
@@ -175,8 +175,8 @@ def render_page(html, title=None):
     scenery_context = ('together' if endpoint in ('learning_groups_page', 'learning_group_page', 'teams_directory', 'project_team')
                        else 'review' if endpoint.startswith('teacher_') or
                        ('data-interface-shell="teacher"' in html) else 'workshop')
-    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261102-layout-review">'
-                   '<script src="/static/auth.js?v=20261102-layout-review" defer></script>'
+    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261106-access">'
+                   '<script src="/static/auth.js?v=20261106-access" defer></script>'
                    if 'class="auth-page ' in html else '')
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -202,9 +202,9 @@ def render_page(html, title=None):
         '<script src="/static/form-guard.js?v=20261029" defer></script>'
         '<link rel="stylesheet" href="/static/design-suite.css?v=20261101-mail-ui">'
         '<script src="/static/design-suite.js?v=20261104-navigation" defer></script>'
-            + auth_assets + '<link rel="stylesheet" href="/static/scenery.css?v=20261104-calm-background">'
+            + '<link rel="stylesheet" href="/static/scenery.css?v=20261104-calm-background">'
             '<link rel="stylesheet" href="/static/components.css?v=20261104-system">'
-            '<link rel="stylesheet" href="/static/interface-v3.css?v=20261104-components">' +
+            '<link rel="stylesheet" href="/static/interface-v3.css?v=20261104-components">' + auth_assets +
             f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-interface-v3 data-scenery="{scenery_context}" data-scenery-layout="{scenery_layout}" data-design-page="{escape(endpoint, quote=True)}">'
             + f'<a class="skip-link" href="#{skip_target}">К содержимому</a>' + html
             + scenery(scenery_context, layout=scenery_layout) + '</body></html>')
@@ -1108,12 +1108,13 @@ def render_auth_page(mode, error=None, role="student", field=None):
         if is_login and not repeat:
             label_html = f'<div class="auth-label-row">{label_html}<a href="/forgot-password">Забыли пароль?</a></div>'
         return f'''
-            {label_html}
+            <div class="access-field">{label_html}
             <div class="auth-password-control">
                 <input id="{input_id}" name="{name}" type="password" placeholder="{placeholder}" autocomplete="{autocomplete}"{limits}{field_attributes(name, hint)} required>
                 <button class="auth-password-toggle" type="button" aria-controls="{input_id}" aria-pressed="false" aria-label="Показать {"повтор пароля" if repeat else "пароль"}" hidden>Показать</button>
             </div>
             {field_error(name)}
+            {'<small class="auth-hint" id="auth-password-hint">От 8 до 256 символов</small>' if not is_login and not repeat else ''}</div>
         '''
 
     error_title = 'Не удалось войти' if is_login else 'Не удалось создать аккаунт'
@@ -1122,27 +1123,26 @@ def render_auth_page(mode, error=None, role="student", field=None):
 
     if is_login:
         form_fields = f"""
-            <label for="auth-username">Логин</label>
+            <div class="access-field"><label for="auth-username">Логин</label>
             <input id="auth-username" name="username" value="{username}" placeholder="Ваш логин" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30"{field_attributes('username')} required>
-            {field_error('username')}
+            {field_error('username')}</div>
             {password_control('password', 'current-password')}
         """
         submit_label = "Попробовать снова" if error else "Войти"
     else:
         form_fields = f"""
-            <label for="auth-username">Придумайте логин</label>
+            <div class="access-field"><label for="auth-username">Придумайте логин</label>
             <input id="auth-username" name="username" value="{username}" placeholder="Ваш логин" minlength="3" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false"{field_attributes('username', 'auth-username-hint')} required>
             <small class="auth-hint" id="auth-username-hint">От 3 до 30 символов</small>
-            {field_error('username')}
+            {field_error('username')}</div>
             {password_control('password', 'new-password')}
-            <small class="auth-hint" id="auth-password-hint">От 8 до 256 символов</small>
             {password_control('repeat_password', 'new-password', repeat=True)}
         """
         submit_label = "Создать аккаунт"
         if is_teacher:
-            form_fields += f'''<label for="auth-teacher-code">Код регистрации учителя</label>
+            form_fields = f'''<div class="access-field access-teacher-code"><label for="auth-teacher-code">Код регистрации учителя</label>
                 <input id="auth-teacher-code" type="password" name="teacher_code" autocomplete="off" maxlength="256"{field_attributes('teacher_code', 'auth-teacher-code-hint')} required>
-                <small class="auth-hint" id="auth-teacher-code-hint">Получите код лично у организатора M-Flow. Это не код подключения проекта.</small>{field_error('teacher_code')}'''
+                <small class="auth-hint" id="auth-teacher-code-hint">Получите код лично у организатора M-Flow. Это не код подключения проекта.</small>{field_error('teacher_code')}</div>''' + form_fields
     intro = ('Проекты учеников и обратная связь в одном месте.' if is_teacher
              else 'От идеи до защиты — всё для вашего проекта.')
     pending_label = 'Входим…' if is_login else 'Создаём аккаунт…'
@@ -1150,13 +1150,13 @@ def render_auth_page(mode, error=None, role="student", field=None):
     switch_text = 'Нет аккаунта?' if is_login else 'Уже есть аккаунт?'
     switch_mode = 'register' if is_login else 'login'
     switch_label = 'Зарегистрироваться' if is_login else 'Войти'
-    auth_form = f'''<form method="post">{csrf_input()}{form_fields}<button type="submit" class="auth-submit" data-ui-icon="arrow" data-pending-label="{pending_label}">{submit_label}</button></form><p class="auth-submit-status" role="status" aria-live="polite"></p>'''
+    auth_form = f'''<form method="post" class="access-form">{csrf_input()}{form_fields}<button type="submit" class="auth-submit" data-ui-icon="arrow" data-pending-label="{pending_label}">{submit_label}</button></form><p class="auth-submit-status" role="status" aria-live="polite"></p>'''
     if is_teacher and not is_login and not teacher_registration_code():
         auth_form = '<p class="auth-intro">Регистрация учителей пока закрыта. Для получения доступа обратитесь к организатору M-Flow. Если аккаунт уже есть, войдите в него.</p>'
 
     return render_page(
         f"""
-        <div class="auth-page auth-role-{role} auth-mode-{mode}">
+        <div class="auth-page access-page auth-role-{role} auth-mode-{mode}">
             <div class="auth-card">
                 <main class="auth-form-side">
                     <div class="auth-form-inner">
@@ -1330,8 +1330,8 @@ def mail_limit(identity, purpose):
     return account_mail.reserve_mail(get_db, SECRET_KEY, identity, source, session['auth_browser'], purpose)
 
 
-def mail_response(title, intro, fields, button, error='', notice='', token_form=False, ready=True, status=200):
-    html = mail_form(title, intro, fields, csrf_token(), button, error, notice, token_form, ready)
+def mail_response(title, intro, fields, button, error='', notice='', token_form=False, ready=True, status=200, state='form', login_url='/login'):
+    html = mail_form(title, intro, fields, csrf_token(), button, error, notice, token_form, ready, state, login_url)
     response = app.make_response((render_page(html, title=title + ' · M-Flow'), status))
     response.headers['Referrer-Policy'] = 'no-referrer'
     return response
@@ -1353,17 +1353,20 @@ def forgot_password():
             retry = mail_limit(address, 'reset-mail')
             if retry:
                 response = mail_response('Восстановить доступ', 'Используйте заранее подтверждённую почту.', '', '',
-                                         error=f'Слишком много запросов. Повторите через {retry} сек.', ready=False, status=429)
+                                         error=f'Слишком много запросов. Повторите через {retry} сек.', ready=False, status=429, state='throttled')
                 response.headers['Retry-After'] = str(retry)
                 return response
             account_mail.schedule_reset(get_db, SECRET_KEY, settings, app.config['MAIL_DISPATCHER'], username, address)
             notice = account_mail.GENERIC_REQUEST
         except ValueError as exc:
             error, status = str(exc), 400
-    fields = '''<label for="recover-name">Логин</label><input id="recover-name" name="username" autocomplete="username" maxlength="30" required>
-        <label for="recover-email">Подтверждённая почта</label><input id="recover-email" name="email" type="email" autocomplete="email" maxlength="254" required>'''
+    name_value = escape(request.form.get('username', '')[:30], quote=True) if error else ''
+    email_value = escape(request.form.get('email', '')[:254], quote=True) if error else ''
+    fields = f'''<div class="access-field"><label for="recover-name">Логин</label><input id="recover-name" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" value="{name_value}" required></div>
+        <div class="access-field"><label for="recover-email">Подтверждённая почта</label><input id="recover-email" name="email" type="email" autocomplete="email" maxlength="254" value="{email_value}" required></div>'''
     return mail_response('Восстановить доступ', 'Ссылка придёт только на почту, которую вы заранее подтвердили в профиле.', fields,
-                         'Отправить ссылку', error, notice, ready=bool(settings), status=status)
+                         'Отправить ссылку', error, notice, ready=bool(settings), status=status,
+                         state='unavailable' if not settings else 'sent' if notice else 'form')
 
 
 @app.route('/reset-password', methods=['GET', 'POST'])
@@ -1386,13 +1389,14 @@ def reset_password_page():
                             f'Аккаунт: {result["display_name"]}\nПароль вашего аккаунта M-Flow изменён. Все прежние сеансы завершены. Если это сделали не вы, снова запросите восстановление доступа.'))
                     except DatabaseUnavailable:
                         app.logger.warning('Password reset notice could not be queued; details omitted.')
-                return mail_response('Пароль изменён', 'Все прежние сеансы завершены. Войдите с новым паролем через обычную форму.', '', '', ready=False)
+                return mail_response('Пароль изменён', 'Все прежние сеансы завершены. Войдите с новым паролем через обычную форму.', '', '', ready=False, login_url='/teacher/login' if result['role'] == 'teacher' else '/login')
             except ValueError as exc:
                 error, status = str(exc), 400
-    fields = token_field(raw if account_mail.TOKEN.fullmatch(raw) else '') + '''<label for="reset-password">Новый пароль</label><input id="reset-password" name="password" type="password" minlength="8" maxlength="256" autocomplete="new-password" required>
-        <label for="reset-repeat">Повторите пароль</label><input id="reset-repeat" name="repeat_password" type="password" minlength="8" maxlength="256" autocomplete="new-password" required>'''
+    fields = token_field(raw if account_mail.TOKEN.fullmatch(raw) and error != account_mail.INVALID_TOKEN else '') + '''<fieldset data-token-actions class="access-token-actions"><div class="access-field"><label for="reset-password">Новый пароль</label><input id="reset-password" name="password" type="password" minlength="8" maxlength="256" autocomplete="new-password" required></div>
+        <div class="access-field"><label for="reset-repeat">Повторите пароль</label><input id="reset-repeat" name="repeat_password" type="password" minlength="8" maxlength="256" autocomplete="new-password" required></div></fieldset>'''
     response = mail_response('Новый пароль', 'Откройте ссылку из письма или вставьте код из него. Ссылка одноразовая и действует 20 минут.', fields,
-                            'Сменить пароль', error=error, token_form=True, status=status)
+                            'Сменить пароль', error=error, token_form=True, status=status,
+                            state='throttled' if status == 429 else 'invalid' if error == account_mail.INVALID_TOKEN else 'form', ready=status != 429)
     if status == 429:
         response.headers['Retry-After'] = str(retry)
     return response
@@ -1405,7 +1409,7 @@ def confirm_email_page():
         raw = request.form.get('token', '')
         retry = mail_limit(fingerprint(SECRET_KEY, 'verify-input', raw[:256]), 'verify-token')
         if retry:
-            response = mail_response('Подтверждение почты', '', '', '', error=f'Повторите через {retry} сек.', ready=False, status=429)
+            response = mail_response('Подтверждение почты', '', '', '', error=f'Повторите через {retry} сек.', ready=False, status=429, state='throttled')
             response.headers['Retry-After'] = str(retry)
             return response
         try:
@@ -1414,7 +1418,8 @@ def confirm_email_page():
         except ValueError as exc:
             error, status = str(exc), 400
     return mail_response('Подтверждение почты', 'Подтвердите действие, которое вы запросили в профиле. Простое открытие ссылки ничего не меняет.', token_field(),
-                         'Подтвердить', error, notice, token_form=True, ready=not bool(notice), status=status)
+                         'Подтвердить', error, notice, token_form=True, ready=not bool(notice), status=status,
+                         state=('confirmed' if complete else 'pending-confirmation') if notice else 'invalid' if error == account_mail.INVALID_TOKEN else 'form')
 
 
 @app.route('/profile/email', methods=['GET', 'POST'])
@@ -1469,51 +1474,11 @@ def profile():
         except ValueError as exc:
             error = str(exc)
 
-    role_name = "Учитель" if user["role"] == "teacher" else "Ученик"
-    projects_count = len(get_projects())
-    skills_link = '<p><a class="teacher-primary-link" href="/skills">Мой класс, направление и навыки</a></p>' if user["role"] == "student" else ''
-
-    message_html = f'<div class="ok" role="status">{escape(message)}</div>' if message else ""
-    error_html = f'<div class="error" role="alert" tabindex="-1" data-account-password-error>{escape(error)}</div>' if error else ""
-
-    return render_page(
-        PAGE_STYLE
-        + account_assets()
-        + f"""
-        <div class="container">
-            {render_header(user)}
-            <main class="profile-card account-profile">
-                <a class="back" href="/">{icon('arrow-left')} На главную</a>
-                <h1>Профиль</h1>
-                <dl class="account-profile-facts">
-                    <dt>Логин</dt>
-                    <dd>{escape(user["username"])}</dd>
-                    <dt>Роль</dt>
-                    <dd>{role_name}</dd>
-                    <dt>Проектов</dt>
-                    <dd>{projects_count}</dd>
-                </dl>
-                <nav class="account-profile-links" aria-label="Разделы аккаунта">{skills_link}
-                <p><a class="back" href="/profile/email">Почта и восстановление доступа {icon('arrow')}</a></p>
-                <p><a class="back" href="/settings">Настройки оформления и анимаций {icon('arrow')}</a></p>
-                </nav>
-                <div class="account-access-layout account-password-layout"><section class="account-security-panel" data-account-form>
-                <h2>Смена пароля</h2>
-                <p class="account-section-intro">Текущий сеанс сохранится. После смены пароля другие сеансы этого аккаунта завершатся.</p>
-                {message_html}
-                {error_html}
-                <form method="post">
-                    {csrf_input()}
-                    {account_password_control('old-password', 'old_password', 'Старый пароль', 'current-password')}
-                    {account_password_control('new-password', 'new_password', 'Новый пароль', 'new-password', ' minlength="8" maxlength="256"', 'От 8 до 256 символов')}
-                    {account_password_control('repeat-password', 'repeat_password', 'Повторите новый пароль', 'new-password', ' minlength="8" maxlength="256"')}
-                    <button type="submit" data-ui-icon="settings" data-pending-label="Сохраняем…">Сменить пароль</button>
-                </form><p class="auth-submit-status" role="status" aria-live="polite"></p>
-                </section></div>
-            </main>
-        </div>
-        """
-    )
+    with closing(get_db()) as conn:
+        email = account_mail.email_for(conn, user['id'])
+    body = profile_panel(user, len(get_projects()), email, csrf_token(), message, error,
+                         ready=bool(app.config['MAIL_SETTINGS']))
+    return render_page(PAGE_STYLE + account_assets() + f'<div class="container">{render_header(user)}{body}</div>')
 
 
 # =========================================================

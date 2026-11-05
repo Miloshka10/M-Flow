@@ -6,7 +6,8 @@
   page.querySelectorAll('.auth-password-toggle').forEach(button => {
     const input = document.getElementById(button.getAttribute('aria-controls'));
     if (!input) return;
-    const subject = input.name === 'repeat_password' ? 'повтор пароля' : 'пароль';
+    const subject = input.name === 'repeat_password' ? 'повтор пароля'
+      : input.name === 'old_password' ? 'текущий пароль' : input.name === 'new_password' ? 'новый пароль' : 'пароль';
     function conceal() {
       input.type = 'password';
       button.textContent = 'Показать';

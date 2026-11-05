@@ -96,7 +96,10 @@ class AccountRecoveryCases:
                         self.assertEqual(self.post('/forgot-password', data=dict(username=name, email=address)).status_code, 200)
                         recovery = wait_for_mail(base + 2)
                         token = re.search(r'#token=([A-Za-z0-9_-]{43})', recovery['textContent'])[1]
-                        self.assertEqual(self.post('/reset-password', data=dict(token=token, password='new-api-password', repeat_password='new-api-password')).status_code, 200)
+                        reset = self.post('/reset-password', data=dict(token=token, password='new-api-password', repeat_password='new-api-password'))
+                        self.assertEqual(reset.status_code, 200)
+                        self.assertIn(f'href="{login}"', reset.text)
+                        self.assertIn('Перейти ко входу', reset.text)
                         notice = wait_for_mail(base + 3)
                         self.assertEqual(notice['to'], [dict(email=address)])
                         self.assertIn(name, notice['textContent'])
