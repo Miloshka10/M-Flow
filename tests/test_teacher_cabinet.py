@@ -1610,7 +1610,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             mode = 'register' if path.endswith('register') else 'login'
             self.assertIn(f'href="/{mode}"', page.text)
             self.assertIn(f'href="/teacher/{mode}"', page.text)
-            self.assertIn('<form method="post">', page.text)
+            self.assertTrue(any(form['method'] == 'post' for form in FormTokens(page.text).forms))
         self.sign_in(1)
         self.assertIn('/static/motion.js', self.client.get('/teacher').text)
         with self.client.get('/static/motion.css') as response:

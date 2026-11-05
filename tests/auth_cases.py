@@ -485,3 +485,72 @@ print('shared-limit-ok')
                                 capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), 'shared-limit-ok')
+
+    def test_access_profile_recovery_summary_uses_only_own_mail_and_get_does_not_write(self):
+        self.mail_setup()
+        with closing(self.module.get_db()) as conn:
+            conn.execute("INSERT INTO account_emails(user_id,email) VALUES(1,'private-teacher@example.org')")
+            conn.commit()
+        self.sign_in(3)
+        before = self.database_snapshot()
+        page = self.client.get('/profile').text
+        self.assertIn('Добавьте почту для восстановления', page)
+        self.assertNotIn('private-teacher@example.org', page)
+        details = [attrs for tag,attrs in _AccessibilityTags(page).tags if tag == 'details' and 'access-password-section' in attrs.get('class','')]
+        self.assertEqual(len(details), 1)
+        self.assertNotIn('open', details[0])
+        self.assertEqual(self.database_snapshot(), before)
+
+    def test_access_email_view_distinguishes_partial_change_from_completion(self):
+        box = self.mail_setup()
+        self.attach_email(box)
+        current = 'student@example.org'
+        for old_first in (False, True):
+            with self.subTest(old_first=old_first):
+                next_address = f'next-{int(old_first)}@example.org'
+                self.post('/profile/email', data=dict(email=next_address, password='test-password'))
+                box.flush()
+                new_token, old_token = box.token(-2), box.token(-1)
+                first, second = (old_token, new_token) if old_first else (new_token, old_token)
+                approved_address = current if old_first else next_address
+                partial = self.post('/email/confirm', data=dict(token=first))
+                self.assertIn('data-access-state="pending-confirmation"', partial.text)
+                page = self.client.get('/profile/email').text
+                checks = page.split('aria-label="Подтверждения адресов">', 1)[1].split('</ul>', 1)[0]
+                approved_row = next(row for row in checks.split('<li>') if f'<span>{approved_address}</span>' in row)
+                self.assertIn('Подтверждено', approved_row)
+                self.assertNotIn('Ждёт подтверждения', approved_row)
+                self.assertIn('Старый подтверждённый адрес действует', page)
+                self.assertIn('Я подтвердил — проверить статус', page)
+                complete = self.post('/email/confirm', data=dict(token=second))
+                self.assertIn('data-access-state="confirmed"', complete.text)
+                page = self.client.get('/profile').text
+                self.assertIn('Восстановление настроено', page)
+                self.assertNotIn(current, page)
+                current = next_address
+
+    def test_access_recovery_feedback_never_claims_delivery_or_availability_without_it(self):
+        with patch.dict(self.module.app.config, MAIL_SETTINGS=None):
+            page = self.client.get('/forgot-password').text
+            self.assertIn('data-access-state="unavailable"', page)
+            self.assertNotIn('class="success', page)
+            self.assertNotIn('<form', page)
+        self.mail_setup()
+        page = self.post('/forgot-password', data=dict(username='missing-user',email='unknown@example.org')).text
+        self.assertIn('data-access-state="sent"', page)
+        self.assertIn('Если логин и подтверждённый адрес совпадают', page)
+        self.assertIn('Изменить данные или запросить письмо ещё раз', page)
+        self.assertNotIn('Письмо доставлено', page)
+
+    def test_access_reset_invalid_token_offers_a_new_link_without_echoing_secrets(self):
+        self.mail_setup()
+        response = self.post('/reset-password', data=dict(token='x'*43, password='test-only-new-password', repeat_password='test-only-new-password'))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('data-access-state="invalid"', response.text)
+        self.assertIn('Запросить новую ссылку', response.text)
+        self.assertNotIn('value="'+'x'*43+'"', response.text)
+        self.assertNotIn('test-only-new-password', response.text)
+        page = self.client.get('/reset-password').text
+        self.assertIn('data-token-entry', page)
+        self.assertIn('data-token-actions', page)
+        self.assertIn('name="csrf_token"', page)
