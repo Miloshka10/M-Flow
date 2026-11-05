@@ -30,7 +30,7 @@ def compact_stage_route(stages, project_id):
         label = ('Принято' if done else 'На проверке' if active and stage['state'] == 'review'
                  else 'Нужна доработка' if active and stage.get('reviewed_by') and stage['state'] == 'progress'
                  else 'Текущий этап' if active else 'Впереди')
-        title = 'Выбор темы' if number == 1 else 'Документация' if number == 5 else 'Работа над проектом'
+        title = 'Выбор темы' if number == 1 else 'Документация' if number == 5 else f'Работа · {number-1}'
         items.append(f'<li class="{"done" if done else "current" if active else "future"}"'
                      + (' aria-current="step"' if active else '')
                      + f'><span class="v3-route-dot" aria-hidden="true">{icon("check") if done else f"{number:02d}"}</span>'

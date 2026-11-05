@@ -31,7 +31,9 @@ def entries(project):
         yield dict(common, key=f'stage-{pid}-{stage["number"]}', kind='stage',
                    title=f'Этап {stage["number"]}: {stage["title"]}', author=stage.get('author_name'),
                    sent=stage.get('updated_at'), revision=stage['revision'], requires_decision=True,
-                   href=f'/project/{pid}/stages#stage-{stage["number"]}', action='Проверить этап', body='')
+                   href=f'/project/{pid}/stages#stage-{stage["number"]}', action='Проверить этап', body='',
+                   previous_decision=bool(stage.get('reviewed_by')),
+                   history_href=f'/project/{pid}/history?work=stage-{stage["number"]}')
     defense = project['defense']
     if defense.get('revision') and defense['state'] == 'submitted':
         yield dict(common, key=f'defense-{pid}', kind='defense', title='Видеозащита',
@@ -85,12 +87,13 @@ def queue_url(params, page):
     return '/teacher?' + urlencode(values) + '#review-queue'
 
 
-def render_queue(result, params):
+def render_queue(result, params, has_projects=True):
     html = (f'<p class="t-muted">Найдено работ: {result["total"]} · Требуется решение: {result["decisions"]}.</p><details class="ui-queue-note"><summary>Как устроена очередь</summary><p class="t-muted">'
             'Сначала результаты для решения, затем информационные отчёты; сортировка по дате внутри групп.</p>'
             '<p class="t-muted">Отчёты: последний по каждой задаче, без статуса проверки. '
             'Прочтение уведомления не означает проверку результата. Даты: Москва (UTC+3).</p></details>')
     previous_group = None
+    first_decision = next((item['key'] for item in result['items'] if item['requires_decision']), None)
     for item in result['items']:
         group = 'Требуется решение' if item['requires_decision'] else 'Отчёты — информация'
         if group != previous_group:
@@ -108,15 +111,22 @@ def render_queue(result, params):
         author = escape(item['author'] or 'не указан')
         team = f'<p class="t-muted">Команда: {escape(item["team"])}</p>' if item['team'] else ''
         body = f'<p class="teacher-queue-body">{escape(item["body"])}</p>' if item['body'] else ''
+        material = (f'<details class="ds-queue-material"><summary>{"Отчёт и команда" if item["kind"] == "report" else "Команда проекта"}</summary>{team}{body}</details>'
+                    if team or body else '')
+        previous = '<p class="work-previous-decision">Есть предыдущее решение</p>' if item.get('previous_decision') else ''
+        history = (f'<a class="action-link work-review-history" href="{item["history_href"]}">История этапа</a>'
+                   if item.get('previous_decision') else '')
         html += f'''<article class="teacher-attention-item teacher-queue-item" data-work-kind="{item['kind']}"
             data-work-key="{item['key']}"><span class="v3-submission-mark" aria-hidden="true">{icon('video' if item['kind'] == 'defense' else 'review')}</span>
             <div class="v3-submission-main"><strong class="v3-submission-label">{label}</strong><h4>{escape(item['project_name'])}</h4>
-            <p class="v3-submission-type">{escape(item['title'])}</p><p class="t-muted">Автор: {author}</p>
-            <details class="ds-queue-material"><summary>Материал и команда</summary>{team}{body}</details></div>
+            <p class="v3-submission-type">{escape(item['title'])}</p><p class="t-muted">Автор: {author}</p>{previous}{material}</div>
             <div class="v3-submission-side"><p class="t-muted">{date_html}</p>
-            <a class="action-link" href="{item['href'] + ('-result' if item['kind'] == 'stage' else '')}">{item['action']} {icon('arrow')}</a></div></article>'''
+            <a class="{'btn' if item['key'] == first_decision else 'action-link'}" href="{item['href'] + ('-result' if item['kind'] == 'stage' else '')}">{item['action']} {icon('arrow')}</a>{history}</div></article>'''
     if not result['items']:
-        html += ('<p class="t-muted">Нет работ по выбранным условиям. '
+        filtered = bool(params.get('q') or params.get('project') or params.get('focus', 'all') != 'all' or params.get('kind', 'all') != 'all')
+        html += ('<div class="work-empty"><h3>Здесь появятся работы учеников</h3><p>Создайте приглашение руководителя. Ученик выберет свой проект, затем вы подтвердите сопровождение. После отправки результата здесь появится работа для проверки.</p></div>' if not has_projects else
+                 '<div class="work-empty"><h3>Сейчас нет работ для проверки</h3><p>Новые результаты появятся после отправки учениками. Проекты и предыдущие решения остаются доступны ниже.</p></div>' if not filtered else
+                 '<p class="t-muted">Нет работ по выбранным условиям. '
                  '<a class="action-link" href="/teacher#review-queue">Сбросить фильтры</a>. '
                  'Новые сдачи появятся после отправки учениками.</p>')
     if result['pages'] > 1:

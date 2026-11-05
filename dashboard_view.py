@@ -56,26 +56,26 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
                     f'<p>{escape(focus["comment"])}</p></aside>') if focus['comment'] else ''
         stages = focus.get('stages', [])
         current = next((s for s in stages if s['state'] != 'done'), None)
-        step_number = f'{current["number"]:02d}' if current else '05'
+        step_number = f'{current["number"]:02d}' if current else icon('video' if step['key'].startswith('defense') else 'check')
         route = compact_stage_route(stages, p['id']) if stages else f'<div class="v3-route-aside">{stage_track(state["stages_done"])}</div>'
         hero = f'''{switch}<section class="home-focus ds-feature ds-home-only" aria-labelledby="focus-name">
             <div class="ds-feature-main"><div class="v3-focus-heading"><span class="eyebrow">ТЕКУЩИЙ ПРОЕКТ</span>
             {state_badge(state['label'], state.get('tone', 'work'))}</div><h2 id="focus-name">{escape(p['name'])}</h2>
             <div class="home-next" data-home-step="{step['key']}"><div class="v3-next-title"><span class="v3-stage-number" aria-hidden="true">{step_number}</span><h3>{step['title']}</h3></div>
+            <p class="work-next-copy">{step['text']}</p>
             {feedback}
-            <details class="ds-guide"><summary>Что делать дальше</summary><p>{step['text']}</p></details>
-            <a class="btn" href="{url}">{step['action'] or 'Открыть проект'} {icon('arrow')}</a>
-            <a class="action-link" href="#my-projects">Все проекты</a></div></div>
+            <div class="ui-actions work-next-actions"><a class="btn" href="{url}">{step['action'] or 'Открыть проект'} {icon('arrow')}</a>
+            <a class="action-link" href="#my-projects">Все проекты</a></div></div></div>
             {route}</section>
             <div class="ds-home-columns ds-home-only"><section class="ui-agenda" aria-labelledby="upcoming-title">
-            <h2 id="upcoming-title">Ближайшие задачи</h2>{upcoming_html}
+            <h2 id="upcoming-title">Ближайшие задачи</h2><p class="work-section-copy">Ваши задачи и задачи без ответственного во всех проектах.</p>{upcoming_html}
             <details class="ds-guide"><summary>О сроках</summary><p>Твои задачи и задачи без ответственного · {TIMEZONE_LABEL}.
             Показано {min(6,len(upcoming))} из {len(upcoming)}.</p></details></section>{group_widget}</div>'''
     else:
         hero = '''<section class="home-focus home-welcome ds-home-only"><div class="ui-hello-empty">
             <h2>Здесь начнётся ваш проект</h2><p>Если учитель создал группу, введите её код. Для своей идеи можно сразу создать проект.</p>
             <div class="welcome-actions"><a class="btn" href="/groups#group-code">Ввести код группы</a>
-            <a class="action-link" href="#project-create" data-open-project>Создать проект</a></div>
+            <a class="btn secondary" href="#project-create" data-open-project>Создать проект</a></div>
             <a class="action-link" href="/teams#team-invitations">Приглашения в команды</a></div></section>'''
     projects_html = f'''<section class="workspace-projects" id="my-projects"><div class="section-title"><h2>Мои проекты</h2>
         <a class="action-link" href="#project-create" data-open-project>{icon('plus')} Новый проект</a></div>
@@ -88,6 +88,6 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
         {create}</section>'''
     groups_html = group_widget if not focus and groups else ''
     secondary = f'<details class="home-details" {"open" if results_open else ""}><summary data-ui-icon="results">Мои результаты</summary>{results}</details>'
-    return f'''<div class="container workspace student-workspace">{header}<main id="main-content" class="simple-home" data-suite-dashboard data-suite-view="{'results' if results_open else 'home'}">
+    return f'''<div class="container workspace student-workspace">{header}<main id="main-content" class="simple-home work-home" data-work-screens="home" data-suite-dashboard data-suite-view="{'results' if results_open else 'home'}">
         {messages}<div class="ui-page-heading"><h1 id="dashboard-title" tabindex="-1" data-home-title="Привет, {escape(user["username"], quote=True)}.">Привет, {escape(user["username"])}.</h1></div>
         {hero}{projects_html}{groups_html}{secondary}</main></div>'''

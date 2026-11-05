@@ -7,14 +7,62 @@ class WorkParser(HTMLParser):
     def __init__(self, html):
         super().__init__()
         self.ids = []
+        self.panels = {}
         self.feed(html)
 
     def handle_starttag(self, tag, attrs):
-        if value := dict(attrs).get('id'):
+        attrs = dict(attrs)
+        if number := attrs.get('data-work-panel'):
+            self.panels[number] = attrs
+        if value := attrs.get('id'):
             self.ids.append(value)
 
 
 class ProjectWorkCases:
+    def test_work_result_default_follows_review_return_accept_and_keeps_future_tasks(self):
+        def default(uid, number=1):
+            self.sign_in(uid)
+            page = self.client.get('/project/2/stages')
+            self.assertEqual(page.status_code, 200)
+            return WorkParser(page.text).panels[str(number)]['data-default-view']
+        self.assertEqual(default(3), 'tasks')
+        self.assertEqual(self.post('/project/2/stages', data=dict(number=1, revision=0, action='submit', result='Первая сдача')).status_code, 302)
+        for uid in (1, 3):
+            self.assertEqual(default(uid), 'result')
+        self.sign_in(1)
+        self.assertEqual(self.post('/project/2/stages', data=dict(number=1, revision=1, action='return', teacher_comment='Уточните цель')).status_code, 302)
+        self.assertEqual(default(3), 'result')
+        self.assertEqual(default(3, 2), 'tasks')
+        self.assertEqual(self.post('/project/2/stages', data=dict(number=1, revision=2, action='submit', result='Исправленная сдача')).status_code, 302)
+        self.sign_in(1)
+        self.assertEqual(self.post('/project/2/stages', data=dict(number=1, revision=3, action='accept')).status_code, 302)
+        self.assertEqual(default(3), 'result')
+        self.assertEqual(default(3, 2), 'tasks')
+
+    def test_work_resubmission_separates_previous_feedback_from_new_decision_and_queue(self):
+        self.sign_in(3)
+        self.post('/project/2/stages', data=dict(number=1, revision=0, action='submit', result='Первый результат'))
+        self.sign_in(1)
+        self.post('/project/2/stages', data=dict(number=1, revision=1, action='return', teacher_comment='Старое замечание <b>'))
+        self.sign_in(3)
+        self.post('/project/2/stages', data=dict(number=1, revision=2, action='submit', result='Исправленный результат <script>'))
+        self.sign_in(1)
+        before = self.database_snapshot()
+        page = self.client.get('/project/2/stages').text
+        old = page.split('<details class="work-previous-feedback">', 1)[1].split('</details>', 1)[0]
+        self.assertIn('Старое замечание &lt;b&gt;', old)
+        self.assertNotIn('Исправленный результат', old)
+        self.assertIn('Исправленный результат &lt;script&gt;', page)
+        self.assertIn('Новая версия ещё не проверена', old)
+        self.assertRegex(page, r'<textarea\b[^>]*name="teacher_comment"[^>]*></textarea>')
+        self.assertIn('aria-describedby="review-comment-hint-1"', page)
+        queue = self.queue_html(self.client.get('/teacher').text)
+        self.assertIn('Есть предыдущее решение', queue)
+        self.assertIn('/project/2/history?work=stage-1', queue)
+        self.assertNotIn('Private project', queue)
+        self.assertIn('href="/teacher#review-queue">К очереди проверки', page)
+        self.assertEqual(self.database_snapshot(), before)
+
     def test_work_unifies_old_stage_and_task_entries_without_get_writes(self):
         self.sign_in(3)
         before = self.database_snapshot()
@@ -56,6 +104,9 @@ class ProjectWorkCases:
         target = '/project/2?mine=1&view_stage=1#stage-1'
         saved = self.post('/project/2/stages', data=dict(action='save',number=1,revision=0,result='Draft',return_to=target))
         self.assertEqual(saved.location, target)
+        saved_page = self.client.get(saved.location).text
+        self.assertIn('data-project-feedback', saved_page)
+        self.assertIn('Результат этапа сохранён.', saved_page)
         for malicious in ('https://evil.example', '/project/3#stage-1', '//evil.example'):
             response = self.post('/project/2/stages', data=dict(action='save',number=1,revision=1 if malicious.startswith('https:') else 2 if malicious.startswith('/project') else 3,result='Draft',return_to=malicious))
             self.assertEqual(response.location, '/project/2/stages')
