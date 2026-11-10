@@ -3927,6 +3927,10 @@ def request_too_large(error):
 # START
 # =========================================================
 
+# Optional new presentation; existing authenticated handlers keep every mutation.
+from linear_view import register_linear_views
+register_linear_views(app, login_required, get_current_user, get_db, get_projects, get_project_details, get_tasks, csrf_token)
+
 if __name__ == "__main__":
 
     app.run(

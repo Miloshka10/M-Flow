@@ -22,3 +22,6 @@ restore-check/
 .env
 .env.*
 !.env.example
+
+# Disposable local review and validation only.
+.tmp/

@@ -115,7 +115,7 @@ def shell_header(user, path, bell, logout, query=None):
     logo = f'<a href="{home}" class="brand" aria-label="M-Flow — на главную">M-Flow<span class="ui-brand-dot">.</span></a>'
     secondary = ''.join(f'<a class="ui-nav-link" href="/{key}"'
                         + (' aria-current="page"' if current == key else '')
-                        + f'>{icon(key, navigation=True)}<span>{label}</span></a>' for key, label in [('profile', 'Мой профиль'), ('settings', 'Настройки')])
+                        + f'>{icon('overview' if key == 'next' else key, navigation=True)}<span>{label}</span></a>' for key, label in [('profile', 'Мой профиль'), ('settings', 'Настройки'), ('next', 'Новый вид')])
     title = {'/teams':'Участники и приглашения', '/skills':'Мои навыки'}.get(path) or next((label for key, _, label, _ in items if key == current),
                  {'/profile':'Мой профиль', '/settings':'Настройки', '/notifications':'Уведомления',
                   '/supervision':'Руководитель проекта'}.get(path, 'Рабочее пространство'))
