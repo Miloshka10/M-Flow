@@ -65,6 +65,8 @@ _ICONS = {
     'calendar': '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18M7 15h2M13 15h4"/>',
     'archive': '<rect x="3" y="3" width="18" height="5" rx="1"/><path d="M5 8v12h14V8M9 12h6"/>',
     'chevron': '<path d="m6 9 6 6 6-6"/>',
+    'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2m0 15v2M2.5 12h2m15 0h2M5.3 5.3l1.4 1.4m10.6 10.6 1.4 1.4m0-13.4-1.4 1.4M6.7 17.3l-1.4 1.4"/>',
+    'moon': '<path d="M20.8 15.3A9 9 0 0 1 8.7 3.2a9 9 0 1 0 12.1 12.1Z"/>',
 }
 
 
@@ -73,6 +75,26 @@ def icon(name, navigation=False):
     return (f'<svg class="{classes}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" '
             'stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">'
             + _ICONS[name] + '</svg>')
+
+
+APPEARANCE_VERSION = '20261111-linear'
+
+
+def appearance_assets():
+    return (f'<link rel="stylesheet" href="/static/appearance.css?v={APPEARANCE_VERSION}">'
+            f'<link rel="stylesheet" href="/static/preferences.css?v={APPEARANCE_VERSION}">'
+            f'<script src="/static/preferences.js?v={APPEARANCE_VERSION}"></script>')
+
+
+def theme_button():
+    return ('<button type="button" class="theme-toggle" data-theme-toggle hidden aria-label="Включить светлую тему">'
+            f'<span data-theme-icon="light">{icon("sun")}</span>'
+            f'<span data-theme-icon="dark">{icon("moon")}</span></button>')
+
+
+def access_header(href='/login'):
+    return (f'<header class="access-topbar"><a class="brand" href="{escape(href, quote=True)}">'
+            f'M-Flow<span class="ui-brand-dot">.</span></a>{theme_button()}</header>')
 
 
 def project_art():
@@ -115,22 +137,21 @@ def shell_header(user, path, bell, logout, query=None):
     logo = f'<a href="{home}" class="brand" aria-label="M-Flow — на главную">M-Flow<span class="ui-brand-dot">.</span></a>'
     secondary = ''.join(f'<a class="ui-nav-link" href="/{key}"'
                         + (' aria-current="page"' if current == key else '')
-                        + f'>{icon('overview' if key == 'next' else key, navigation=True)}<span>{label}</span></a>' for key, label in [('profile', 'Мой профиль'), ('settings', 'Настройки'), ('next', 'Новый вид')])
+                        + f'>{icon('overview' if key == 'next' else key, navigation=True)}<span>{label}</span></a>' for key, label in [('next', 'Обзор проектов'), ('profile', 'Мой профиль'), ('settings', 'Настройки')])
     title = {'/teams':'Участники и приглашения', '/skills':'Мои навыки'}.get(path) or next((label for key, _, label, _ in items if key == current),
                  {'/profile':'Мой профиль', '/settings':'Настройки', '/notifications':'Уведомления',
                   '/supervision':'Руководитель проекта'}.get(path, 'Рабочее пространство'))
     return f'''<aside class="ui-sidebar" aria-label="Боковая навигация">
-        <div class="ui-sidebar-brand">{logo}</div><p class="ui-workspace-label">ПРОСТРАНСТВО {"УЧИТЕЛЯ" if teacher else "УЧЕНИКА"}</p>
+        <div class="ui-sidebar-brand">{logo}</div><p class="ui-workspace-label">{role}</p>
         <nav class="ui-primary-nav" aria-label="Основные разделы">{links()}</nav>
-        <div class="ui-sidebar-bottom"><p class="ui-sidebar-motto">От первой идеи<br>до своего результата.<small>Это твой M-Flow.</small></p>{secondary}
-        <span class="ui-signature">СОЗДАВАЙ. ПРОБУЙ. РАСТИ.</span></div></aside>
+        <div class="ui-sidebar-bottom">{secondary}</div></aside>
     <header class="main-header simple-header" data-interface-shell="{user['role']}">
         <div class="ui-header-start"><details class="ui-mobile-menu">
             <summary aria-controls="ui-mobile-panel">{icon('menu')}<span>Меню</span></summary>
             <div class="ui-mobile-panel" id="ui-mobile-panel" aria-label="Навигация"><div class="ui-mobile-panel-top"><span class="ui-mobile-wordmark">M-Flow<span>.</span></span><button type="button" class="ui-icon-button" data-close-navigation aria-label="Закрыть меню">{icon('close')}</button></div>
             <p class="ui-workspace-label">{role}</p><nav aria-label="Мобильные разделы">{links()}{secondary}</nav></div>
             <button class="ui-mobile-backdrop" type="button" data-close-navigation aria-label="Закрыть навигацию"></button>
-        </details>{logo}<span class="ui-header-context">Моё пространство<span>/</span><span data-shell-location>{title}</span></span></div>
-        <div class="header-actions">{bell}<details class="account-menu"><summary aria-controls="account-panel">Мой аккаунт</summary>
+        </details>{logo}<span class="ui-header-context"><span data-shell-location>{title}</span></span></div>
+        <div class="header-actions">{theme_button()}{bell}<details class="account-menu"><summary aria-controls="account-panel" aria-label="Мой аккаунт">{icon('profile')}<span class="ui-account-label">Аккаунт</span></summary>
             <div class="account-panel" id="account-panel"><div class="account-identity"><strong>{escape(user['username'])}</strong><small>{role}</small></div>
             <a href="/profile">{icon('profile')}Мой профиль</a><a href="/settings">{icon('settings')}Настройки</a>{logout}</div></details></div></header>'''

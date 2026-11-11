@@ -204,26 +204,64 @@ html body.mf-v2 .auth-recovery-links a,html body.mf-v2 .auth-retry a,html body.m
 }
 
 /* Interface stage 3: access forms and account compositions on shared tokens. */
-html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-form-side {padding:36px 40px}
-html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-form-inner {max-width:440px}
-html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-form-brand {margin-bottom:28px}
-html body.mf-v2[data-interface-v3][data-scenery] .access-form {display:grid;gap:var(--mf-space-6);margin:0;min-width:0}
+html body.mf-v2[data-interface-v3][data-scenery] .auth-page {
+  display:grid;grid-template-rows:auto 1fr auto;justify-content:stretch;justify-items:center;align-items:center;
+  min-height:100dvh;padding:0 clamp(16px,4vw,56px);gap:24px;
+}
+html body.mf-v2[data-interface-v3][data-scenery] .auth-card {
+  display:grid;grid-template-columns:minmax(300px,.94fr) minmax(0,1.06fr);width:min(1064px,100%);
+  max-width:none;min-height:0;overflow:visible;background:transparent;border:0;box-shadow:none;
+}
+html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-form-side {
+  display:grid;align-items:center;padding:24px 40px;border-radius:0;background:transparent;
+}
+html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-form-inner {max-width:352px}
+html body.mf-v2[data-interface-v3][data-scenery] .access-page h1 {
+  margin:0 0 12px;font-size:clamp(27px,2.8vw,35px);font-weight:620;line-height:1.16;letter-spacing:-1px;
+}
+html body.mf-v2[data-interface-v3][data-scenery] .auth-role-switch {margin:24px 0;border:1px solid var(--mf-line);border-radius:8px}
+html body.mf-v2[data-interface-v3][data-scenery] .auth-role-switch a {min-height:44px;font-size:13px}
+html body.mf-v2[data-interface-v3][data-scenery] .auth-role-switch::before {border-radius:5px;box-shadow:0 0 0 1px var(--mf-line)}
+html body.mf-v2[data-interface-v3][data-scenery] .auth-access-aside {
+  display:grid;min-height:500px;min-width:0;padding:14px;
+  border:1px solid var(--mf-line);border-radius:10px;background:var(--mf-card);
+}
+html body.mf-v2[data-interface-v3][data-scenery] .auth-orbit {
+  position:relative;overflow:hidden;border:1px solid var(--mf-line);border-radius:6px;
+  background:radial-gradient(circle,color-mix(in srgb,var(--mf-muted) 24%,transparent) .65px,transparent .9px)
+    center / 22px 22px var(--mf-bg);
+}
+html body.mf-v2[data-interface-v3][data-scenery] .auth-orbit canvas {
+  display:block;position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
+}
+html body.mf-v2[data-interface-v3][data-scenery] .auth-page-footer {
+  width:100%;text-align:left;padding:0 4px 8px;
+}
+html body.mf-v2[data-interface-v3][data-scenery] .access-form {display:grid;gap:var(--mf-space-4);margin:0;min-width:0}
 html body.mf-v2[data-interface-v3][data-scenery] .access-field {display:grid;gap:var(--mf-space-2);min-width:0}
 html body.mf-v2[data-interface-v3][data-scenery] .access-field>label {display:block;margin:0;font-size:var(--mf-type-label);line-height:1.5}
 html body.mf-v2[data-interface-v3][data-scenery] .access-field :is(.auth-hint,.auth-field-error) {margin:0;font-size:13px;line-height:1.6}
 html body.mf-v2[data-interface-v3][data-scenery] .access-field .auth-label-row {margin:0;align-items:center;min-width:0}
 html body.mf-v2[data-interface-v3][data-scenery] .access-field .auth-label-row label {margin:0;font-size:var(--mf-type-label)}
-html body.mf-v2[data-interface-v3][data-scenery] .access-field .auth-label-row a {min-height:44px;padding:8px 0;max-width:60%}
-html body.mf-v2[data-interface-v3][data-scenery] .access-form input:not([type="hidden"]) {width:100%;min-width:0;margin:0;height:var(--mf-control-comfort);font-size:var(--mf-type-input);line-height:24px;padding:12px 14px}
+html body.mf-v2[data-interface-v3][data-scenery] .access-field .auth-label-row a {
+  min-height:24px;padding:0;max-width:60%;color:var(--mf-accent);font-weight:500;
+}
+html body.mf-v2[data-interface-v3][data-scenery] .access-form input:not([type="hidden"]) {
+  width:100%;min-width:0;min-height:var(--mf-control-comfort);margin:0;border-radius:var(--mf-radius-control);
+  background:var(--mf-bg);font-size:var(--mf-type-input);line-height:22px;padding:10px 12px;
+}
 html body.mf-v2[data-interface-v3][data-scenery] .access-form .auth-password-control {min-width:0}
 html body.mf-v2[data-interface-v3][data-scenery] .access-form .auth-password-control.has-toggle input {padding-right:104px}
-html body.mf-v2[data-interface-v3][data-scenery] .access-form .auth-password-control .auth-password-toggle {width:94px;height:44px;min-height:44px;padding:8px;inset:4px 4px auto auto;margin:0}
+html body.mf-v2[data-interface-v3][data-scenery] .access-form .auth-password-control .auth-password-toggle {
+  width:90px;height:44px;min-height:44px;padding:8px;inset:2px 2px auto auto;margin:0;
+}
 html body.mf-v2[data-interface-v3][data-scenery] .access-form>button {margin:0;width:100%;min-height:var(--mf-control-comfort)}
 html body.mf-v2[data-interface-v3][data-scenery] .access-teacher-code {padding:var(--mf-space-4);border:1px solid var(--mf-line);border-radius:var(--mf-radius-sm);background:var(--mf-bg)}
 html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-access-content {margin-top:24px}
-html body.mf-v2[data-interface-v3][data-scenery] .access-page.auth-recovery .auth-recovery-card {width:min(560px,100%);max-width:560px;min-height:0}
+html body.mf-v2[data-interface-v3][data-scenery] .access-page.auth-recovery .auth-recovery-card {
+  display:block;width:min(500px,100%);max-width:500px;min-height:0;
+}
 html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-recovery-card .auth-form-inner {max-width:none}
-html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-recovery-card .auth-form-brand {margin-bottom:24px}
 html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-intro {line-height:1.7}
 html body.mf-v2[data-interface-v3][data-scenery] .access-feedback {margin:0 0 24px}
 html body.mf-v2[data-interface-v3][data-scenery] .access-primary-link {width:100%;margin:0 0 24px}
@@ -284,7 +322,10 @@ html body.mf-v2[data-interface-v3][data-scenery] .access-mail-checks li {display
 html body.mf-v2[data-interface-v3][data-scenery] .access-mail-checks li>span:first-child {overflow-wrap:anywhere}
 @media(max-width:800px) {
  html body.mf-v2[data-interface-v3][data-scenery] .access-profile-grid {grid-template-columns:minmax(0,1fr)}
- html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-form-side {padding:28px 24px}
+ html body.mf-v2[data-interface-v3][data-scenery] .auth-page {align-items:start;gap:16px}
+ html body.mf-v2[data-interface-v3][data-scenery] .auth-card {grid-template-columns:minmax(0,1fr);max-width:440px}
+ html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-form-side {padding:24px 4px}
+ html body.mf-v2[data-interface-v3][data-scenery] .auth-access-aside {display:none}
  html body.mf-v2[data-interface-v3][data-scenery] .access-profile .access-password-section .account-security-panel {padding:20px}
 }
 @media(max-width:600px) {

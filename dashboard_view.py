@@ -2,7 +2,7 @@
 from html import escape
 from deadlines import deadline_text, TIMEZONE_LABEL
 from interface import icon
-from design_suite import project_cover, stage_track, compact_stage_route
+from design_suite import stage_track, compact_stage_route
 from navigation import stage_result_target
 from ui_components import state_badge
 
@@ -19,10 +19,10 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
         overdue = f'<span class="tile-alert">Просрочено: {p["overdue"]}</span>' if p['overdue'] else ''
         cards.append(f'''<article class="ds-project-card" data-project-name="{escape(p['name'], quote=True)}" data-project-tone="{state['tone']}">
             <a class="project-row project-tile" href="/project/{p['id']}"{selected}>
-            {project_cover(p['name'], p['id'])}<div class="ds-card-body">
-            {state_badge(state['label'], state['tone'])}<h3>{escape(p['name'])}</h3>
-            {stage_track(state['stages_done'])}<span class="ds-stage-count">Принято {state['stages_done']} из 5 этапов</span>{overdue}
-            <span class="ds-card-open">Открыть проект {icon('arrow')}</span></div></a>
+            <div class="ds-card-body">
+            <div class="ds-card-title"><h3>{escape(p['name'])}</h3>{state_badge(state['label'], state['tone'])}{overdue}</div>
+            <div class="ds-card-progress">{stage_track(state['stages_done'])}<span class="ds-stage-count" aria-hidden="true">Принято {state['stages_done']} из 5 этапов</span></div>
+            <span class="ds-card-open" aria-hidden="true">{icon('arrow')}</span></div></a>
             <details class="ds-card-details"><summary>Задачи</summary><p>{details}</p></details></article>''')
     upcoming = sorted([(p, task) for p in projects for task in p.get('deadlines', [])],
                       key=lambda pair: (pair[1]['deadline_info']['date'], pair[1]['id']))
@@ -55,13 +55,11 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
                     f'{"<small>" + escape(focus.get("reviewer", "")) + "</small>" if focus.get("reviewer") else ""}'
                     f'<p>{escape(focus["comment"])}</p></aside>') if focus['comment'] else ''
         stages = focus.get('stages', [])
-        current = next((s for s in stages if s['state'] != 'done'), None)
-        step_number = f'{current["number"]:02d}' if current else icon('video' if step['key'].startswith('defense') else 'check')
         route = compact_stage_route(stages, p['id']) if stages else f'<div class="v3-route-aside">{stage_track(state["stages_done"])}</div>'
         hero = f'''{switch}<section class="home-focus ds-feature ds-home-only" aria-labelledby="focus-name">
             <div class="ds-feature-main"><div class="v3-focus-heading"><span class="eyebrow">ТЕКУЩИЙ ПРОЕКТ</span>
-            {state_badge(state['label'], state.get('tone', 'work'))}</div><h2 id="focus-name">{escape(p['name'])}</h2>
-            <div class="home-next" data-home-step="{step['key']}"><div class="v3-next-title"><span class="v3-stage-number" aria-hidden="true">{step_number}</span><h3>{step['title']}</h3></div>
+            {state_badge(state['label'], state.get('tone', 'work'))}</div><h2 id="focus-name"><a href="{base}">{escape(p['name'])}</a></h2>
+            <div class="home-next" data-home-step="{step['key']}"><div class="v3-next-title"><h3>{step['title']}</h3></div>
             <p class="work-next-copy">{step['text']}</p>
             {feedback}
             <div class="ui-actions work-next-actions"><a class="btn" href="{url}">{step['action'] or 'Открыть проект'} {icon('arrow')}</a>

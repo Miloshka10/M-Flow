@@ -1,4 +1,4 @@
-import { createOrbitScene } from './linear-orbit.js?v=20261110-orbit-1';
+import { createOrbitScene, observeOrbitAppearance } from './linear-orbit.js?v=20261111-linear';
 
 const statusName = s => ({done:'Этап принят',review:'На проверке',returned:'На доработке',progress:'В работе',locked:'Пока закрыт'}[s]);
 const figure = document.querySelector('[data-orbit]');
@@ -31,25 +31,41 @@ if(figure){
   const accepted=stages.findIndex(s=>s.status!=='done');
   const completed=accepted<0?5:accepted;
   const active=completed<5&&stages[completed].status!=='locked'?completed:-1;
-  const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   const pause=figure.querySelector('[data-pause-orbit]'),reset=figure.querySelector('[data-reset-orbit]');
   const nodes=[...figure.querySelectorAll('[data-node]')],detail=figure.querySelector('[data-orbit-detail]');
-  let paused=false;
-  scene=createOrbitScene(figure.querySelector('canvas'),{accepted:completed,active,selected:currentStage,seed:Number(figure.dataset.seed),paused,reduced:reduced.matches,hovered:-1},{
+  let paused=false, reduced=false;
+  scene=createOrbitScene(figure.querySelector('canvas'),{accepted:completed,active,selected:currentStage,seed:Number(figure.dataset.seed),paused,hovered:-1},{
     onProject(points){nodes.forEach(node=>{const p=points.find(p=>p.index===Number(node.dataset.node));node.hidden=!p;if(p){node.style.transform=`translate(${p.x-18}px,${p.y-18}px)`;node.style.zIndex=String(Math.round(p.depth)+500);}});},
     onViewChange(changed){reset.disabled=!changed;}
   });
   const hover=index=>{scene.update({hovered:index});detail.hidden=index<0;detail.textContent=index>=0?`${stages[index].name} · ${statusName(stages[index].status)}`:'';};
   nodes.forEach(node=>{const i=Number(node.dataset.node);node.addEventListener('pointerenter',()=>hover(i));node.addEventListener('pointerleave',()=>hover(-1));node.addEventListener('focus',()=>hover(i));node.addEventListener('blur',()=>hover(-1));node.addEventListener('click',()=>selectStage(i));});
   reset.addEventListener('click',()=>scene.reset());
-  const motion=()=>{pause.disabled=reduced.matches;pause.setAttribute('aria-pressed',String(paused||reduced.matches));pause.setAttribute('aria-label',reduced.matches?'Движение отключено в настройках устройства':paused?'Включить движение структуры':'Приостановить движение структуры');pause.textContent=paused||reduced.matches?'Движение':'Пауза';scene.update({paused,reduced:reduced.matches});};
-  pause.addEventListener('click',()=>{paused=!paused;motion();});reduced.addEventListener('change',motion);motion();
+  const motion = () => {
+    pause.disabled = reduced;
+    pause.setAttribute('aria-pressed', String(paused || reduced));
+    pause.setAttribute('aria-label', reduced ? 'Движение отключено в настройках' :
+      paused ? 'Включить движение структуры' : 'Приостановить движение структуры');
+    pause.textContent = paused || reduced ? 'Движение' : 'Пауза';
+    scene.update({paused, reduced});
+  };
+  pause.addEventListener('click', () => { paused = !paused; motion(); });
+  const stopAppearance = observeOrbitAppearance(appearance => {
+    reduced = appearance.reduced;
+    scene.update({theme: appearance.theme});
+    motion();
+  });
   document.querySelectorAll('[data-stage-link]').forEach(el=>el.addEventListener('click',e=>{if(e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();selectStage(Number(el.dataset.stageLink));}));
   document.querySelectorAll('[data-tab]').forEach(el=>el.addEventListener('click',e=>{if(e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();selectTab(el.dataset.tab);}));
   const fromURL=()=>{const p=new URL(location.href).searchParams;const n=p.get('stage');selectStage(n?Number(n)-1:Number(figure.dataset.selected),false);selectTab(p.get('tab')||'result',false);};
   addEventListener('popstate',fromURL);fromURL();
   // Keep native back/forward caching usable; only dispose when the document is discarded.
-  addEventListener('pagehide',e=>{if(!e.persisted)scene.dispose();});
+  addEventListener('pagehide', event => {
+    if (!event.persisted) {
+      stopAppearance();
+      scene.dispose();
+    }
+  });
 }
 
 const dialog=document.querySelector('.ln-nav-dialog');

@@ -150,7 +150,7 @@ class SceneryPageTests(unittest.TestCase):
                                        'sender@example.org', 'http://localhost', 'starttls'),
             MAIL_DISPATCHER=Mailbox())
 
-    def assert_scene(self, response, context, layout):
+    def assert_appearance(self, response, context, layout):
         self.assertEqual(response.status_code, 200)
         document = SceneryTags(response.text)
         tags = document.tags
@@ -158,14 +158,11 @@ class SceneryPageTests(unittest.TestCase):
         self.assertEqual(body.get('data-scenery'), context)
         self.assertEqual(body.get('data-scenery-layout'), layout)
         layers = [attrs for tag, attrs in tags if 'mf-scenery' in attrs.get('class', '').split()]
-        self.assertEqual(len(layers), 1)
-        self.assertEqual(layers[0].get('aria-hidden'), 'true')
-        # At widths without a side rail, artwork follows the content in normal
-        # flow. Putting it before the content recreates the overlay regression.
-        self.assertEqual(document.body_children[-1][0], 'div')
-        self.assertIn('mf-scenery', document.body_children[-1][1].get('class', '').split())
-        self.assertIn('href="/static/scenery.css', response.text)
-        # Decorating the document must not displace secured POST form tokens.
+        self.assertFalse(layers)
+        self.assertNotIn('href="/static/scenery.css', response.text)
+        self.assertIn('href="/static/appearance.css', response.text)
+        self.assertIn('data-theme-toggle', response.text)
+        # Presentation changes must preserve secured POST form tokens.
         from test_teacher_cabinet import FormTokens
         forms = FormTokens(response.text)
         self.assertTrue(forms.meta)
@@ -173,7 +170,7 @@ class SceneryPageTests(unittest.TestCase):
             if form['method'] == 'post':
                 self.assertEqual(form['tokens'], [forms.meta])
 
-    def test_public_role_and_recovery_pages_choose_their_scene(self):
+    def test_public_role_and_recovery_pages_share_appearance(self):
         for path, context, layout in (
             ('/login', 'workshop', 'auth'),
             ('/register', 'workshop', 'auth'),
@@ -184,7 +181,7 @@ class SceneryPageTests(unittest.TestCase):
             ('/email/confirm', 'workshop', 'access'),
         ):
             with self.subTest(path=path):
-                self.assert_scene(self.client.get(path), context, layout)
+                self.assert_appearance(self.client.get(path), context, layout)
 
     def test_workspace_contexts_follow_roles_and_collaboration_pages(self):
         for user, home in ((3, '/'), (1, '/teacher')):
@@ -194,7 +191,7 @@ class SceneryPageTests(unittest.TestCase):
                                   ('/project/2', default), ('/groups', 'together'),
                                   ('/teams', 'together')):
                 with self.subTest(user=user, path=path):
-                    self.assert_scene(self.client.get(path), context, 'workspace')
+                    self.assert_appearance(self.client.get(path), context, 'workspace')
         self.assertEqual(self.client.get('/project/3').status_code, 403)
 
     def test_user_words_cannot_select_the_account_recovery_layout(self):
@@ -210,7 +207,7 @@ class SceneryPageTests(unittest.TestCase):
             with self.subTest(path=path):
                 response = self.client.get(path)
                 self.assertIn('auth-recovery', response.text)
-                self.assert_scene(response, 'workshop', 'workspace')
+                self.assert_appearance(response, 'workshop', 'workspace')
         self.assertEqual(self.fixture.database_snapshot(), before)
 
 

@@ -1,6 +1,7 @@
 """Presentation for account access; handlers and server checks remain authoritative."""
 from html import escape
 import re
+from interface import APPEARANCE_VERSION, access_header
 from ui_components import state_badge
 
 ACCESS_VERSION = '20261106-access'
@@ -16,27 +17,7 @@ def password_control(input_id, name, label, autocomplete, limits='', hint=''):
 
 
 def account_assets():
-    return f'<link rel="stylesheet" href="/static/auth.css?v={ACCESS_VERSION}"><script src="/static/auth.js?v={ACCESS_VERSION}" defer></script><script src="/static/account-mail.js?v={ACCESS_VERSION}" defer></script>'
-
-
-def access_aside(kind):
-    content = {
-        'login': ('Ваше пространство для работы', 'Войдите в свой аккаунт, чтобы продолжить проекты и вернуться к обратной связи.', 'Всё остаётся в аккаунте', 'Проекты, работы и решения учителя сохраняются между входами.', 'Забыли пароль?', 'Восстановление доступно через почту, заранее подтверждённую в профиле.'),
-        'register': ('Начните со своего аккаунта', 'Выберите роль и создайте личный аккаунт M-Flow.', 'Почта — следующий шаг', 'После входа добавьте и подтвердите адрес в профиле. Он поможет восстановить доступ.', 'Учителю нужен код', 'Код регистрации организатор передаёт лично. Код группы или проекта для этого не подходит.'),
-        'forgot': ('Письмо, которое вернёт доступ', 'Используйте логин и адрес, который вы заранее подтвердили в профиле.', 'Ссылка действует 20 минут', 'Она поможет выбрать новый пароль и используется один раз.', 'Не помните подтверждённую почту?', 'Если вы ещё вошли на другом устройстве, откройте профиль. Иначе обратитесь к организатору.'),
-        'reset': ('Пароль для следующего входа', 'После сохранения войдите с новым паролем. Ваши проекты и результаты сохранятся.', 'От 8 до 256 символов', 'Повторите пароль в обоих полях. Кнопка «Показать» поможет проверить ввод.', 'Прежние сеансы завершатся', 'На других устройствах потребуется войти с новым паролем.'),
-        'reset-success': ('Можно вернуться к работе', 'Используйте новый пароль на обычном экране входа.', 'Проекты и результаты сохранены', 'Сброс пароля не меняет работы, замечания и оценки.', 'Прежние сеансы завершены', 'На других устройствах также войдите заново.'),
-        'confirm': ('Почта для вашего аккаунта', 'Подтвердите действие отдельным нажатием. Открытие ссылки само по себе ничего не меняет.', 'Ссылка действует 24 часа', 'Используйте письмо, которое получили после запроса в профиле.', 'При смене нужны оба ящика', 'Пока оба подтверждения не получены, действует прежний адрес.'),
-        'email': ('Личная почта для доступа', 'Подтвердите адрес, чтобы вернуть доступ к аккаунту, если забудете пароль.', 'Подтверждение — из письма', 'Неподтверждённый адрес не подходит для восстановления.', 'Ваши данные — в профиле', 'Для добавления или смены адреса нужен текущий пароль.'),
-        'email-change': ('Подтвердите оба адреса', 'Для смены почты нужны подтверждения прежнего и нового ящиков.', 'Порядок не важен', 'Можно начать с любого письма. Смена завершится только после двух подтверждений.', 'Старый адрес пока действует', 'До завершения смены через него можно восстановить доступ.'),
-        'password': ('Обновите доступ к аккаунту', 'Текущий пароль подтверждает, что изменение запрашиваете вы.', 'Текущий сеанс сохранится', 'Другие сеансы этого аккаунта после смены будут завершены.', 'Проекты и оценки сохранятся', 'Смена пароля сохраняет проекты, историю и оценки.'),
-    }
-    title, intro, heading, detail, heading2, detail2 = content[kind]
-    notes = f'<div class="auth-access-note"><h3>{heading}</h3><p>{detail}</p></div><div class="auth-access-extra"><h3>{heading2}</h3><p>{detail2}</p></div>'
-    intro_html = f'<p class="auth-eyebrow">ПОЧТА И ДОСТУП</p><h2>{title}</h2><p class="auth-access-copy">{intro}</p>'
-    if kind in ('login', 'register'):
-        return f'<aside class="auth-access-aside" aria-label="Полезно знать"><div class="auth-access-intro">{intro_html}</div><details class="auth-access-guide"><summary>Как устроен доступ</summary><div class="auth-access-guide-content">{notes}</div></details></aside>'
-    return f'<aside class="auth-access-aside" aria-label="Полезно знать">{intro_html}{notes}</aside>'
+    return f'<link rel="stylesheet" href="/static/auth.css?v={APPEARANCE_VERSION}"><script src="/static/auth.js?v={ACCESS_VERSION}" defer></script><script src="/static/account-mail.js?v={ACCESS_VERSION}" defer></script>'
 
 
 def token_field(value=''):
@@ -104,12 +85,11 @@ def public_form(title, intro, fields, token, button, error='', notice='', token_
         'confirm': 'Открытие ссылки само по себе ничего не меняет. При смене адреса нужны подтверждения обоих ящиков.',
     }[kind]
     retry = '<a class="action-link" href="/forgot-password">Запросить новую ссылку</a>' if kind == 'reset' and state != 'invalid' else ''
-    return f'''<script src="/static/account-mail.js?v={ACCESS_VERSION}" defer></script><div class="auth-page auth-recovery access-page" data-access-state="{escape(state, quote=True)}"><div class="auth-card auth-recovery-card"><main class="auth-form-side"><div class="auth-form-inner">
-        <a class="brand auth-form-brand" href="/login">M-Flow<span class="ui-brand-dot">.</span></a><p class="auth-eyebrow">ДОСТУП К АККАУНТУ</p>
+    return f'''<script src="/static/account-mail.js?v={ACCESS_VERSION}" defer></script><div class="auth-page auth-recovery access-page" data-access-state="{escape(state, quote=True)}">{access_header(login_url)}<div class="auth-card auth-recovery-card"><main class="auth-form-side"><div class="auth-form-inner">
         <h1>{escape(heading)}</h1><p class="auth-intro">{escape(intro)}</p><div class="auth-access-content">{feedback}{action}{form}</div>
         <details class="access-help"><summary>Что важно знать</summary><p>{explanation}</p></details>{retry}
-        <nav class="auth-recovery-links" aria-label="Вернуться ко входу"><a href="/login">Вход ученика</a><a href="/teacher/login">Вход учителя</a></nav><p class="auth-recovery-data"><a href="/data">Данные и помощь</a></p>
-        </div></main></div><footer class="auth-page-footer"><a href="/settings">Настройки оформления</a></footer></div>'''
+        <nav class="auth-recovery-links" aria-label="Вернуться ко входу"><a href="/login">Вход ученика</a><a href="/teacher/login">Вход учителя</a></nav>
+        </div></main></div><footer class="auth-page-footer"><a href="/data">Данные и помощь</a></footer></div>'''
 
 
 def email_status(email, ready=True):

@@ -132,8 +132,9 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
                 grades.append('Оценка опубликована · подробности в разделе оценивания')
         grading = '<br>'.join(grades) or 'Ваша оценка ещё не опубликована'
     defense_label = DEFENSE_STATES[defense['state']] if defense['revision'] else 'Запись ещё не добавлена'
-    return f'''<div class="journey-heading"><div><span class="eyebrow">ПРОЕКТ / ОТ ТЕМЫ ДО ЗАЩИТЫ</span><h1>{escape(name)}</h1>
-            <details class="journey-members"><summary>Участники: {len(members)} · {escape(names) or 'Команда пока не сформирована'}</summary><ul>{member_list}</ul></details></div></div>
+    return f'''<div class="journey-heading"><div><h1>{escape(name)}</h1>
+            <details class="journey-members"><summary>Участники: {len(members)} · {escape(names) or 'Команда пока не сформирована'}</summary><ul>{member_list}</ul></details></div>
+            <a class="action-link" href="/next/project/{project_id}">{icon('overview')} Орбита проекта</a></div>
         {project_navigation(project_id, active)}<section class="project-overview" aria-label="Маршрут проекта">
         <div class="ui-project-overview-grid"><section class="ui-project-next" aria-label="Следующий шаг проекта">
             <div class="journey-action" data-next-step="{step['key']}"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span>

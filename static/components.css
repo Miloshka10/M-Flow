@@ -3,40 +3,35 @@
 html body.mf-v2[data-interface-v3][data-scenery] {
   --mf-space-1:4px; --mf-space-2:8px; --mf-space-3:12px; --mf-space-4:16px;
   --mf-space-5:20px; --mf-space-6:24px; --mf-space-8:32px; --mf-space-10:40px;
-  --mf-control-height:48px; --mf-control-compact:44px; --mf-control-comfort:52px;
-  --mf-radius-sm:8px; --mf-radius-control:9px; --mf-radius:16px; --mf-radius-lg:20px;
-  --mf-type-caption:12px; --mf-type-label:14px; --mf-type-body:15px;
+  --mf-control-height:40px; --mf-control-compact:36px; --mf-control-comfort:48px;
+  --mf-radius-sm:6px; --mf-radius-control:6px; --mf-radius:8px; --mf-radius-lg:12px;
+  --mf-type-caption:12px; --mf-type-label:13px; --mf-type-body:14px;
   --mf-type-input:16px; --mf-weight-medium:500; --mf-weight-strong:600;
-  --mf-bg:#f5f4ef; --mf-card:#fff; --mf-text:#252c3a; --mf-muted:#606c7e;
-  --mf-line:#e0e3e7; --mf-panel:#eeeff2; --mf-control-line:#8994a4;
-  --mf-action:#284be8; --mf-action-hover:#203ec7; --mf-accent:#284be8;
-  --mf-accent-hover:#203ec7; --mf-accent-soft:#edf0ff; --ui-brand:#284be8;
-  --ui-on-action:#fff; --mf-danger:#a93232; --mf-danger-bg:#fff1ef;
-  --mf-warning:#795522; --mf-warning-bg:#fbf1dd;
-  --mf-success:#40583c; --mf-success-bg:#eaf0e5;
+  --mf-bg:var(--mflow-canvas); --mf-card:var(--mflow-surface); --mf-text:var(--mflow-text);
+  --mf-muted:var(--mflow-muted); --mf-line:var(--mflow-line); --mf-panel:var(--mflow-raised);
+  --mf-control-line:var(--mflow-field-line);
+  --mf-action:var(--mflow-action); --mf-action-hover:var(--mflow-action-hover);
+  --mf-accent:var(--mflow-accent); --mf-accent-hover:var(--mflow-accent-hover);
+  --mf-accent-soft:var(--mflow-accent-soft); --ui-brand:var(--mf-action);
+  --ui-brand-soft:var(--mf-accent-soft); --ui-on-action:var(--mflow-on-action);
+  --mf-danger:var(--mflow-danger); --mf-danger-bg:var(--mflow-danger-bg);
+  --mf-warning:var(--mflow-warning); --mf-warning-bg:var(--mflow-warning-bg);
+  --mf-success:var(--mflow-success); --mf-success-bg:var(--mflow-success-bg);
+  --mf-shadow:none;
   --mf-info:var(--mf-accent); --mf-info-bg:var(--mf-accent-soft);
   --ui-sage:var(--mf-success-bg); --ui-sage-ink:var(--mf-success);
   --ds-sage:var(--mf-success-bg); --ds-sage-ink:var(--mf-success);
   --ds-gold:var(--mf-warning-bg); --ds-gold-ink:var(--mf-warning);
   --ui-warning-bg:var(--mf-warning-bg); --ui-success-bg:var(--mf-success-bg);
   --ui-success:var(--mf-success);
-  font-size:var(--mf-type-body); line-height:1.6;
-}
-html[data-theme="dark"] body.mf-v2[data-interface-v3][data-scenery] {
-  --mf-bg:#161b24; --mf-card:#202733; --mf-text:#edf0f7; --mf-muted:#b0bbce;
-  --mf-line:#394251; --mf-panel:#2a3342; --mf-control-line:#7c899d;
-  --mf-action:#a2b3ff; --mf-action-hover:#b9c6ff; --mf-accent:#a2b3ff;
-  --mf-accent-hover:#b9c6ff; --mf-accent-soft:#2b3656; --ui-brand:#a2b3ff;
-  --ui-on-action:#192348; --mf-danger:#ffb4aa; --mf-danger-bg:#3b272c;
-  --mf-warning:#f1ce91; --mf-warning-bg:#3a3023;
-  --mf-success:#c5ddba; --mf-success-bg:#29382f;
+  font-family:var(--mflow-font); font-size:var(--mf-type-body); line-height:1.55;
 }
 
 /* Typography, focus and spacing use the same values in both themes. */
 html body.mf-v2[data-interface-v3][data-scenery] :is(h1,h2,h3,h4) {font-weight:var(--mf-weight-strong);line-height:1.25;overflow-wrap:anywhere}
-html body.mf-v2[data-interface-v3][data-scenery] h1 {font-size:clamp(29px,3vw,39px);line-height:1.17;letter-spacing:-1.2px}
-html body.mf-v2[data-interface-v3][data-scenery] h2 {font-size:24px;letter-spacing:-.65px}
-html body.mf-v2[data-interface-v3][data-scenery] h3 {font-size:18px;letter-spacing:-.25px}
+html body.mf-v2[data-interface-v3][data-scenery] h1 {font-size:clamp(25px,2.4vw,32px);line-height:1.2;letter-spacing:-.85px}
+html body.mf-v2[data-interface-v3][data-scenery] h2 {font-size:20px;letter-spacing:-.4px}
+html body.mf-v2[data-interface-v3][data-scenery] h3 {font-size:16px;letter-spacing:-.2px}
 html body.mf-v2[data-interface-v3][data-scenery] :is(button,.btn,.action-link,.ui-nav-link) {transition:none}
 html body.mf-v2[data-interface-v3][data-scenery] :focus-visible {outline:3px solid var(--mf-accent);outline-offset:3px}
 html body.mf-v2[data-interface-v3][data-scenery] :is(.t-muted,.subtle,.settings-intro) {color:var(--mf-muted);font-size:13px;line-height:1.7}
@@ -46,8 +41,15 @@ html body.mf-v2[data-interface-v3][data-scenery] .eyebrow {font-size:11px;letter
 html body.mf-v2[data-interface-v3][data-scenery] :is(button,.btn,input[type="submit"],.teacher-primary-link) {
   min-height:var(--mf-control-height); max-width:100%; border-radius:var(--mf-radius-control);
   font:inherit; font-size:var(--mf-type-label); font-weight:var(--mf-weight-strong);
-  line-height:1.4; padding:var(--mf-space-3) var(--mf-space-4); white-space:normal;
+  line-height:1.4; padding:var(--mf-space-2) var(--mf-space-3); white-space:normal;
   overflow-wrap:anywhere; cursor:pointer;
+}
+html body.mf-v2[data-interface-v3][data-scenery] button.theme-toggle {
+  min-height:0;padding:0;border-color:transparent;
+  background:transparent;color:var(--mf-muted);box-shadow:none;
+}
+html body.mf-v2[data-interface-v3][data-scenery] button.theme-toggle:hover {
+  background:var(--mf-panel);color:var(--mf-text);
 }
 html body.mf-v2[data-interface-v3][data-scenery] :is(button.secondary,.btn.secondary,.stage-actions button[value="save"],.stage-actions button[value="return"],.assessment-actions button[value="draft"]) {
   border:1px solid var(--mf-control-line); background:var(--mf-card); color:var(--mf-text);
@@ -130,10 +132,13 @@ html body.mf-v2[data-interface-v3][data-scenery] :is(.card,.teacher-panel,.group
   background:var(--mf-card);color:var(--mf-text);box-shadow:none;min-width:0;
 }
 html body.mf-v2[data-interface-v3][data-scenery] summary {min-height:var(--mf-control-compact);cursor:pointer}
-html body.mf-v2[data-interface-v3][data-scenery] :is(.account-panel,.notification-panel) {border-radius:var(--mf-radius);border-color:var(--mf-line);box-shadow:0 12px 36px #10162a1a}
+html body.mf-v2[data-interface-v3][data-scenery] :is(.account-panel,.notification-panel) {border-radius:var(--mf-radius);border-color:var(--mf-line);box-shadow:0 12px 30px var(--mflow-shadow)}
 html body.mf-v2[data-interface-v3][data-scenery] .task-drawer {border-radius:var(--mf-radius-lg) 0 0 var(--mf-radius-lg)}
 html body.mf-v2[data-interface-v3][data-scenery] .task-drawer .drawer-close {min-width:var(--mf-control-compact);min-height:var(--mf-control-compact)}
 
+@media(pointer:coarse),(max-width:800px) {
+  html body.mf-v2[data-interface-v3][data-scenery] {--mf-control-height:44px;--mf-control-compact:44px}
+}
 @media(max-width:600px) {
   html body.mf-v2[data-interface-v3][data-scenery] :is(input:not([type="checkbox"],[type="radio"],[type="hidden"]),select,textarea) {font-size:var(--mf-type-input)}
   html body.mf-v2[data-interface-v3][data-scenery] :is(.card,.teacher-panel,.group-panel,.team-person,.result-item,.settings-card,.ui-surface) {padding:var(--mf-space-5)}

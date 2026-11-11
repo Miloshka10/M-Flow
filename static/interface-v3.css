@@ -1,31 +1,62 @@
 /* Approved page compositions. Shared tokens and elements live in components.css. */
-html body.mf-v2[data-interface-v3][data-scenery] {--ui-sidebar:216px}
+html body.mf-v2[data-interface-v3][data-scenery] {--ui-sidebar:224px;--ui-gutter:32px}
 
 /* The existing shell keeps all links, disclosures and keyboard behavior. */
-html body.mf-v2[data-interface-v3][data-scenery].ui-authenticated :is(.container,.app) {width:calc(100% - var(--ui-sidebar));max-width:none;margin:0 0 0 var(--ui-sidebar);padding:0 44px}
+html body.mf-v2[data-interface-v3][data-scenery].ui-authenticated {background:var(--mflow-shell)}
+html body.mf-v2[data-interface-v3][data-scenery].ui-authenticated :is(.container,.app) {
+  width:calc(100% - var(--ui-sidebar) - 8px);max-width:none;min-height:calc(100dvh - 16px);
+  margin:8px 8px 8px var(--ui-sidebar);padding:0 var(--ui-gutter);
+  border:1px solid var(--mf-line);border-radius:8px;background:var(--mf-card);
+}
 html body.mf-v2[data-interface-v3][data-scenery].ui-authenticated :is(.container,.app)>main {max-width:1170px;margin:0 auto}
-html body.mf-v2[data-interface-v3][data-scenery] .main-header {min-height:80px;margin:0 0 36px;padding:12px 0;border-bottom:1px solid var(--mf-line)}
-html body.mf-v2[data-interface-v3][data-scenery] .ui-sidebar {padding:30px 18px 24px}
-html body.mf-v2[data-interface-v3][data-scenery] .brand {font-size:28px;letter-spacing:-1.3px}
-html body.mf-v2[data-interface-v3][data-scenery] .ui-sidebar-brand {padding:0 13px}
-html body.mf-v2[data-interface-v3][data-scenery] .ui-workspace-label {margin:40px 13px 14px;font-size:10px;letter-spacing:1.4px}
-html body.mf-v2[data-interface-v3][data-scenery] .ui-nav-link {min-height:46px;padding:11px 13px;font-size:14px;border-radius:10px;gap:13px}
-html body.mf-v2[data-interface-v3][data-scenery] .ui-nav-link[aria-current] {color:var(--ui-on-action)}
-html body.mf-v2[data-interface-v3][data-scenery] .account-menu>summary {min-height:44px;font-size:13px;border-radius:8px;padding:9px 12px}
+html body.mf-v2[data-interface-v3][data-scenery] .main-header {
+  min-height:54px;margin:0 calc(-1 * var(--ui-gutter)) 28px;padding:0 var(--ui-gutter);
+  border-bottom:1px solid var(--mf-line);
+}
+html body.mf-v2[data-interface-v3][data-scenery] .ui-sidebar {padding:18px 12px 16px;border:0;background:var(--mflow-shell)}
+html body.mf-v2[data-interface-v3][data-scenery] .brand {font-size:19px;letter-spacing:-.6px;line-height:1.25}
+html body.mf-v2[data-interface-v3][data-scenery] .ui-sidebar-brand {padding:0 9px}
+html body.mf-v2[data-interface-v3][data-scenery] .ui-workspace-label {margin:28px 9px 8px;font-size:11px;letter-spacing:.1px}
+html body.mf-v2[data-interface-v3][data-scenery] .ui-primary-nav {gap:2px}
+html body.mf-v2[data-interface-v3][data-scenery] .ui-nav-link {min-height:var(--mf-control-compact);padding:7px 9px;font-size:13px;border-radius:6px;gap:9px}
+html body.mf-v2[data-interface-v3][data-scenery] .ui-nav-link .ui-nav-icon {width:16px;height:16px;flex-basis:16px}
+html body.mf-v2[data-interface-v3][data-scenery] .ui-nav-link[aria-current] {background:var(--mf-panel);color:var(--mf-text)}
+html body.mf-v2[data-interface-v3][data-scenery] .header-actions {gap:4px;flex-wrap:nowrap}
+html body.mf-v2[data-interface-v3][data-scenery] .account-menu>summary {
+  display:flex;align-items:center;gap:8px;min-width:var(--mf-control-compact);
+  min-height:var(--mf-control-compact);font-size:12px;border:0;border-radius:6px;padding:0 8px;
+}
+html body.mf-v2[data-interface-v3][data-scenery] .account-menu>summary:hover {background:var(--mf-panel)}
+html body.mf-v2[data-interface-v3][data-scenery] .account-menu>summary .ui-icon {width:16px;height:16px}
 html body.mf-v2[data-interface-v3][data-scenery] .account-panel {width:250px;border-radius:14px;padding:10px;background:var(--mf-card);color:var(--mf-text)}
 html body.mf-v2[data-interface-v3][data-scenery] .account-panel :is(a,.logout) {min-height:44px;font-size:14px;padding:11px 12px;border-radius:7px;background:transparent;color:var(--mf-text);font-weight:400}
 html body.mf-v2[data-interface-v3][data-scenery] .account-panel :is(a,.logout):hover {background:var(--mf-panel)}
 html body.mf-v2[data-interface-v3][data-scenery] .account-panel .logout {border:0;border-top:1px solid var(--mf-line);border-radius:0}
-html body.mf-v2[data-interface-v3][data-scenery] .notification-bell>summary {min-height:44px}
+html body.mf-v2[data-interface-v3][data-scenery] .notification-bell>summary {
+  min-width:var(--mf-control-compact);min-height:var(--mf-control-compact);
+  border-radius:6px;border-color:transparent;background:transparent;padding:0 7px;
+}
+html body.mf-v2[data-interface-v3][data-scenery] .notification-bell>summary:hover,
+html body.mf-v2[data-interface-v3][data-scenery] .notification-bell[open]>summary {background:var(--mf-panel)}
+
+/* Public routes use the same toolbar and place the form below it. */
+html body.mf-v2[data-interface-v3][data-scenery] .access-topbar {
+  width:100%;min-height:56px;display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--mf-line);gap:16px;padding:0 4px;
+}
+html body.mf-v2[data-interface-v3][data-scenery] .access-topbar .brand {margin:0}
+html body.mf-v2[data-interface-v3][data-scenery] .ui-error-page .access-topbar {position:absolute;inset:0 0 auto;padding:0 var(--ui-gutter)}
+html body.mf-v2[data-interface-v3][data-scenery] .ui-error-page .login-box {margin-top:60px;border-radius:var(--mf-radius)}
 
 /* Current project, one server-calculated next step, then tasks and groups. */
 html body.mf-v2[data-interface-v3][data-scenery] .ui-page-heading {margin:38px 0 26px}
 html body.mf-v2[data-interface-v3][data-scenery] .focus-switch {margin:0 0 20px;gap:10px;font-size:13px}
-html body.mf-v2[data-interface-v3][data-scenery] .ds-feature {display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:0;padding:0;margin:16px 0 30px;border:1px solid var(--mf-line);border-radius:20px;background:var(--mf-card);overflow:hidden;box-shadow:0 10px 34px #26354d09}
-html body.mf-v2[data-interface-v3][data-scenery] .ds-feature-main {padding:30px 32px;align-self:stretch}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-feature {display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:0;padding:0;margin:16px 0 24px;border:1px solid var(--mf-line);border-radius:var(--mf-radius);background:var(--mf-card);overflow:hidden;box-shadow:none}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-feature-main {padding:24px;align-self:stretch}
 html body.mf-v2[data-interface-v3][data-scenery] .v3-focus-heading {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
-html body.mf-v2[data-interface-v3][data-scenery] .ds-feature #focus-name {font-size:clamp(27px,2.8vw,36px);line-height:1.17;letter-spacing:-1px;margin:16px 0 26px}
-html body.mf-v2[data-interface-v3][data-scenery] .ds-feature .home-next {border-top:1px solid var(--mf-line);padding-top:22px}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-feature #focus-name {font-size:clamp(21px,2.2vw,28px);line-height:1.25;letter-spacing:-.55px;margin:12px 0 18px}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-feature #focus-name a:hover {text-decoration:underline;text-underline-offset:4px}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-feature .home-next {border-top:1px solid var(--mf-line);padding-top:16px}
 html body.mf-v2[data-interface-v3][data-scenery] .v3-next-title {display:flex;align-items:center;gap:15px}
 html body.mf-v2[data-interface-v3][data-scenery] .v3-next-title h3 {font-size:18px;line-height:1.45;margin:0}
 html body.mf-v2[data-interface-v3][data-scenery] .v3-stage-number {font-size:33px;line-height:1;color:var(--mf-accent);font-weight:500;letter-spacing:-1.5px;flex-shrink:0}
@@ -61,27 +92,42 @@ html body.mf-v2[data-interface-v3][data-scenery] .upcoming-list .due-label {font
 html body.mf-v2[data-interface-v3][data-scenery] .home-welcome {background:var(--mf-card);border:1px solid var(--mf-line);border-radius:20px;padding:40px 28px}
 html body.mf-v2[data-interface-v3][data-scenery] .ui-hello-empty {padding:0;background:none;border:0}
 html body.mf-v2[data-interface-v3][data-scenery] .ui-hello-empty>p {font-size:15px;max-width:500px;line-height:1.8;color:var(--mf-muted);margin:14px 0 24px}
-html body.mf-v2[data-interface-v3][data-scenery] .ds-project-card {padding:var(--mf-space-6);border:1px solid var(--mf-line);border-radius:var(--mf-radius);background:var(--mf-card)}
-html body.mf-v2[data-interface-v3][data-scenery] .ds-project-card .project-tile {display:block;padding:0;background:transparent;border:0}
-html body.mf-v2[data-interface-v3][data-scenery] .ds-project-card .ds-cover {display:none}
-html body.mf-v2[data-interface-v3][data-scenery] .ds-card-body {padding:0}
-html body.mf-v2[data-interface-v3][data-scenery] .ds-card-body h3 {font-size:23px;line-height:1.35;margin:15px 0}
-html body.mf-v2[data-interface-v3][data-scenery] .ds-card-open {font-size:14px;margin-top:20px;min-height:44px}
+html body.mf-v2[data-interface-v3][data-scenery] .project-grid {grid-template-columns:minmax(0,1fr);gap:0;border-top:1px solid var(--mf-line)}
+html body.mf-v2[data-interface-v3][data-scenery] .workspace-projects>.section-title {margin:0 0 8px}
+html body.mf-v2[data-interface-v3][data-scenery] .workspace-projects .project-people-links {margin:0 0 8px}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-project-tools {margin:12px 0 16px}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-project-card {
+  padding:0;border:0;border-bottom:1px solid var(--mf-line);border-radius:0;background:var(--mf-card);
+}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-project-card .project-tile {
+  display:block;margin:0;padding:12px 8px 0;background:transparent;border:0;border-radius:var(--mf-radius-sm);
+}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-card-body {
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(124px,180px) auto;
+  align-items:center;gap:12px 24px;padding:0;min-width:0;
+}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-card-body h3 {font-size:16px;line-height:1.35;margin:0 0 6px}
+html body.mf-v2[data-interface-v3][data-scenery] .project-tile:hover h3 {color:var(--mf-accent)}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-card-progress .ds-stage-track {margin:0 0 6px}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-card-open {
+  margin:0;padding:0;border:0;min-width:24px;min-height:24px;color:var(--mf-muted);
+}
+html body.mf-v2[data-interface-v3][data-scenery] .ds-card-details {padding:0 8px}
 
 /* Actual submissions remain links to their original versioned review forms. */
 html body.mf-v2[data-interface-v3][data-scenery] .teacher-hero {margin:38px 0 26px}
-html body.mf-v2[data-interface-v3][data-scenery] .teacher-hero h1 {font-size:clamp(29px,3vw,39px)}
+html body.mf-v2[data-interface-v3][data-scenery] .teacher-hero h1 {font-size:clamp(25px,2.4vw,32px)}
 html body.mf-v2[data-interface-v3][data-scenery] .t-stats {display:flex;flex-wrap:wrap;gap:24px;margin:20px 0 26px;padding:0;border:0}
 html body.mf-v2[data-interface-v3][data-scenery] .t-stat {flex:0 1 auto;display:flex;gap:8px;align-items:baseline;background:var(--mf-bg);border:0;border-radius:0;padding:0 24px 0 0;border-right:1px solid var(--mf-line)}
 html body.mf-v2[data-interface-v3][data-scenery] .t-stat:last-child {border:0}
 html body.mf-v2[data-interface-v3][data-scenery] .t-stat strong {font-size:22px;font-weight:500}
 html body.mf-v2[data-interface-v3][data-scenery] .t-stat span {font-size:13px}
 html body.mf-v2[data-interface-v3][data-scenery] .teacher-dashboard-grid {grid-template-columns:minmax(0,1.55fr) minmax(270px,1fr);gap:24px}
-html body.mf-v2[data-interface-v3][data-scenery] .teacher-queue-item {display:grid;grid-template-columns:44px minmax(0,1fr) minmax(150px,200px);gap:18px;padding:22px 0;background:var(--mf-card);border:0;border-top:1px solid var(--mf-line);border-radius:0;margin:0;align-items:start}
-html body.mf-v2[data-interface-v3][data-scenery] .v3-submission-mark {width:42px;height:48px;display:grid;place-items:center;border:1px solid var(--mf-line);border-radius:8px;color:var(--mf-accent);background:var(--mf-accent-soft)}
+html body.mf-v2[data-interface-v3][data-scenery] .teacher-queue-item {display:grid;grid-template-columns:32px minmax(0,1fr) minmax(128px,170px);gap:12px;padding:16px 0;background:var(--mf-card);border:0;border-top:1px solid var(--mf-line);border-radius:0;margin:0;align-items:start}
+html body.mf-v2[data-interface-v3][data-scenery] .v3-submission-mark {width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--mf-line);border-radius:6px;color:var(--mf-muted);background:var(--mf-panel)}
 html body.mf-v2[data-interface-v3][data-scenery] .v3-submission-main {min-width:0}
 html body.mf-v2[data-interface-v3][data-scenery] .v3-submission-label {font-size:11px;font-weight:500;letter-spacing:.3px;color:var(--mf-muted)}
-html body.mf-v2[data-interface-v3][data-scenery] .teacher-queue-item h4 {font-size:17px;margin:7px 0}
+html body.mf-v2[data-interface-v3][data-scenery] .teacher-queue-item h4 {font-size:15px;margin:4px 0}
 html body.mf-v2[data-interface-v3][data-scenery] .teacher-queue-item p {font-size:12px;line-height:1.7;margin:5px 0}
 html body.mf-v2[data-interface-v3][data-scenery] .v3-submission-side {display:grid;justify-items:end;text-align:right;gap:12px}
 html body.mf-v2[data-interface-v3][data-scenery] .v3-submission-side .action-link {display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;border:1px solid var(--mf-line);border-radius:9px;padding:10px 13px;color:var(--mf-text);font-size:13px}
@@ -101,6 +147,7 @@ html body.mf-v2[data-interface-v3][data-scenery] .pw-stage-heading>p {font-size:
 html body.mf-v2[data-interface-v3][data-scenery] .pw-grid {grid-template-columns:minmax(0,1.15fr) minmax(300px,.9fr);gap:24px}
 html body.mf-v2[data-interface-v3][data-scenery] .pw-tasks {border:1px solid var(--mf-line);background:var(--mf-card);border-radius:var(--mf-radius);padding:var(--mf-space-6)}
 html body.mf-v2[data-interface-v3][data-scenery] .pw-result {border-radius:var(--mf-radius);padding:var(--mf-space-6)}
+html body.mf-v2[data-interface-v3][data-scenery] .pw-result:focus-visible {outline-width:2px;outline-offset:-2px}
 html body.mf-v2[data-interface-v3][data-scenery] .pw-result h3 {font-size:21px}
 html body.mf-v2[data-interface-v3][data-scenery] .pw-result p {font-size:14px;line-height:1.8}
 html body.mf-v2[data-interface-v3][data-scenery] .pw-result .stage-comment {border-radius:10px;border-left:3px solid var(--mf-warning);padding:16px 18px}
@@ -153,6 +200,9 @@ html body.mf-v2[data-interface-v3][data-scenery] .project-people-links {display:
 html body.mf-v2[data-interface-v3][data-scenery] .project-context-actions {display:flex;justify-content:flex-end;margin:6px 0}
 html body.mf-v2[data-interface-v3][data-scenery] .project-context-actions a {display:inline-flex;gap:8px;align-items:center;min-height:44px;font-size:13px;color:var(--mf-muted)}
 html body.mf-v2[data-interface-v3][data-scenery] .project-context-actions a[aria-current] {color:var(--mf-accent)}
+html body.mf-v2[data-interface-v3][data-scenery] .journey-heading {gap:8px 24px}
+html body.mf-v2[data-interface-v3][data-scenery] .journey-heading h1 {font-size:clamp(25px,2.4vw,32px)}
+html body.mf-v2[data-interface-v3][data-scenery] .journey-heading > .action-link {margin:4px 0 0}
 html body.mf-v2[data-interface-v3][data-scenery] .supervision-context {padding:20px 24px;margin:20px 0;border:1px solid var(--mf-line);border-radius:12px;background:var(--mf-card)}
 html body.mf-v2[data-interface-v3][data-scenery] .home-welcome .ui-hello-empty :is(h2,.action-link) {color:var(--mf-text)}
 html body.mf-v2[data-interface-v3][data-scenery] .home-welcome .welcome-actions>.btn {background:var(--mf-action);color:var(--ui-on-action)}
@@ -160,7 +210,7 @@ html body.mf-v2[data-interface-v3][data-scenery] :is(#my-projects,#student-resul
 html body.mf-v2[data-interface-v3][data-scenery] .ds-card-body .tile-alert {display:block;margin-top:8px}
 
 @media(max-width:1200px) {
-  html body.mf-v2[data-interface-v3][data-scenery].ui-authenticated :is(.container,.app) {padding:0 28px}
+  html body.mf-v2[data-interface-v3][data-scenery] {--ui-gutter:24px;--ui-sidebar:200px}
   html body.mf-v2[data-interface-v3][data-scenery] .ds-feature {grid-template-columns:minmax(0,1fr) 235px}
   html body.mf-v2[data-interface-v3][data-scenery] .ds-feature-main {padding:26px}
   html body.mf-v2[data-interface-v3][data-scenery] .v3-route-aside {padding:26px 20px}
@@ -179,8 +229,8 @@ html body.mf-v2[data-interface-v3][data-scenery] .ds-card-body .tile-alert {disp
   html body.mf-v2[data-interface-v3][data-scenery] .ds-home-columns {grid-template-columns:minmax(0,1fr)}
 }
 @media(max-width:800px) {
-  html body.mf-v2[data-interface-v3][data-scenery].ui-authenticated :is(.container,.app) {width:100%;margin:0;padding:0 24px}
-  html body.mf-v2[data-interface-v3][data-scenery] .main-header {min-height:70px;margin-bottom:28px}
+  html body.mf-v2[data-interface-v3][data-scenery].ui-authenticated :is(.container,.app) {width:100%;min-height:100dvh;margin:0;border:0;border-radius:0}
+  html body.mf-v2[data-interface-v3][data-scenery] .main-header {min-height:56px;margin-bottom:20px}
   html body.mf-v2[data-interface-v3][data-scenery] .ui-page-heading {margin:26px 0 22px}
   html body.mf-v2[data-interface-v3][data-scenery] .project-navigation {gap:20px;flex-wrap:wrap}
   html body.mf-v2[data-interface-v3][data-scenery] .project-navigation a {font-size:13px}
@@ -190,12 +240,21 @@ html body.mf-v2[data-interface-v3][data-scenery] .ds-card-body .tile-alert {disp
   html body.mf-v2[data-interface-v3][data-scenery] .auth-access-aside h2 {font-size:27px}
 }
 @media(max-width:600px) {
-  html body.mf-v2[data-interface-v3][data-scenery].ui-authenticated :is(.container,.app) {padding:0 18px}
-  html body.mf-v2[data-interface-v3][data-scenery] h1 {font-size:30px}
-  html body.mf-v2[data-interface-v3][data-scenery] h2 {font-size:22px}
+  html body.mf-v2[data-interface-v3][data-scenery] {--ui-gutter:16px}
+  html body.mf-v2[data-interface-v3][data-scenery] h1 {font-size:25px}
+  html body.mf-v2[data-interface-v3][data-scenery] h2 {font-size:19px}
+  html body.mf-v2[data-interface-v3][data-scenery] .main-header {gap:4px}
+  html body.mf-v2[data-interface-v3][data-scenery] .ui-header-start {gap:4px}
+  html body.mf-v2[data-interface-v3][data-scenery] .ui-account-label {display:none}
+  html body.mf-v2[data-interface-v3][data-scenery] .account-menu>summary {justify-content:center}
   html body.mf-v2[data-interface-v3][data-scenery] :is(input:not([type="hidden"]),textarea,select) {font-size:16px}
   html body.mf-v2[data-interface-v3][data-scenery] .ds-feature-main {padding:23px 20px}
-  html body.mf-v2[data-interface-v3][data-scenery] .ds-feature #focus-name {font-size:29px;line-height:1.25}
+  html body.mf-v2[data-interface-v3][data-scenery] .ds-feature #focus-name a {
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
+  }
+  html body.mf-v2[data-interface-v3][data-scenery] .ds-card-body {grid-template-columns:minmax(0,1fr) auto;gap:8px}
+  html body.mf-v2[data-interface-v3][data-scenery] .ds-card-open {grid-area:1 / 2}
+  html body.mf-v2[data-interface-v3][data-scenery] .ds-card-progress {max-width:180px}
   html body.mf-v2[data-interface-v3][data-scenery] .v3-next-title h3 {font-size:16px}
   html body.mf-v2[data-interface-v3][data-scenery] .ds-feature .home-next>.btn {display:flex;width:100%;margin:20px 0 8px}
   html body.mf-v2[data-interface-v3][data-scenery] .ds-feature .home-next>.action-link {display:flex;width:100%;justify-content:center}
