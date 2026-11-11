@@ -1,4 +1,4 @@
-import {createOrbitScene, observeOrbitAppearance} from './linear-orbit.js?v=20261111-linear';
+import {createOrbitScene, observeOrbitAppearance} from './linear-orbit.js?v=20261111-orbit';
 
 const canvas = document.querySelector('[data-access-orbit]');
 const scene = createOrbitScene(canvas, {

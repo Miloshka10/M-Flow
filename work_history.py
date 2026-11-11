@@ -104,6 +104,12 @@ def history_parameters(args):
     return work, int(raw)
 
 
+def recent_history(conn, pid):
+    """Read the latest tracked events for the project overview."""
+    return conn.execute("""SELECT event, kind, number, attempt, actor_name, author_name, recorded_at, comment
+        FROM work_history WHERE project_id=? ORDER BY id DESC LIMIT ?""", (pid, PAGE_SIZE)).fetchall()
+
+
 def load_history(conn, pid, work, page):
     # Access must be checked by the route. Content reads are bounded to 12 events
     # and at most six untracked old work records, without lazy writes or N+1.
@@ -138,10 +144,13 @@ def _safe_url(value):
     return safe_web_url(value)
 
 
+def event_context(row):
+    work = f'Этап {row["number"]}' if row['kind'] == 'stage' else 'Видеозащита'
+    return f'{work} · Отправка №{row["attempt"]}' if row['attempt'] else work
+
+
 def _render_event(row):
     old = row['event'] == 'legacy'
-    work = f'Этап {row["number"]}' if row['kind'] == 'stage' else 'Видеозащита'
-    attempt = f' · Отправка №{row["attempt"]}' if row['attempt'] else ''
     date = ('Последнее известное обновление: ' + format_timestamp(row['source_updated_at'])) if old else format_timestamp(row['recorded_at'])
     actor = f'<p class="t-muted">{escape(row["actor_name"])}</p>' if row['actor_name'] else ''
     author = f'<p class="t-muted">Автор записи: {escape(row["author_name"])}</p>' if row['author_name'] else ''
@@ -156,7 +165,7 @@ def _render_event(row):
                     + ('Презентация этой версии' if row['kind'] == 'stage' else 'Запись этой версии') + f' {icon("external")}</a>') if _safe_url(url) else '<p>Сохранённая ссылка некорректна; переход отключён.</p>'
     explanation = (f'<p class="history-notice">Это доступное состояние старой записи, включая возможный черновик и прежнее замечание. '
         f'Точная дата отправки и содержание прошлых попыток неизвестны. Состояние: {escape({"review":"На проверке","submitted":"На проверке","done":"Принято","accepted":"Принято","progress":"В работе или на доработке","returned":"На доработке","draft":"Черновик"}.get(row["state"], row["state"]))}.</p>') if old else ''
-    return f'''<article class="history-event" data-history-event="{row['event']}"><span class="eyebrow">{work}{attempt}</span>
+    return f'''<article class="history-event" data-history-event="{row['event']}"><span class="eyebrow">{event_context(row)}</span>
         <h2>{EVENTS[row['event']]}</h2><p class="t-muted">{date}</p>{actor}{author}{reviewer}{explanation}
         <details><summary data-ui-icon="history">Текст и ссылка этой записи</summary><p class="history-text" tabindex="0">{escape(row['result'] or 'Текст не указан.')}</p>{resource}</details>{comment}</article>'''
 
