@@ -28,7 +28,7 @@ class AuthSecurityCases:
             self.assertEqual(page.count('href="/forgot-password"'), 1)
             self.assertLess(page.index('for="auth-password"'), page.index('Забыли пароль?'))
             self.assertLess(page.index('Забыли пароль?'), page.index('id="auth-password"'))
-            self.assertIn('aria-label="Полезно знать"', page)
+            self.assertIn('data-theme-toggle', page)
             self.assertIn('name="csrf_token"', page)
         for path in ('/register', '/teacher/register'):
             page = self.client.get(path).text

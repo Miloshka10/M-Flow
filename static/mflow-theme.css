@@ -1,6 +1,5 @@
 /* M-Flow — one calm, consistent interface. No external fonts or assets. */
 :root {
-  color-scheme: light;
   --mf-accent: #23786f;
   --mf-accent-hover: #195d56;
   --mf-accent-soft: #e4f1ee;

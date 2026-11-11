@@ -1353,7 +1353,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
             page = self.client.get(path).text
             self.assertEqual(page.count('/static/product-design.css'), 1)
-            self.assertIn('aria-label="Полезно знать"', page)
+            self.assertEqual(page.count('/static/appearance.css'), 1)
             self.assertNotIn('Школьная медиастудия', page)
             self.assertEqual(page.count('/static/interface.css'), 1)
             self.assertIn('К содержимому', page)
@@ -1419,13 +1419,14 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
             page = self.client.get(path).text
             self.assertEqual(page.count('/static/graphics.css'), 1)
-            self.assertIn('aria-label="Полезно знать"', page)
+            self.assertIn('<aside class="auth-access-aside" aria-hidden="true">', page)
+            self.assertIn('data-access-orbit', page)
             self.assertNotIn('Школьная медиастудия', page)
             self.assertNotIn('by Minich', page)
             self.assertNotIn('project-kit.svg', page)
         self.sign_in(3)
         page = self.client.get('/').text
-        self.assertIn('class="ds-cover ds-', page)
+        self.assertIn('class="ds-card-progress"', page)
         self.assertIn('aria-hidden="true"', page)
         self.assertIn('href="/teams#people"', page)
         self.assertNotIn('blank-study.svg', page)  # Existing projects, not an empty state.
@@ -1582,10 +1583,10 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for path in ("/login", "/register", "/teacher/login", "/teacher/register"):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200)
-            self.assertTrue(response.text.startswith('<!doctype html><html lang="ru">'))
+            self.assertTrue(response.text.startswith('<!doctype html><html lang="ru" data-theme="dark">'))
             self.assertEqual(response.text.count('name="viewport"'), 1)
             self.assertEqual(response.text.count('/static/mflow-theme.css'), 1)
-            self.assertLess(response.text.index('class="auth-form-side"'), response.text.index('class="auth-access-aside"'))
+            self.assertLess(response.text.index('class="auth-form-side"'), response.text.index('data-access-orbit'))
             self.assertNotIn('by Minich', response.text)
             self.assertIn('name="username"', response.text)
             self.assertIn('type="password"', response.text)

@@ -15,9 +15,10 @@
   box-shadow: 0 8px 32px #0002; }
 .notification-panel h2 { margin: 0 0 12px; font-size: 20px; }
 .notification-list { list-style: none; margin: 16px 0; padding: 0; }
-.notification-item { border: 1px solid var(--mf-line); border-radius: 14px;
-  padding: 12px; margin: 10px 0; overflow-wrap: anywhere; }
-.notification-item.is-unread { border-left: 4px solid var(--mf-action); background: var(--mf-accent-soft); }
+.notification-item { position: relative; border-top: 1px solid var(--mf-line);
+  padding: 12px 0 12px 16px; margin: 0; overflow-wrap: anywhere; }
+.notification-item.is-unread::before { content: ""; position: absolute; top: 19px; left: 1px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--mf-action); }
 .notification-item a { display: grid; gap: 4px; color: var(--mf-text); }
 .notification-item a:hover strong { text-decoration: underline; }
 .notification-item a span { font-size: 13px; white-space: pre-wrap; }
@@ -36,5 +37,5 @@ body .notification-meta button { min-height: 44px; padding: 8px 12px; font-size:
   .notification-panel { top: 100%; right: 0; width: 100%; max-width: 100%; }
 }
 @media (forced-colors: active) {
-  .notification-item.is-unread { border-left-color: Highlight; }
+  .notification-item.is-unread::before { background: Highlight; forced-color-adjust: none; }
 }

@@ -35,4 +35,17 @@ No remaining P0/P1/P2 finding in the inspected scope. The read-only presentation
 - Local full suite: 755 tests reported OK, 312 skipped for unavailable local PostgreSQL/platform capabilities. After the final tab fallback change, the focused new-view suite reported 16 cases OK, 8 PostgreSQL skips. All 13 JavaScript suites passed. The updated local prototype also built and passed its 17 workflow/packaging checks. GitHub CI must pass the final source on Python 3.12 and 3.14 with disposable PostgreSQL before merge.
 - No browser console warnings/errors in the inspected server view. Physical touch hardware and authenticated production behavior were not tested locally.
 
+Previous result — passed.
+
+## Единое оформление и темы · 11 ноября 2026
+
+Визуальный ориентир — рабочий экран «Мост будущего» в `.tmp/theme-qa/before/next.png`. Исходный вход — `.tmp/theme-qa/before/login.png`. Итоговые снимки — `.tmp/theme-qa/after/next-final.png` и `.tmp/theme-qa/after/login-final.png`. Все четыре снимка имеют размер 1280 × 900 px при таком же CSS-viewport. Для общего сравнения каждый кадр уменьшен до 640 × 450 px в `.tmp/theme-qa/comparison.png`. В `.tmp/theme-qa/comparison-focus.png` навигация, вкладки и длинное название на телефоне сопоставлены в масштабе 1:1. Мобильные исходники имеют размер 375 × 812 px. В сравнении использованы одинаковые роли, проект и состояние этапа. Положение движущихся узлов на снимках может различаться.
+
+- На входе поле пароля и восстановление видны без дополнительного блока текста. Справа статичная орбита, на телефоне форма занимает всю ширину. Проверены роль, видимость пароля и вход через обычную форму.
+- При ширине 375 px название из 80 букв занимало большую часть рабочего блока. Теперь на главной видно до двух строк, полное название доступно на странице проекта по той же ссылке. На ширине 768 px карточки разной высоты заменены строками с прогрессом. Итоговый снимок — `.tmp/theme-qa/after/studentProjects-final-tablet.png`.
+- На 320 px в обзоре проекта оставалась горизонтальная прокрутка. После изменения минимальной ширины измерены 305 px и для области просмотра, и для содержимого. Проверены длинное название, смена этапа, вкладка «История», возврат и поворот орбиты с клавиатуры.
+- Проверены обе темы на входе, в рабочем пространстве и в обзоре проектов. Светлая тема сохранилась при перезагрузке и входе. Выключение анимаций в настройках остановило орбиту. Кнопка сброса вернула тёмную тему.
+- На локальных данных проверены кабинеты обеих ролей, включая мобильную очередь и открытие формы решения, восстановление, почта профиля, группы, команды, настройки, история и защита. Ширины 320, 375, 768 и 1280 px. В итоговых браузерных проверках отсутствовали ошибки и предупреждения консоли.
+- Локально пройдены 13 наборов JavaScript и 757 Python-тестов с 313 пропусками PostgreSQL и проверок окружения. Браузерные проверки ролей проведены на тестовых аккаунтах в эмуляции размеров экрана.
+
 final result: passed

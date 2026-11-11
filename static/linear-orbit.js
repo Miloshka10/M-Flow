@@ -1,5 +1,13 @@
 const TAU = Math.PI * 2;
 const PHI = (1 + Math.sqrt(5)) / 2;
+const palettes = {
+  dark: {grid: '#6c7180', reference: '#555b6b', track: '#afb7c9', selected: '#a8a5ec',
+    node: '#d7dfef', active: '#b8b4ff', halo: '#aaa4ff', core: '#f0f1ff',
+    layer: '#9b99d9', shell: '#dce1f4'},
+  light: {grid: '#4e5164', reference: '#606483', track: '#555a77', selected: '#5050a9',
+    node: '#414760', active: '#4745aa', halo: '#4846ad', core: '#242649',
+    layer: '#63609e', shell: '#444678'},
+};
 const vertices = [[0,1,PHI],[0,-1,PHI],[0,1,-PHI],[0,-1,-PHI],[1,PHI,0],[-1,PHI,0],[1,-PHI,0],[-1,-PHI,0],[PHI,0,1],[-PHI,0,1],[PHI,0,-1],[-PHI,0,-1]].map(v => v.map(n => n / Math.hypot(...v)));
 const edges = vertices.flatMap((a,i) => vertices.flatMap((b,j) => j > i && Math.hypot(...a.map((v,k) => v-b[k])) < 1.1 ? [[i,j]] : []));
 const connected=(a,b)=>edges.some(([x,y])=>x===Math.min(a,b)&&y===Math.max(a,b));
@@ -12,6 +20,23 @@ const rotate = ([x,y,z], ax, ay, az = 0) => {
 
 export function clampOrbitView({yaw,pitch}) {
   return {yaw:Number.isFinite(yaw)?((yaw+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI:0,pitch:Math.max(-.95,Math.min(.95,Number.isFinite(pitch)?pitch:0))};
+}
+
+export function observeOrbitAppearance(onChange) {
+  const root = document.documentElement;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const sync = () => onChange({
+    theme: root.dataset.theme,
+    reduced: reducedMotion.matches || root.dataset.animations === 'off',
+  });
+  const observer = new MutationObserver(sync);
+  observer.observe(root, {attributes: true, attributeFilter: ['data-theme', 'data-animations']});
+  reducedMotion.addEventListener('change', sync);
+  sync();
+  return () => {
+    observer.disconnect();
+    reducedMotion.removeEventListener('change', sync);
+  };
 }
 
 export function createOrbitScene(element, initial, callbacks={}) {
@@ -44,6 +69,7 @@ export function createOrbitScene(element, initial, callbacks={}) {
     const draw = () => {
       if (!width || !height) return;
       const c=config,t=clock,scale=Math.min(width/470,height/400,1.3);
+      const palette = c.theme === 'light' ? palettes.light : palettes.dark;
       ctx.clearRect(0,0,width,height);
       const easing=c.paused||c.reduced?1:.065;
       built+=(c.accepted-built)*easing;
@@ -55,11 +81,11 @@ export function createOrbitScene(element, initial, callbacks={}) {
       const spread=scale*(.80+Math.min(target,5)*.04);
       const centerSize=(25+built*10)*scale;
       const origin=project([0,0,0]);
-      line([[width/2-12, height/2],[width/2+12,height/2]],'#6c7180',.11);
-      line([[width/2,height/2-12],[width/2,height/2+12]],'#6c7180',.11);
+      line([[width/2-12, height/2],[width/2+12,height/2]],palette.grid,.11);
+      line([[width/2,height/2-12],[width/2,height/2+12]],palette.grid,.11);
       // A quiet external reference ring stays fixed; the built structure moves within it.
       const reference=Array.from({length:129},(_,i)=>project(rotate([Math.cos(i/128*TAU)*208*spread,Math.sin(i/128*TAU)*208*spread,0],1.15,.1,.0)));
-      line(reference,'#555b6b',.14,.55);
+      line(reference,palette.reference,.2,.55);
       const bodies=[];
       for (let i=0;i<layers;i++) {
         reveal[i]+=(1-reveal[i])*easing;
@@ -68,12 +94,12 @@ export function createOrbitScene(element, initial, callbacks={}) {
         const radius=(79+i*26)*spread*(.75+birth*.25);
         const ax=.65+i*.49,ay=.2+i*.56,az=i*.64+seed*.12;
         const path=Array.from({length:145},(_,j)=>project(rotate([Math.cos(j/144*TAU)*radius,Math.sin(j/144*TAU)*radius,0],ax,ay,az)));
-        line(path.slice(0,Math.max(2,Math.ceil(path.length*birth))),focused?'#a8a5ec':'#afb7c9',(complete ? (focused ? .58 : .35) : .28)*birth,focused?1:.75,!complete);
+        line(path.slice(0,Math.max(2,Math.ceil(path.length*birth))),focused?palette.selected:palette.track,(complete ? (focused ? .58 : .35) : .28)*birth,focused?1:.75,!complete);
         const count=complete?3+i:1;
         for (let n=0;n<count;n++) {
           const angle=t*(i%2 ? -.07:.055)/(1+i*.11)+n/count*TAU+i*1.79+seed*.43;
           const position=rotate([Math.cos(angle)*radius,Math.sin(angle)*radius,0],ax,ay,az);
-          const p=project(position),color=focused||!complete?'#b8b4ff':'#d7dfef';
+          const p=project(position),color=focused||!complete?palette.active:palette.node;
           if(n===0 && complete) line([origin,p],color,.08,.6);
           bodies.push({position,p,color,complete,focused,size:(n===0?12+i*1.5:3.2+i*.35)*scale*birth,angle,birth,index:i,node:n});
         }
@@ -85,16 +111,16 @@ export function createOrbitScene(element, initial, callbacks={}) {
         else { ctx.fillStyle=b.color;ctx.globalAlpha=(b.complete?.75:.65)*b.birth;ctx.beginPath();ctx.arc(b.p[0],b.p[1],Math.max(1.3,b.size*b.p[3]*.5),0,TAU);ctx.fill(); }
         if(b.focused) {
           const pulse=c.reduced?0:(Math.sin(t*1.5)+1)*.5;
-          ctx.globalAlpha=.12+pulse*.09;ctx.strokeStyle='#aaa4ff';ctx.lineWidth=.7;ctx.beginPath();ctx.arc(b.p[0],b.p[1],(b.size+7+pulse*3)*b.p[3],0,TAU);ctx.stroke();
+          ctx.globalAlpha=.12+pulse*.09;ctx.strokeStyle=palette.halo;ctx.lineWidth=.7;ctx.beginPath();ctx.arc(b.p[0],b.p[1],(b.size+7+pulse*3)*b.p[3],0,TAU);ctx.stroke();
         }
       };
       bodies.filter(b=>b.p[2]<0).forEach(paintBody);
       // Nested polyhedra form the nucleus; accepted stages add a new crystalline shell.
       for(let i=c.accepted;i>=0;i--) {
         const r=centerSize*(.52+i*.105);
-        crystal([0,0,0],r,t*.075+i*.31+seed*.4,i===0?'#f0f1ff':'#9b99d9',i===0?.85:.29);
+        crystal([0,0,0],r,t*.075+i*.31+seed*.4,i===0?palette.core:palette.layer,i===0?.85:.29);
       }
-      crystal([0,0,0],centerSize,t*.075+seed*.4,'#dce1f4',.8);
+      crystal([0,0,0],centerSize,t*.075+seed*.4,palette.shell,.8);
       bodies.filter(b=>b.p[2]>=0).forEach(paintBody);
       ctx.globalAlpha=1;
     };

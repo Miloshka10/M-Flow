@@ -28,7 +28,7 @@ from auth_security import (initialize_auth, reserve_attempt, client_source, prox
                            new_session, revoke_session, replace_password, fingerprint, SESSION_SECONDS, begin_auth_write)
 from account_names import name_key, name_taken, login_user
 import account_mail
-from account_mail_view import profile_panel, public_form as mail_form, token_field, email_panel, access_aside, account_assets
+from account_mail_view import profile_panel, public_form as mail_form, token_field, email_panel, account_assets
 from data_notice import render_data_notice
 from collections import defaultdict
 from deadlines import business_today, deadline_info, deadline_text, parse_deadline, urgent_tasks, TIMEZONE_LABEL, format_timestamp
@@ -45,12 +45,11 @@ from learning_groups import (initialize_groups, create_group, preview_code as pr
 from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue
 from dashboard_view import student_dashboard
 from graphics import illustration
-from scenery import scenery
 from project_workspace import render_workspace, task_deadline
 from project_work import render_project_work
 from navigation import project_navigation, project_list_url
 from ui_components import notice
-from interface import shell_header, document_title, icon
+from interface import APPEARANCE_VERSION, access_header, appearance_assets, document_title, icon, shell_header
 from student_results import parameters as result_parameters, load_results, render_results, load_focus, load_project_states
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores, assessment_version
 from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, stage_label, change_stage, render_stages, STATE_LABELS
@@ -175,40 +174,38 @@ def render_page(html, title=None):
     scenery_context = ('together' if endpoint in ('learning_groups_page', 'learning_group_page', 'teams_directory', 'project_team')
                        else 'review' if endpoint.startswith('teacher_') or
                        ('data-interface-shell="teacher"' in html) else 'workshop')
-    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261106-access">'
-                   '<script src="/static/auth.js?v=20261106-access" defer></script>'
+    auth_assets = (f'<link rel="stylesheet" href="/static/auth.css?v={APPEARANCE_VERSION}">'
+                   f'<script src="/static/auth.js?v={APPEARANCE_VERSION}" defer></script>'
                    if 'class="auth-page ' in html else '')
     work_assets = '<link rel="stylesheet" href="/static/work-screens.css?v=20261106-work">' if 'data-work-screens=' in html else ''
-    return ('<!doctype html><html lang="ru"><head><meta charset="utf-8">'
+    return ('<!doctype html><html lang="ru" data-theme="dark"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<title>{escape(title) if title is not None else document_title(html)}</title>'
             f'<meta name="csrf-token" content="{escape(csrf_token(), quote=True)}">'
-        '<link rel="stylesheet" href="/static/mflow-theme.css?v=20261005-mobile">'
+        + appearance_assets() +
+        f'<link rel="stylesheet" href="/static/mflow-theme.css?v={APPEARANCE_VERSION}">'
         '<link rel="stylesheet" href="/static/mobile.css?v=20261006-scrollbar">'
         '<link rel="stylesheet" href="/static/motion.css?v=20261005-controls">'
-        '<link rel="stylesheet" href="/static/preferences.css?v=20261005">'
         '<link rel="stylesheet" href="/static/controls.css?v=20261006-csrf">'
-        '<script src="/static/preferences.js?v=20261005"></script>'
         '<script src="/static/motion.js?v=20261005-controls" defer></script>'
         '<link rel="stylesheet" href="/static/product-design.css?v=20261017-text-logo">'
         '<link rel="stylesheet" href="/static/graphics.css?v=20261015">'
-        '<link rel="stylesheet" href="/static/notifications.css?v=20261013">'
+        f'<link rel="stylesheet" href="/static/notifications.css?v={APPEARANCE_VERSION}">'
         '<link rel="stylesheet" href="/static/deadlines.css?v=20261013-filters">'
         '<script src="/static/dashboard.js?v=20261106-work" defer></script>'
         '<link rel="stylesheet" href="/static/navigation.css?v=20261017-fixes">'
         '<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
-        '<link rel="stylesheet" href="/static/icon-symbols.css?v=20261026-icons">'
+        f'<link rel="stylesheet" href="/static/icon-symbols.css?v={APPEARANCE_VERSION}">'
         '<link rel="stylesheet" href="/static/interface.css?v=20261029-review">'
         '<script src="/static/interface.js?v=20261027-work" defer></script>'
         '<script src="/static/form-guard.js?v=20261029" defer></script>'
         '<link rel="stylesheet" href="/static/design-suite.css?v=20261101-mail-ui">'
         '<script src="/static/design-suite.js?v=20261106-work" defer></script>'
-            + '<link rel="stylesheet" href="/static/scenery.css?v=20261104-calm-background">'
-            '<link rel="stylesheet" href="/static/components.css?v=20261104-system">'
-            '<link rel="stylesheet" href="/static/interface-v3.css?v=20261104-components">' + work_assets + auth_assets +
+            f'<link rel="stylesheet" href="/static/components.css?v={APPEARANCE_VERSION}">'
+            f'<link rel="stylesheet" href="/static/interface-v3.css?v={APPEARANCE_VERSION}">' + work_assets + auth_assets +
             f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-interface-v3 data-scenery="{scenery_context}" data-scenery-layout="{scenery_layout}" data-design-page="{escape(endpoint, quote=True)}">'
             + f'<a class="skip-link" href="#{skip_target}">К содержимому</a>' + html
-            + scenery(scenery_context, layout=scenery_layout) + '</body></html>')
+            + '</body></html>')
 
 
 DATABASE_SETTINGS = DatabaseSettings.from_environment(app.root_path)
@@ -1101,8 +1098,6 @@ def render_auth_page(mode, error=None, role="student", field=None):
     def password_control(name, autocomplete, repeat=False):
         input_id = 'auth-repeat-password' if repeat else 'auth-password'
         label = 'Повторите пароль' if repeat else ('Пароль' if is_login else 'Придумайте пароль')
-        placeholder = ('Повторите пароль' if repeat else
-                       ('Введите пароль' if is_login else 'Не менее 8 символов'))
         limits = ' minlength="8" maxlength="256"' if not is_login else ''
         hint = 'auth-password-hint' if not is_login and not repeat else None
         label_html = f'<label for="{input_id}">{label}</label>'
@@ -1111,7 +1106,7 @@ def render_auth_page(mode, error=None, role="student", field=None):
         return f'''
             <div class="access-field">{label_html}
             <div class="auth-password-control">
-                <input id="{input_id}" name="{name}" type="password" placeholder="{placeholder}" autocomplete="{autocomplete}"{limits}{field_attributes(name, hint)} required>
+                <input id="{input_id}" name="{name}" type="password" autocomplete="{autocomplete}"{limits}{field_attributes(name, hint)} required>
                 <button class="auth-password-toggle" type="button" aria-controls="{input_id}" aria-pressed="false" aria-label="Показать {"повтор пароля" if repeat else "пароль"}" hidden>Показать</button>
             </div>
             {field_error(name)}
@@ -1125,7 +1120,7 @@ def render_auth_page(mode, error=None, role="student", field=None):
     if is_login:
         form_fields = f"""
             <div class="access-field"><label for="auth-username">Логин</label>
-            <input id="auth-username" name="username" value="{username}" placeholder="Ваш логин" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30"{field_attributes('username')} required>
+            <input id="auth-username" name="username" value="{username}" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30"{field_attributes('username')} required>
             {field_error('username')}</div>
             {password_control('password', 'current-password')}
         """
@@ -1133,7 +1128,7 @@ def render_auth_page(mode, error=None, role="student", field=None):
     else:
         form_fields = f"""
             <div class="access-field"><label for="auth-username">Придумайте логин</label>
-            <input id="auth-username" name="username" value="{username}" placeholder="Ваш логин" minlength="3" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false"{field_attributes('username', 'auth-username-hint')} required>
+            <input id="auth-username" name="username" value="{username}" minlength="3" maxlength="30" autocomplete="username" autocapitalize="none" spellcheck="false"{field_attributes('username', 'auth-username-hint')} required>
             <small class="auth-hint" id="auth-username-hint">От 3 до 30 символов</small>
             {field_error('username')}</div>
             {password_control('password', 'new-password')}
@@ -1144,10 +1139,7 @@ def render_auth_page(mode, error=None, role="student", field=None):
             form_fields = f'''<div class="access-field access-teacher-code"><label for="auth-teacher-code">Код регистрации учителя</label>
                 <input id="auth-teacher-code" type="password" name="teacher_code" autocomplete="off" maxlength="256"{field_attributes('teacher_code', 'auth-teacher-code-hint')} required>
                 <small class="auth-hint" id="auth-teacher-code-hint">Получите код лично у организатора M-Flow. Это не код подключения проекта.</small>{field_error('teacher_code')}</div>''' + form_fields
-    intro = ('Проекты учеников и обратная связь в одном месте.' if is_teacher
-             else 'От идеи до защиты — всё для вашего проекта.')
     pending_label = 'Входим…' if is_login else 'Создаём аккаунт…'
-    eyebrow = '<p class="auth-eyebrow">ВАШ СЛЕДУЮЩИЙ ШАГ</p>' if is_login else ''
     switch_text = 'Нет аккаунта?' if is_login else 'Уже есть аккаунт?'
     switch_mode = 'register' if is_login else 'login'
     switch_label = 'Зарегистрироваться' if is_login else 'Войти'
@@ -1158,13 +1150,11 @@ def render_auth_page(mode, error=None, role="student", field=None):
     return render_page(
         f"""
         <div class="auth-page access-page auth-role-{role} auth-mode-{mode}">
+            {access_header(f'{prefix}/login')}
             <div class="auth-card">
                 <main class="auth-form-side">
                     <div class="auth-form-inner">
-                    <a href="{prefix}/login" class="brand auth-form-brand" aria-label="M-Flow — вход">M-Flow<span class="ui-brand-dot">.</span></a>
-                    {eyebrow}
                     <h1>{"Войти в M-Flow" if is_login else "Создать аккаунт"}</h1>
-                    <p class="auth-intro">{intro}</p>
                     <nav class="auth-role-switch" aria-label="Выбор роли">
                         <a href="{student_url}" class="{"active" if not is_teacher else ""}" {"aria-current='page'" if not is_teacher else ""}>Я ученик</a>
                         <a href="{teacher_url}" class="{"active" if is_teacher else ""}" {"aria-current='page'" if is_teacher else ""}>Я учитель</a>
@@ -1172,13 +1162,14 @@ def render_auth_page(mode, error=None, role="student", field=None):
                     {error_html}
                     {auth_form}
                     <p class="auth-footer">{switch_text} <a href="{prefix}/{switch_mode}">{switch_label}</a></p>
-
-                    <p class="auth-footer"><a href="/data">Данные и помощь</a></p>
                     </div>
                 </main>
-                {access_aside('login' if is_login else 'register')}
+                <aside class="auth-access-aside" aria-hidden="true">
+                    <div class="auth-orbit"><canvas data-access-orbit></canvas></div>
+                </aside>
             </div>
-            <footer class="auth-page-footer"><a href="/settings">Настройки оформления</a></footer>
+            <footer class="auth-page-footer"><a href="/data">Данные и помощь</a></footer>
+            <script type="module" src="/static/access-orbit.js?v={APPEARANCE_VERSION}"></script>
         </div>
         """, title="Вход — M-Flow" if is_login else "Регистрация — M-Flow"
     )
@@ -1319,7 +1310,7 @@ def teacher_register():
 @app.route('/data')
 def data_notice_page():
     user = get_current_user()
-    header = render_header(user) if user else '<header class="main-header"><a class="brand" href="/login">M-Flow.</a><a href="/login">К входу</a></header>'
+    header = render_header(user) if user else access_header()
     body = render_data_notice(os.environ.get('M_FLOW_OPERATOR_NAME', ''), os.environ.get('M_FLOW_SUPPORT_EMAIL', ''))
     return render_page(PAGE_STYLE + f'<div class="container">{header}<main class="team-page">{body}</main></div>', title='Данные и помощь · M-Flow')
 
@@ -2767,18 +2758,17 @@ def read_notifications(notification_id=None):
 @app.route('/settings')
 def site_settings():
     user = get_current_user()
-    header = render_header(user) if user else f'<header class="main-header"><a class="brand" href="/login" aria-label="M-Flow — вход">M-Flow<span class="ui-brand-dot">.</span></a><a class="back" href="/login">{icon('arrow-left')} К входу</a></header>'
+    header = render_header(user) if user else access_header()
     return render_page(f'''<div class="container">{header}<main class="settings-page">
         <h1>Настройки сайта</h1>
-        <p class="settings-intro">Оформление сохраняется в этом браузере и действует на всех страницах. Настройки аккаунта остаются в профиле.</p>
+        <p class="settings-intro">Оформление сохраняется в этом браузере.</p>
         <section class="card settings-card" aria-labelledby="appearance-heading">
             <h2 id="appearance-heading">Оформление</h2>
             <form id="site-preferences">
                 <label for="site-theme">Тема сайта</label>
                 <select id="site-theme" name="theme">
-                    <option value="system">Как в системе</option><option value="light">Светлая</option><option value="dark">Тёмная</option>
+                    <option value="dark" selected>Тёмная</option><option value="light">Светлая</option><option value="system">Как в системе</option>
                 </select>
-                <p class="settings-hint">Системная тема автоматически подстраивается под настройки устройства.</p>
                 <label class="settings-checkbox" for="site-animations"><input id="site-animations" name="animations" type="checkbox" checked>Плавные анимации интерфейса</label>
                 <p class="settings-hint">Если на устройстве включено уменьшение движения, анимации отключены независимо от этого переключателя.</p>
                 <button type="button" class="secondary" id="reset-preferences" data-ui-icon="return">Сбросить настройки</button>
@@ -3882,8 +3872,8 @@ def render_error_page(title, message, status_code):
         PAGE_STYLE
         + f"""
         <div class="login-page ui-error-page">
+            {access_header('/')}
             <main class="login-box">
-                <a class="brand" href="/" aria-label="M-Flow — на главную">M-Flow<span class="ui-brand-dot">.</span></a>
                 <span class="eyebrow">Ошибка {status_code}</span>
                 <h1>{escape(title)}</h1>
                 <p>{escape(message)}</p>

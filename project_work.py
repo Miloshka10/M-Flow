@@ -69,7 +69,7 @@ def render_project_work(pid, user, owner, members, stages, defense, assessments,
         default_view = 'result' if s['state'] in ('done', 'review') or kind == 'returned' else 'tasks'
         panels.append(f'''<section class="pw-stage pw-stage-{kind}" id="stage-{number}" data-work-panel="{number}" data-default-view="{default_view}" data-review-role="{user['role']}">
             <header class="pw-stage-heading"><span class="eyebrow">ЭТАП {number} / 5{' · ТЕКУЩИЙ' if current and number == current['number'] else ''}</span>
-            <h2>{escape(s['title'])}</h2><p>{STAGE_DESCRIPTIONS[number]}</p></header>
+            <h2>{escape(s['title'])}</h2>{f'<p>{STAGE_DESCRIPTIONS[number]}</p>' if text != STAGE_DESCRIPTIONS[number] else ''}</header>
             <div class="pw-next work-stage-next pw-{kind}" data-next-step="{key}"><div><strong>{escape(title)}</strong>
             <p>{escape(text)}</p></div>{f'<a class="btn secondary" href="{target}">{escape(action)} {icon("arrow")}</a>' if target else ''}</div>
             <div class="pw-mobile-views" role="group" aria-label="Задачи и результат этапа {number}">
