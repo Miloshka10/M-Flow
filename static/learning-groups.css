@@ -62,7 +62,7 @@
 .group-assignment-editor input[type="date"] { max-width: 240px; }
 .group-assignment-editor button { min-height: 44px; }
 .group-materials { padding-inline-start: 20px; }
-#group-project, #group-roster { scroll-margin-top: 80px; }
+#group-assignment, #group-project, #group-roster { scroll-margin-top: 80px; }
 @media (max-width: 1000px) {
   .group-table, .group-table tbody, .group-table tr, .group-table td { display: block; width: auto; }
   .group-table thead { display: none; }

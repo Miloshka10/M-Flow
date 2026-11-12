@@ -14,6 +14,7 @@ TITLE_LIMIT = 120
 TEXT_LIMIT = 1200
 LINK_COUNT = 3
 LINK_TEXT_LIMIT = LINK_COUNT * 2002
+CLASSROOM_CSS = '<link rel="stylesheet" href="/static/classroom-workflow.css?v=20261112">'
 FIELD_LIMITS = {
     'title': TITLE_LIMIT, 'goal': TEXT_LIMIT, 'criteria': TEXT_LIMIT,
     'due_date': 10, 'materials': LINK_TEXT_LIMIT,
@@ -36,6 +37,27 @@ def initialize_group_assignments(conn):
 
 def assignment_for(conn, group_id):
     return conn.execute('SELECT * FROM learning_group_assignments WHERE group_id=?', (group_id,)).fetchone()
+
+
+def assignment_url(group_id):
+    return f'/groups/{group_id}#group-assignment'
+
+
+def assignment_date(value):
+    due = parse_deadline(value)
+    if due is None:
+        return ''
+    return f'<time datetime="{due.isoformat()}">{due.day:02d}.{due.month:02d}.{due.year:04d}</time>'
+
+
+def assignment_links(groups):
+    """Compact assignment links for a project already visible to the viewer."""
+    if not groups:
+        return ''
+    items = ''.join(
+        f'<li><a href="{assignment_url(g["id"])}">{escape(g["name"])} · {escape(g["assignment_title"])}</a>'
+        f'<span>{assignment_date(g["assignment_due"])}</span></li>' for g in groups)
+    return f'<div class="classroom-context"><span>Задание группы</span><ul>{items}</ul></div>'
 
 
 def save_assignment(conn, group_id, form):
@@ -103,8 +125,7 @@ def render_assignment(assignment, token, *, teacher, archived, submitted=None):
             return ''
         return f'<section class="group-panel group-assignment"><h2>Задание для группы</h2>{editor}</section>'
 
-    due = parse_deadline(assignment['due_date'])
-    due_html = f'<time datetime="{due.isoformat()}">{due.day:02d}.{due.month:02d}.{due.year:04d}</time>' if due else 'Уточните у учителя'
+    due_html = assignment_date(assignment['due_date']) or 'Уточните у учителя'
     material_items = []
     for link in assignment['materials'].splitlines():
         if safe_web_url(link) and '\\' not in link:
@@ -114,10 +135,10 @@ def render_assignment(assignment, token, *, teacher, archived, submitted=None):
     project_link = ''
     if not teacher and not archived:
         project_link = f'<a class="action-link group-assignment-project" href="#group-project">К проекту {icon("arrow")}</a>'
-    return f'''<section class="group-panel group-assignment" aria-labelledby="group-assignment-title">
+    return f'''<section class="group-panel group-assignment" aria-labelledby="group-assignment">
         <div class="group-assignment-head">
             <div><span class="eyebrow">ЗАДАНИЕ ГРУППЫ</span>
-                <h2 id="group-assignment-title">{escape(assignment['title'])}</h2></div>
+                <h2 id="group-assignment" tabindex="-1">{escape(assignment['title'])}</h2></div>
             <p class="group-assignment-due"><span>Срок сдачи</span>{due_html}</p>
         </div>
         <p class="group-text group-assignment-goal">{escape(assignment['goal'])}</p>

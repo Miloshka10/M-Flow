@@ -5,6 +5,7 @@ from html import escape
 from urllib.parse import urlencode
 
 from deadlines import MOSCOW
+from group_assignments import assignment_date
 
 WORK_KINDS = {'all': 'Все работы', 'stage': 'Этапы', 'defense': 'Видеозащиты', 'report': 'Отчёты — информация'}
 WORK_SORTS = {'oldest': 'Сначала ранние', 'newest': 'Сначала новые'}
@@ -87,6 +88,35 @@ def queue_url(params, page):
     return '/teacher?' + urlencode(values) + '#review-queue'
 
 
+def render_classrooms(groups, project_ids, decisions, selected):
+    active = [group for group in groups if not group['archived']]
+    if not active and selected is None:
+        return ''
+    if selected is not None:
+        group = next(group for group in groups if group['id'] == selected)
+        return f'''<div class="classroom-queue-scope" aria-label="Учебная группа очереди">
+            <strong>{escape(group['name'])}</strong>
+            <a class="action-link" href="/groups/{selected}">Открыть группу {icon('arrow')}</a>
+            <a class="action-link" href="/teacher#review-queue">Все работы</a></div>'''
+    cards = []
+    for group in active:
+        group_id = group['id']
+        count = sum(decisions.get(pid, 0) for pid in project_ids.get(group_id, ()))
+        assignment = ''
+        if group['assignment_title']:
+            assignment = f'<span>{escape(group["assignment_title"])} · {assignment_date(group["assignment_due"])}</span>'
+        cards.append((count, f'''<article class="classroom-queue-card">
+            <a href="/groups/{group_id}"><strong>{escape(group['name'])}</strong></a>
+            {assignment}
+            <a class="action-link" href="/teacher?group={group_id}#review-queue">На проверке: {count} {icon('arrow')}</a>
+            </article>'''))
+    cards.sort(key=lambda card: -card[0])
+    return f'''<section class="classroom-queue" aria-labelledby="classroom-queue-title">
+        <div><h2 id="classroom-queue-title">Учебные группы</h2><a class="action-link" href="/groups">Все группы {icon('arrow')}</a></div>
+        <div class="classroom-queue-grid">{"".join(card for _, card in cards[:3])}</div>
+        </section>'''
+
+
 def render_queue(result, params, has_projects=True):
     html = (f'<p class="t-muted">Найдено работ: {result["total"]} · Требуется решение: {result["decisions"]}.</p><details class="ui-queue-note"><summary>Как устроена очередь</summary><p class="t-muted">'
             'Сначала результаты для решения, затем информационные отчёты; сортировка по дате внутри групп.</p>'
@@ -124,7 +154,8 @@ def render_queue(result, params, has_projects=True):
             <a class="{'btn' if item['key'] == first_decision else 'action-link'}" href="{item['href'] + ('-result' if item['kind'] == 'stage' else '')}">{item['action']} {icon('arrow')}</a>{history}</div></article>'''
     if not result['items']:
         filtered = bool(params.get('q') or params.get('project') or params.get('focus', 'all') != 'all' or params.get('kind', 'all') != 'all')
-        html += ('<div class="work-empty"><h3>Здесь появятся работы учеников</h3><p>Создайте приглашение руководителя. Ученик выберет свой проект, затем вы подтвердите сопровождение. После отправки результата здесь появится работа для проверки.</p></div>' if not has_projects else
+        html += ('<p class="t-muted">В этой группе нет работ по выбранным условиям.</p>' if params.get('group') else
+                 '<div class="work-empty"><h3>Здесь появятся работы учеников</h3><p>Создайте приглашение руководителя. Ученик выберет свой проект, затем вы подтвердите сопровождение. После отправки результата здесь появится работа для проверки.</p></div>' if not has_projects else
                  '<div class="work-empty"><h3>Сейчас нет работ для проверки</h3><p>Новые результаты появятся после отправки учениками. Проекты и предыдущие решения остаются доступны ниже.</p></div>' if not filtered else
                  '<p class="t-muted">Нет работ по выбранным условиям. '
                  '<a class="action-link" href="/teacher#review-queue">Сбросить фильтры</a>. '

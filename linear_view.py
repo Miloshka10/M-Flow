@@ -7,6 +7,8 @@ import json
 from flask import request
 from interface import APPEARANCE_VERSION, appearance_assets, icon, theme_button
 from deadlines import format_timestamp
+from group_assignments import CLASSROOM_CSS, assignment_links
+from learning_groups import project_assignment_groups
 from material_links import safe_web_url
 from project_stages import get_stages, stages_from_rows, stage_summary, stage_needs_revision
 from work_history import event_context, recent_history, EVENTS
@@ -84,7 +86,7 @@ def orbit(stages, selected, pid):
             f'<nav class="po-stages" aria-label="Этапы структуры">{steps}</nav></figure>')
 
 
-def project_page(user, projects, project, stages, tasks, history, members, token, selected):
+def project_page(user, projects, project, stages, tasks, history, members, token, selected, classroom_assignments=()):
     pid, name = project['id'], project['name']
     model = stage_model(stages)
     initial_tab = request.args.get('tab', 'result')
@@ -112,10 +114,12 @@ def project_page(user, projects, project, stages, tasks, history, members, token
                      f'<p>{event_context(row)} · {escape(row["actor_name"] or row["author_name"] or "Участник проекта")} · {format_timestamp(row["recorded_at"])}</p>'
                      f'{"<p>"+escape(row["comment"])+"</p>" if row["comment"] else ""}</div></article>' for row in history)
     people = ''.join(f'<p>{escape(m["username"])}<small>{"Учитель" if m["role"] == "teacher" else "Ученик"}</small></p>' for m in members)
+    classroom = CLASSROOM_CSS + assignment_links(classroom_assignments) if classroom_assignments else ''
     return document(name, f'''<div class="lx-app-shell lw-shell">{sidebar(user, projects, token, pid, model, selected, initial_tab)}
       <main class="lx-app-main lw-view" id="linear-main"><header class="lx-app-topbar lw-topbar">{icon('folder')}<span class="lw-id">MFL-{pid:03}</span><span class="lw-breadcrumb-title">{escape(name)}</span>{theme_button()}</header>
       <div class="lw-viewbar"><nav class="lw-tabs" aria-label="Раздел проекта"><a href="?stage={selected+1}&tab=result" data-tab="result" aria-current="{'page' if initial_tab == 'result' else 'false'}">Результат</a><a href="?stage={selected+1}&tab=tasks" data-tab="tasks" aria-current="{'page' if initial_tab == 'tasks' else 'false'}">Задачи</a><a href="?stage={selected+1}&tab=history" data-tab="history" aria-current="{'page' if initial_tab == 'history' else 'false'}">История</a></nav><div class="lw-toolbar-actions">{"".join(quick_actions)}<a class="lw-button ln-team-link" href="/project/{pid}/team">Команда</a></div></div>
       <div class="lw-body"><section class="lw-content"><div class="lw-title-block"><h1>{escape(name)}</h1><p class="lw-stage-context" aria-live="polite" aria-atomic="true"><span data-stage-caption>{NAMES[selected]}</span><span>·</span><span data-stage-status>{status_name(model[selected]['status'])}</span></p></div>
+      {classroom}
       <section data-tab-panel="result" {"hidden" if initial_tab != "result" else ""}>{''.join(panels)}{orbit(model, selected, pid)}<a class="lw-result-link" href="/project/{pid}/preparation">Видеозащита и итоговая оценка {icon('arrow')}</a></section>
       <section data-tab-panel="tasks" {"hidden" if initial_tab != "tasks" else ""}><div class="lw-section-title"><h2>Задачи команды</h2><a href="/project/{pid}#task-board">Доска задач {icon('arrow')}</a></div>{task_rows or '<p class="lw-muted">Задач пока нет.</p>'}</section>
       <section data-tab-panel="history" {"hidden" if initial_tab != "history" else ""}><div class="lw-section-title"><h2>Последние события</h2><a href="/project/{pid}/history">Вся история {icon('arrow')}</a></div>{events or '<p class="lw-muted">Здесь появятся отправки и решения учителя.</p>'}</section></section>
@@ -176,6 +180,7 @@ def register_linear_views(app, *, login_required, current_user, get_db, projects
             members = members_for_project(project_id, connection=conn)
             projects = projects_for_user(connection=conn)
             tasks = tasks_for_project(project_id, connection=conn)
+            classroom_assignments = project_assignment_groups(conn, user, project_id)
         _, current = stage_summary(stages)
         try:
             selected = int(request.args.get('stage', current['number'] if current else 5))-1
@@ -184,4 +189,4 @@ def register_linear_views(app, *, login_required, current_user, get_db, projects
         selected = max(0, min(4, selected))
         if current and selected >= current['number']:
             selected = current['number']-1
-        return project_page(user, projects, project, stages, tasks, history, members, token(), selected)
+        return project_page(user, projects, project, stages, tasks, history, members, token(), selected, classroom_assignments)

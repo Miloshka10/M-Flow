@@ -185,12 +185,26 @@ class LearningGroupCases:
         self.assertIn('href="#group-project"', student)
         self.assertIn('Observed project', student)
         self.assertNotIn('value="save_assignment"', student)
+        self.assertIn(f'href="{url}#group-assignment"', self.client.get('/?project=2').text)
+        for path in ('/project/2', '/project/2/stages', '/next/project/2'):
+            self.assertIn(f'href="{url}#group-assignment"', self.client.get(path).text)
+        self.sign_in(1)
+        self.assertEqual(self.client.get(f'/teacher?group={gid}').status_code, 403)
+        self.assertNotIn('Школьная среда', self.client.get('/project/2').text)
         self.sign_in(4)
         self.assertNotIn('Сравнить шум у двух входов', self.client.get(url).text)
         self.assertNotIn('Сравнить шум у двух входов', self.post('/groups', data=dict(action='preview', code=code)).text)
         self.assertEqual(self.group_join(code, user=4).status_code, 302)
         self.assertIn('Сравнить шум у двух входов', self.client.get(url).text)
+        self.assertIn(f'href="{url}#group-assignment">Открыть задание', self.client.get('/').text)
         self.assertEqual(self.client.get('/project/2').status_code, 403)
+        conn = self.module.get_db()
+        conn.execute('INSERT INTO project_members(project_id,user_id) VALUES(2,4)')
+        conn.commit()
+        conn.close()
+        page = self.client.get('/project/2')
+        self.assertEqual(page.status_code, 200)
+        self.assertNotIn('Школьная среда', page.text)
 
     def test_groups_assignment_validates_inputs_and_protects_existing_publication(self):
         gid = self.group_create()
@@ -233,8 +247,10 @@ class LearningGroupCases:
         pid = conn.execute('SELECT project_id FROM learning_group_members WHERE group_id=? AND student_id=3', (gid,)).fetchone()[0]
         conn.close()
         project = f'/project/{pid}'
+        self.assertIn(f'href="{url}#group-project">Открыть учебную группу', self.client.get(project).text)
         self.assertEqual(self.group_post(gid, user=3, action='propose', project_id=str(pid)).status_code, 302)
         self.assertEqual(self.supervision_reply(1).status_code, 302)
+        self.assertEqual(self.stage_post(3).status_code, 302)  # A different project outside this group.
 
         def stage(uid, number, revision, action, **fields):
             self.sign_in(uid)
@@ -244,6 +260,12 @@ class LearningGroupCases:
 
         stage(3, 1, 0, 'submit')
         self.sign_in(1)
+        queue = self.client.get(f'/teacher?group={gid}').text
+        self.assertIn(f'data-work-key="stage-{pid}-1"', queue)
+        self.assertNotIn('data-work-key="stage-1-1"', queue)
+        teacher_project = self.client.get(project + '/stages').text
+        self.assertIn(f'href="/teacher?group={gid}#review-queue">К очереди группы', teacher_project)
+        self.assertIn(f'href="{url}#group-assignment"', teacher_project)
         review = self.client.get(url + '?view=review').text
         self.assertIn(f'href="{project}/stages#stage-1-result">Ожидают решения: 1', review)
         stage(1, 1, 1, 'return', teacher_comment='Укажите время замеров')

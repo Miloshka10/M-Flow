@@ -39,10 +39,11 @@ from project_rules import create_owned_project, has_project_teacher
 from teacher_supervision import (initialize_supervision, create_invite, preview_invite, request_connection,
                                 invitation_action, request_end, respond_request, render_hub, participant)
 from auth_security import reserve_supervision_attempt
+from group_assignments import CLASSROOM_CSS, assignment_links
 from learning_groups import (initialize_groups, create_group, preview_code as preview_group_code,
                              join_group, change_group, own_groups, group_for, roster,
-                             render_groups, render_group)
-from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue
+                             project_assignment_groups, render_groups, render_group, teacher_group_projects)
+from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue, render_classrooms
 from dashboard_view import student_dashboard
 from graphics import illustration
 from project_workspace import render_workspace, task_deadline
@@ -1429,7 +1430,7 @@ def index():
     header = render_header(user, notification_data)
     messages = ''.join(f'<div class="{escape(category, quote=True)}" role="status">{escape(message)}</div>'
                        for category, message in get_flashed_messages(with_categories=True))
-    return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/student-results.css?v=20261015">'
+    return render_page(PAGE_STYLE + CLASSROOM_CSS + '<link rel="stylesheet" href="/static/student-results.css?v=20261015">'
                        + student_dashboard(user, projects, csrf_token(), header, messages, results, focus,
                                            any(key.startswith("result_") for key in request.args), groups=groups,
                                            project_states=project_states))
@@ -1484,6 +1485,7 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
             FROM project_assessments a JOIN users u ON u.id=a.teacher_id
             WHERE a.project_id=? AND a.state='published' AND a.{assessment_column}=?
             ORDER BY a.updated_at DESC, a.teacher_id''', (project_id, current_user['id'])).fetchall()
+        classroom_assignments = project_assignment_groups(conn, current_user, project_id)
         notification_data = notification_feed(conn, current_user['id'])
     project_name = details['name']
     student_counts = defaultdict(lambda: [0, 0])
@@ -1978,12 +1980,20 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
     workspace_html = render_workspace(project_id, project_name, current_user, owner, members,
                                       stages, defense, published_assessments, all_tasks,
                                       completed_tasks, progress, overdue_count, today=deadline_today,
-                                      active='tasks' if work_mode else 'overview')
+                                      active='tasks' if work_mode else 'overview',
+                                      classroom_assignments=classroom_assignments)
     work_html, selected_stage = render_project_work(project_id, current_user, owner, members,
         stages, defense, published_assessments, tasks, all_tasks, render_task_card,
         filters_html + '<details class="board-deadlines"><summary data-ui-icon="calendar">Ближайшие сроки</summary>' + hot_html + '</details>', add_task_section, board_state, csrf_token(), stage_submitted, stage_error, unsaved)
+    queue_return = ''
+    if current_user['role'] == 'teacher':
+        queue_return = '<a class="action-link" href="/teacher#review-queue">К очереди проверки</a>'
+        if len(classroom_assignments) == 1:
+            group_id = classroom_assignments[0]['id']
+            queue_return = f'<a class="action-link" href="/teacher?group={group_id}#review-queue">К очереди группы</a>'
     return render_page(
         PAGE_STYLE
+        + (CLASSROOM_CSS if classroom_assignments else '')
         + f"""
         <link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">
         <link rel="stylesheet" href="/static/task-board.css?v=20261031"><link rel="stylesheet" href="/static/project-work.css?v=20261031-tasks"><script src="/static/project-work.js?v=20261106-work" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
@@ -1991,8 +2001,9 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
             {render_header(current_user, notification_data)}
             <main class="project-workspace" data-work-screens="project" data-project-views data-work-default="{int(work_mode)}">
                 <div class="work-project-returns"><a href="{project_list_url(current_user['role'], project_id)}" class="back">{icon('arrow-left')} Все проекты</a>
-                {'<a class="action-link" href="/teacher#review-queue">К очереди проверки</a>' if current_user['role'] == 'teacher' else ''}</div>
+                {queue_return}</div>
                 {messages}
+                {assignment_links(classroom_assignments)}
                 {workspace_html}
 
 
@@ -3487,6 +3498,17 @@ def teacher_cabinet():
             403
         )
 
+    with closing(get_db()) as conn:
+        groups = [group for group in own_groups(conn, user) if group['teacher_id'] == user['id']]
+        group_projects = teacher_group_projects(conn, user['id']) if groups else {}
+    group_id = None
+    if request.args.get('group'):
+        try:
+            group_id = form_database_id(request.args['group'])
+        except ValueError:
+            return render_error_page('Некорректный фильтр', 'Выберите учебную группу из списка.', 400)
+        if group_id not in {group['id'] for group in groups}:
+            return render_error_page('Нет доступа', 'Учебная группа недоступна вашему аккаунту.', 403)
     overview = build_teacher_overview(user)
 
     query = request.args.get("q", "").strip()[:100]
@@ -3516,6 +3538,7 @@ def teacher_cabinet():
     visible_projects = [
         project for project in overview
         if project_matches(project, query_folded)
+        and (group_id is None or project['id'] in group_projects.get(group_id, ()))
         and (project_id is None or project['id'] == project_id)
         and (focus == "all" or (focus not in ('done', 'review') and project["health"] == focus)
              or focus == 'done' and project['total'] > 0 and project['counts']['done'] == project['total']
@@ -3524,7 +3547,7 @@ def teacher_cabinet():
     ]
     queue = queue_page(visible_projects, kind, sort, page, query_folded)
     queue_html = render_queue(queue, dict(q=query, focus=focus, kind=kind,
-                                         project=project_id, sort=sort), has_projects=bool(overview))
+                                         project=project_id, sort=sort, group=group_id), has_projects=bool(overview))
     kind_options = ''.join(f'<option value="{v}" {"selected" if kind == v else ""}>{label}</option>'
                            for v, label in WORK_KINDS.items())
     sort_options = ''.join(f'<option value="{v}" {"selected" if sort == v else ""}>{label}</option>'
@@ -3532,6 +3555,12 @@ def teacher_cabinet():
     project_options = '<option value="">Все проекты</option>' + ''.join(
         f'<option value="{p["id"]}" {"selected" if project_id == p["id"] else ""}>{escape(p["name"])}</option>'
         for p in overview)
+    group_filter = ''
+    if groups:
+        group_options = ''.join(
+            f'<option value="{g["id"]}"{" selected" if group_id == g["id"] else ""}>{escape(g["name"])}{" · архив" if g["archived"] else ""}</option>'
+            for g in groups)
+        group_filter = f'<select name="group" aria-label="Учебная группа"><option value="">Все группы</option>{group_options}</select>'
 
     total_tasks = sum(p["total"] for p in overview)
     done_tasks = sum(p["counts"]["done"] for p in overview)
@@ -3581,12 +3610,17 @@ def teacher_cabinet():
     attention_title = 'Просроченные задачи учеников' if focus == 'overdue' else 'Сроки и назначение задач'
 
     overdue_class = "warn" if overdue_tasks else ""
-    review_count = sum(bool(p['current_stage'] and p['current_stage']['state'] == 'review')
-                       + bool(p['defense_state'] == DEFENSE_STATES['submitted']) for p in overview)
+    decisions_by_project = {
+        p['id']: bool(p['current_stage'] and p['current_stage']['state'] == 'review')
+        + bool(p['defense_state'] == DEFENSE_STATES['submitted']) for p in overview
+    }
+    review_count = sum(decisions_by_project.values())
+    classrooms = render_classrooms(groups, group_projects, decisions_by_project, group_id)
 
     return render_page(
         PAGE_STYLE
         + TEACHER_STYLE
+        + (CLASSROOM_CSS if classrooms else '')
         + '<link rel="stylesheet" href="/static/teacher-queue.css?v=20261014">'
         + f"""
         <div class="container workspace teacher-workspace">
@@ -3613,12 +3647,14 @@ def teacher_cabinet():
                     <span>Без ответственного: <b>{unassigned_tasks}</b></span>
                     <span>Сроки задач: {TIMEZONE_LABEL}. Ожидание проверки — не просрочка сдачи.</span>
                 </details>
-                <details class="ui-teacher-filters" {'open' if query or focus != 'all' or kind != 'all' or sort != 'oldest' or project_id is not None or queue['page'] > 1 else ''}><summary data-ui-icon="filter">Поиск и фильтры работ</summary>
+                {classrooms}
+                <details class="ui-teacher-filters" {'open' if query or focus != 'all' or kind != 'all' or sort != 'oldest' or project_id is not None or group_id is not None or queue['page'] > 1 else ''}><summary data-ui-icon="filter">Поиск и фильтры работ</summary>
                 <form class="teacher-filters" method="get">
                     <input type="search" name="q" value="{escape(query)}"
                         aria-label="Поиск проекта, автора или работы" placeholder="Найти проект, автора или работу">
                     <select name="focus" aria-label="Состояние проектов">{focus_options}</select>
                     <select name="project" aria-label="Проект очереди">{project_options}</select>
+                    {group_filter}
                     <select name="kind" aria-label="Тип работы">{kind_options}</select>
                     <select name="sort" aria-label="Порядок отправки работ">{sort_options}</select>
                     <button type="submit" data-ui-icon="filter">Показать</button>

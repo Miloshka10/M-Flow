@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 from database import PostgresConnection, execute_schema_script, form_database_id, insert_id
 from deadlines import format_timestamp
 from grading import load_scores, summarize
-from group_assignments import assignment_for, initialize_group_assignments, render_assignment, save_assignment
+from group_assignments import assignment_date, assignment_for, initialize_group_assignments, render_assignment, save_assignment
 from project_stages import STAGES, stage_label, stage_needs_revision, get_stages
 from project_rules import create_owned_project, has_project_teacher
 from project_workspace import next_step
@@ -30,7 +30,7 @@ PAGE_SIZE = 30
 CODE_ERROR = 'Код группы недоступен. Проверьте его или попросите учителя выдать новый.'
 VIEWS = {'all': 'Все ученики', 'review': 'Ждут проверки', 'revision': 'Дорабатывают', 'unlinked': 'Нужно подключение',
          'no_project': 'Без проекта', 'stale': 'Работы без обновлений 14 дней'}
-GROUP_CSS = '<link rel="stylesheet" href="/static/learning-groups.css?v=20261112-assignment">'
+GROUP_CSS = '<link rel="stylesheet" href="/static/learning-groups.css?v=20261112-workflow">'
 
 
 def initialize_groups(conn):
@@ -53,6 +53,7 @@ def initialize_groups(conn):
             PRIMARY KEY(group_id,student_id)
         );
         CREATE INDEX IF NOT EXISTS idx_learning_group_student ON learning_group_members(student_id,group_id);
+        CREATE INDEX IF NOT EXISTS idx_learning_group_project ON learning_group_members(project_id) WHERE project_id IS NOT NULL;
         CREATE TABLE IF NOT EXISTS learning_group_invitations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             group_id INTEGER NOT NULL REFERENCES learning_groups(id),
@@ -219,12 +220,38 @@ def change_group(conn, user, group_id, form):
 
 def own_groups(conn, user):
     return [dict(r) for r in conn.execute('''SELECT g.*,u.username AS teacher_name,p.id AS linked_project_id,
+        a.title AS assignment_title,a.due_date AS assignment_due,
         (SELECT COUNT(*) FROM learning_group_members m WHERE m.group_id=g.id) AS members
         FROM learning_groups g JOIN users u ON u.id=g.teacher_id
         LEFT JOIN learning_group_members member ON member.group_id=g.id AND member.student_id=?
         LEFT JOIN projects p ON p.id=member.project_id AND p.owner_id=member.student_id
+        LEFT JOIN learning_group_assignments a ON a.group_id=g.id
         WHERE g.teacher_id=? OR member.student_id IS NOT NULL
         ORDER BY g.archived,g.id DESC LIMIT 50''', (user['id'], user['id']))]
+
+
+def project_assignment_groups(conn, user, project_id):
+    if user['role'] == 'teacher':
+        access = '''g.teacher_id=? AND EXISTS (
+            SELECT 1 FROM project_members pm WHERE pm.project_id=p.id AND pm.user_id=g.teacher_id)'''
+    else:
+        access = 'p.owner_id=?'
+    return [dict(row) for row in conn.execute(f'''SELECT g.id,g.name,a.title AS assignment_title,a.due_date AS assignment_due
+        FROM learning_group_members m JOIN learning_groups g ON g.id=m.group_id AND g.archived=0
+        JOIN projects p ON p.id=m.project_id AND p.owner_id=m.student_id
+        JOIN learning_group_assignments a ON a.group_id=g.id
+        WHERE p.id=? AND {access} ORDER BY a.due_date,g.id LIMIT 20''', (project_id, user['id']))]
+
+
+def teacher_group_projects(conn, teacher_id):
+    groups = defaultdict(set)
+    for row in conn.execute('''SELECT g.id,m.project_id FROM learning_groups g
+        JOIN learning_group_members m ON m.group_id=g.id
+        JOIN projects p ON p.id=m.project_id AND p.owner_id=m.student_id
+        JOIN project_members pm ON pm.project_id=p.id AND pm.user_id=g.teacher_id
+        WHERE g.teacher_id=?''', (teacher_id,)):
+        groups[row['id']].add(row['project_id'])
+    return groups
 
 
 def roster(conn, user, group, args):
@@ -334,8 +361,10 @@ def render_groups(groups, user, token, preview=None):
             <form method="post">{hidden_token(token)}<input type="hidden" name="action" value="join"><input type="hidden" name="code" value="{escape(code, quote=True)}"><button data-ui-icon="check">Подтвердить вступление</button></form></section>'''
     body += '<h2>Мои учебные группы</h2><div class="group-list">'
     for group in groups:
+        assignment = (f'<p class="group-list-assignment">{escape(group["assignment_title"])} · {assignment_date(group["assignment_due"])}</p>'
+                      if group.get('assignment_title') else '')
         body += f'''<a class="group-panel group-link" href="/groups/{group['id']}"><span>{'В архиве' if group['archived'] else 'Действующая группа'}</span><h3>{escape(group['name'])}</h3>
-            <p>Учитель: {escape(group['teacher_name'])}</p>{f'<p>Учеников: {group["members"]}</p>' if user['role'] == 'teacher' else ''}</a>'''
+            {assignment}<p>Учитель: {escape(group['teacher_name'])}</p>{f'<p>Учеников: {group["members"]}</p>' if user['role'] == 'teacher' else ''}</a>'''
     if not groups:
         empty = 'У вас пока нет учебных групп.' if user['role'] == 'teacher' else 'Вы ещё не вступили в учебную группу.'
         body += f'<p>{empty}</p>'
@@ -434,6 +463,7 @@ def render_group(conn, user, group, data, token, code=None, assignment_form=None
     if not data['teacher']:
         body += render_student_project(conn, user, group, data['rows'][0] if data['rows'] else {}, token)
         return body + '<details class="group-panel"><summary>Выход из группы</summary><p>Проект, оценки и руководство сохранятся.</p>' + form('leave', '<button class="secondary" data-ui-icon="logout">Выйти из группы</button>') + '</details>'
+    body += f'<a class="action-link" href="/teacher?group={gid}#review-queue">Очередь работ группы {icon("arrow")}</a>'
     c = data['counts']
     stats = [('all', c['total']), ('no_project', c['no_project']), ('review', c['review']),
              ('revision', c['revision']), ('unlinked', c['unlinked'])]

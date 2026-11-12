@@ -1,0 +1,59 @@
+.classroom-context,
+.classroom-start,
+.classroom-queue-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  padding: 12px 0;
+  margin-bottom: 16px;
+  border-block-end: 1px solid var(--mf-line, #35363d);
+  overflow-wrap: anywhere;
+}
+.classroom-context > span,
+.classroom-start span,
+.classroom-queue-card > span {
+  color: var(--mf-muted, #878993);
+  font-size: 13px;
+}
+.classroom-context ul {
+  list-style: none;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+}
+.classroom-context li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.classroom-context li + li { margin-top: 6px; }
+.classroom-context a { text-decoration: underline; text-underline-offset: 3px; }
+.classroom-context time { color: var(--mf-muted, #878993); font-size: 13px; }
+.classroom-start { justify-content: space-between; }
+.classroom-start strong { display: block; margin-top: 3px; }
+.classroom-queue { margin: 20px 0; }
+.classroom-queue > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.classroom-queue h2 { margin: 0 0 12px; font-size: 18px; }
+.classroom-queue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 10px;
+}
+.classroom-queue-card {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--mf-line);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+.classroom-queue-card a { justify-self: start; }
