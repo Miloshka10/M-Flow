@@ -16,9 +16,10 @@
 .group-link:hover { border-color: var(--mf-accent); }
 .group-link span { color: var(--mf-muted); font-size: 13px; }
 .group-link h3 { margin: 12px 0; }
-.group-stats { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; margin: 24px 0; }
-.group-stats div { display: grid; gap: 12px; padding: 20px; border-radius: 20px; background: var(--mf-card); }
-.group-stats strong { font-size: 30px; }
+.group-stats { display: grid; grid-template-columns: repeat(auto-fit,minmax(132px,1fr)); gap: 12px; margin: 24px 0; }
+.group-stats a { display: flex; align-items: center; gap: 10px; padding: 14px; min-height: 44px; border: 1px solid var(--mf-line); border-radius: 12px; background: var(--mf-card); color: var(--mf-text); text-decoration: none; overflow-wrap: anywhere; }
+.group-stats a:hover, .group-stats a[aria-current="true"] { border-color: var(--mf-accent); }
+.group-stats strong { font-size: 24px; font-variant-numeric: tabular-nums; }
 .group-filters { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; margin: 28px 0; }
 .group-filters label { display: grid; gap: 8px; flex: 1 1 220px; }
 .group-table-wrap { overflow-x: auto; }
@@ -26,6 +27,7 @@
 .group-table th, .group-table td { padding: 16px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--mf-line); overflow-wrap: anywhere; }
 .group-table th { color: var(--mf-muted); font-size: 12px; }
 .group-cell { min-width: 0; }
+.group-cell .group-review-link { text-decoration: underline; text-underline-offset: 3px; }
 .group-late { color: var(--mf-warning); font-size: 12px; }
 .group-table td form { margin: 14px 0 0; }
 .group-table td button { padding: 9px 10px; font-size: 12px; min-height: 40px; }
@@ -46,6 +48,21 @@
 .group-project-step + a { display: inline-block; margin-top: 16px; }
 .group-student-project .ds-guide { margin-top: 16px; }
 .group-student-project .ds-guide .group-form { margin-top: 8px; }
+.group-assignment { overflow-wrap: anywhere; }
+.group-assignment-head { display: flex; justify-content: space-between; gap: 10px 24px; flex-wrap: wrap; }
+.group-assignment-head h2 { margin: 6px 0 0; }
+.group-assignment-head .eyebrow, .group-assignment-due span { color: var(--mf-muted); }
+.group-assignment-due { display: grid; align-content: start; gap: 2px; margin: 0; font-variant-numeric: tabular-nums; }
+.group-assignment-due span { font-size: 13px; }
+.group-assignment-goal { margin: 12px 0; }
+.group-assignment h3 { font-size: 15px; }
+.group-assignment-project { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+.group-assignment-editor[open] > summary { margin-bottom: 8px; }
+.group-assignment-editor small { color: var(--mf-muted); font-weight: 400; }
+.group-assignment-editor input[type="date"] { max-width: 240px; }
+.group-assignment-editor button { min-height: 44px; }
+.group-materials { padding-inline-start: 20px; }
+#group-project, #group-roster { scroll-margin-top: 80px; }
 @media (max-width: 1000px) {
   .group-table, .group-table tbody, .group-table tr, .group-table td { display: block; width: auto; }
   .group-table thead { display: none; }
@@ -58,7 +75,7 @@
   .group-panel { padding: 18px; }
   .group-list { grid-template-columns: minmax(0,1fr); }
   .group-stats { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
-  .group-stats div { padding: 16px; }
+  .group-stats a { padding: 12px; }
   .group-actions > form, .group-actions button { max-width: 100%; }
   .group-code input { font-size: 13px; }
 }

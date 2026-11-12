@@ -13,7 +13,8 @@ from urllib.parse import urlencode
 from database import PostgresConnection, execute_schema_script, form_database_id, insert_id
 from deadlines import format_timestamp
 from grading import load_scores, summarize
-from project_stages import STAGES, stage_label, get_stages
+from group_assignments import assignment_for, initialize_group_assignments, render_assignment, save_assignment
+from project_stages import STAGES, stage_label, stage_needs_revision, get_stages
 from project_rules import create_owned_project, has_project_teacher
 from project_workspace import next_step
 from video_defense import defense_for
@@ -27,9 +28,9 @@ MAX_MEMBERS = 300
 MAX_STUDENT_GROUPS = 20
 PAGE_SIZE = 30
 CODE_ERROR = 'Код группы недоступен. Проверьте его или попросите учителя выдать новый.'
-VIEWS = {'all': 'Все ученики', 'review': 'Ждут проверки', 'unlinked': 'Нужно подключение',
+VIEWS = {'all': 'Все ученики', 'review': 'Ждут проверки', 'revision': 'Дорабатывают', 'unlinked': 'Нужно подключение',
          'no_project': 'Без проекта', 'stale': 'Работы без обновлений 14 дней'}
-GROUP_CSS = '<link rel="stylesheet" href="/static/learning-groups.css?v=20261112-student">'
+GROUP_CSS = '<link rel="stylesheet" href="/static/learning-groups.css?v=20261112-assignment">'
 
 
 def initialize_groups(conn):
@@ -61,6 +62,7 @@ def initialize_groups(conn):
         );
         CREATE INDEX IF NOT EXISTS idx_learning_group_invite ON learning_group_invitations(group_id,revoked,expires);
     """)
+    initialize_group_assignments(conn)
 
 
 def _lock(conn, group_id=None, user_id=None):
@@ -152,6 +154,10 @@ def change_group(conn, user, group_id, form):
             if user['role'] != 'student':
                 raise PermissionError('Выход доступен ученику группы.')
             conn.execute('DELETE FROM learning_group_members WHERE group_id=? AND student_id=?', (group_id, user['id']))
+        elif action == 'save_assignment':
+            if user['role'] != 'teacher' or group['teacher_id'] != user['id'] or group['archived']:
+                raise PermissionError('Публиковать задание может учитель действующей группы.')
+            save_assignment(conn, group_id, form)
         elif action in ('select', 'propose', 'create_project'):
             if user['role'] != 'student' or group['archived']:
                 raise PermissionError('Выбирать проект может ученик действующей группы.')
@@ -268,7 +274,7 @@ def roster(conn, user, group, args):
     for row in rows:
         pid = row['project_id']
         row.update(completed=0, pending=0, stage='', grade='', updated='', stale=False,
-                   current_number=None, stage_review=False, proposed=pid in pending)
+                   current_number=None, stage_review=False, revision_target='', proposed=pid in pending)
         if row['accessible']:
             stored = stages[pid]
             row['completed'] = sum(s['state'] == 'done' for s in stored.values())
@@ -277,6 +283,10 @@ def roster(conn, user, group, args):
             row['stage_review'] = any(s['state'] == 'review' for s in stored.values())
             row['stage'] = 'Все пять этапов приняты' if current is None else f'Этап {current} · ' + stage_label(stored.get(current, {'state': 'todo', 'reviewed_by': None}))
             row['pending'] = sum(s['state'] == 'review' for s in stored.values()) + int(defenses.get(pid) == 'submitted')
+            if current in stored and stage_needs_revision(stored[current]):
+                row['revision_target'] = f'/project/{pid}/stages#stage-{current}-result'
+            elif defenses.get(pid) == 'returned':
+                row['revision_target'] = f'/project/{pid}/defense'
             grade = grades.get((pid, row['student_id']))
             if grade:
                 try:
@@ -293,10 +303,12 @@ def roster(conn, user, group, args):
             row['updated'] = max((d for d in dates if d), default=None)
             row['stale'] = bool(row['updated'] and (datetime.now(timezone.utc) - row['updated']).days >= 14)
     counts = dict(total=len(rows), review=sum(r['pending'] > 0 for r in rows),
+                  revision=sum(bool(r['revision_target']) for r in rows),
                   no_project=sum(not r['project_name'] for r in rows),
                   unlinked=sum(bool(r['project_name']) and not r['accessible'] for r in rows))
     rows = [r for r in rows if query.casefold() in r['username'].casefold()
             and (view == 'all' or view == 'review' and r['pending'] > 0
+                 or view == 'revision' and r['revision_target']
                  or view == 'no_project' and not r['project_name']
                  or view == 'unlinked' and r['project_name'] and not r['teacher_connected']
                  or view == 'stale' and r['stale'])]
@@ -355,7 +367,7 @@ def render_student_project(conn, user, group, row, token):
     if selected is None:
         if archived:
             return '<p class="group-text">Проект для этой группы не выбран.</p>'
-        return f'''<section class="group-panel group-student-project"><h2>Добавьте проект в группу</h2>
+        return f'''<section class="group-panel group-student-project"><h2 id="group-project" tabindex="-1">Добавьте проект в группу</h2>
             <p>Учитель увидит название проекта. Для доступа к работе нужно согласовать руководство.</p>
             {select_form(projects) if projects else create_form()}
             {f'<details class="ds-guide"><summary>Создать новый проект</summary>{create_form()}</details>' if projects else ''}
@@ -401,7 +413,7 @@ def render_student_project(conn, user, group, row, token):
     grade = f'<a href="{project_url}/assessment">Оценка учителя группы: {escape(row["grade"])}</a>' if row['grade'] else ''
     change = f'<details class="ds-guide"><summary>Изменить проект в группе</summary>{select_form(projects)}</details>' if not archived else ''
     return f'''<section class="group-panel group-student-project" aria-label="Мой проект в группе">
-        <span class="eyebrow">МОЙ ПРОЕКТ В ГРУППЕ</span><h2>{escape(row['project_name'])}</h2>
+        <span class="eyebrow">МОЙ ПРОЕКТ В ГРУППЕ</span><h2 id="group-project" tabindex="-1">{escape(row['project_name'])}</h2>
         <p class="group-project-progress">{row['completed']} из 5 приняты · {escape(row['stage'])}</p>
         <div class="group-project-step"><h3>{title}</h3><p>{description}</p>
         <div class="group-actions">{primary}{project_link}</div></div>
@@ -410,19 +422,27 @@ def render_student_project(conn, user, group, row, token):
         </section>'''
 
 
-def render_group(conn, user, group, data, token, code=None):
+def render_group(conn, user, group, data, token, code=None, assignment_form=None):
     gid, revision = group['id'], group['revision']
     def form(action, content):
         return f'<form method="post">{hidden_token(token)}<input type="hidden" name="revision" value="{revision}"><input type="hidden" name="action" value="{action}">{content}</form>'
     body = GROUP_CSS + f'''<p class="groups-intro group-identity">Учитель: {escape(group['teacher_name'])}{' · В архиве' if group['archived'] else ''}</p><p class="group-text">{escape(group['description'])}</p>'''
     if group['archived']:
         body += '<p class="group-notice">Группа в архиве. Новые вступления и выбор проекта закрыты; существующие проекты и руководство сохранены.</p>'
+    body += render_assignment(assignment_for(conn, gid), token, teacher=data['teacher'],
+                              archived=group['archived'], submitted=assignment_form)
     if not data['teacher']:
         body += render_student_project(conn, user, group, data['rows'][0] if data['rows'] else {}, token)
         return body + '<details class="group-panel"><summary>Выход из группы</summary><p>Проект, оценки и руководство сохранятся.</p>' + form('leave', '<button class="secondary" data-ui-icon="logout">Выйти из группы</button>') + '</details>'
     c = data['counts']
-    body += f'''<section class="group-stats" aria-label="Показатели группы"><div><strong>{c['total']}</strong>Учеников</div><div><strong>{c['review']}</strong>Ждут проверки</div>
-        <div><strong>{c['unlinked']}</strong>Нужно подключение</div><div><strong>{c['no_project']}</strong>Без проекта</div></section>'''
+    stats = [('all', c['total']), ('no_project', c['no_project']), ('review', c['review']),
+             ('revision', c['revision']), ('unlinked', c['unlinked'])]
+    stat_links = []
+    for view, count in stats:
+        current = ' aria-current="true"' if data['view'] == view and not data['query'] else ''
+        stat_links.append(f'<a href="/groups/{gid}?view={view}#group-roster"{current}>'
+                          f'<strong>{count}</strong><span>{VIEWS[view]}</span></a>')
+    body += f'<nav class="group-stats" aria-label="Фильтры по состоянию проектов">{"".join(stat_links)}</nav>'
     body += f'<details class="group-panel" {"open" if code or not c["total"] else ""}><summary data-ui-icon="link">Приглашение класса</summary><p>Один код можно передать всему классу. Он действует 7 дней, показывается только при создании. Новый код отменяет предыдущий, но сохраняет состав группы.</p><div class="group-actions">'
     if not group['archived']:
         body += form('invite', '<button data-ui-icon="plus">Создать новый код группы</button>') + form('revoke', '<button class="secondary" data-ui-icon="close">Отозвать код</button>')
@@ -438,7 +458,7 @@ def render_group(conn, user, group, data, token, code=None):
     body += '</details>'
     options = ''.join(f'<option value="{key}" {"selected" if key == data["view"] else ""}>{label}</option>' for key, label in VIEWS.items())
     body += f'''<form method="get" class="group-filters"><label>Поиск ученика<input name="q" maxlength="100" value="{escape(data['query'], quote=True)}"></label><label>Состояние учеников<select name="view">{options}</select></label><button data-ui-icon="filter">Показать</button><a href="/groups/{gid}">Сбросить</a></form>'''
-    body += f'<section aria-label="Проекты учеников"><h2>Ученики и проекты</h2><p>Показано {len(data["rows"])} из {data["filtered"]}</p><div class="group-table-wrap"><table class="group-table"><thead><tr>'
+    body += f'<section aria-label="Проекты учеников"><h2 id="group-roster" tabindex="-1">Ученики и проекты</h2><p>Показано {len(data["rows"])} из {data["filtered"]}</p><div class="group-table-wrap"><table class="group-table"><thead><tr>'
     columns = ('Ученик', 'Проект', 'Этапы', 'Проверка', 'Моя оценка', 'Последнее изменение', 'Действия')
     body += ''.join(f'<th scope="col">{label}</th>' for label in columns) + '</tr></thead><tbody>'
     for row in data['rows']:
@@ -447,12 +467,15 @@ def render_group(conn, user, group, data, token, code=None):
         if row['accessible']:
             project = f'<a href="/project/{pid}">{project}</a>'
             stages = f'{row["completed"]} из 5 приняты<br>{escape(row["stage"])}'
-            review = f'Ожидают решения: {row["pending"]}' if row['pending'] else 'Нет ожидающих проверок'
             stage_target = f'/project/{pid}/stages' + (f'#stage-{row["current_number"]}-result' if row['current_number'] else '')
-            if row['pending'] and not row['stage_review']:
-                actions = f'<a href="/project/{pid}/defense">Проверить видеозащиту {icon('arrow')}</a>'
+            if row['revision_target'] and (data['view'] == 'revision' or not row['pending']):
+                review = f'<a class="group-review-link" href="{row["revision_target"]}">Посмотреть замечание</a>'
+            elif row['pending']:
+                review_target = stage_target if row['stage_review'] else f'/project/{pid}/defense'
+                review = f'<a class="group-review-link" href="{review_target}">Ожидают решения: {row["pending"]}</a>'
             else:
-                actions = f'<a href="{stage_target}">{"Проверить этап" if row["stage_review"] else "Открыть этапы"} {icon('arrow')}</a>'
+                review = 'Нет ожидающих проверок'
+            actions = f'<a href="{stage_target}">Открыть этапы {icon('arrow')}</a>'
             grade = row['grade'] or 'Не опубликована'
             grade_target = f'/project/{pid}/assessment' + f'?student_id={row["student_id"]}'
             grade = f'<a href="{grade_target}">{grade}</a>'
@@ -468,7 +491,8 @@ def render_group(conn, user, group, data, token, code=None):
         body += '<tr>' + ''.join(f'<td data-label="{label}"><div class="group-cell">{cell}</div></td>' for label, cell in zip(columns, cells)) + '</tr>'
     body += '</tbody></table></div>'
     if not data['rows']:
-        body += '<p>По этим условиям учеников нет. Пригласите класс по коду или сбросьте фильтры.</p>'
+        empty = 'По этим условиям учеников нет.' if c['total'] else 'Пригласите учеников по коду группы.'
+        body += f'<p>{empty}</p>'
     body += '<nav class="group-actions" aria-label="Страницы группы">'
     for page, label in ((data['page']-1, 'Предыдущая страница'), (data['page']+1, 'Следующая страница')):
         if 1 <= page <= data['pages']:

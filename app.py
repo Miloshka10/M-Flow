@@ -2714,7 +2714,7 @@ def learning_group_page(group_id):
         limited = group_attempt(user)
         if limited:
             return limited
-    error, status, code = '', 200, None
+    error, status, code, assignment_form = '', 200, None, None
     with closing(get_db()) as conn:
         try:
             group = group_for(conn, user, group_id)
@@ -2727,6 +2727,10 @@ def learning_group_page(group_id):
                 if action == 'leave':
                     flash('Вы вышли из группы. Проект и действующее руководство сохранены.')
                     return redirect('/groups')
+                if action == 'save_assignment':
+                    flash('Задание опубликовано.' if request.form.get('assignment_revision') == '0'
+                          else 'Задание обновлено.')
+                    return redirect(f'/groups/{group_id}')
                 if action != 'invite':
                     flash('Запрос отправлен учителю.' if action == 'propose'
                           else 'Проект создан и добавлен в группу.' if action == 'create_project'
@@ -2738,12 +2742,14 @@ def learning_group_page(group_id):
         except (ValueError, PermissionError) as exc:
             conn.rollback()
             error, status = str(exc), 403 if isinstance(exc, PermissionError) else 400
+            if status == 400 and request.method == 'POST' and request.form.get('action') == 'save_assignment':
+                assignment_form = request.form
             try:
                 group = group_for(conn, user, group_id)
             except PermissionError:
                 return render_error_page('Нет доступа', 'Вы больше не состоите в учебной группе.', 403)
             data = roster(conn, user, group, {})
-        body = render_group(conn, user, group, data, csrf_token(), code)
+        body = render_group(conn, user, group, data, csrf_token(), code, assignment_form=assignment_form)
     return render_collaboration_page(user, group['name'], body, error=error, status=status,
                                      back_url='/groups', back_label='Учебные группы')
 
