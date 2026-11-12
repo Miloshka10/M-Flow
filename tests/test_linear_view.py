@@ -69,6 +69,24 @@ class LinearViewTests(unittest.TestCase):
         after = self.client.get('/next/project/2').text
         self.assertEqual([s['status'] for s in self.model(after)], ['done', 'progress', 'locked', 'locked', 'locked'])
         self.assertIn('Принято 1 из 5', after)
+        history = self.client.get('/next/project/2?tab=history').text
+        self.assertIn('Этап 1 · Отправка №1', history)
+
+    def test_overview_tracks_return_and_resubmission_for_both_roles(self):
+        self.sign_in()
+        self.assertEqual(self.fixture.post('/project/2/stages', data=dict(
+            number='1', revision='0', action='submit', result='Первый результат')).status_code, 302)
+        self.sign_in(1)
+        self.assertEqual(self.fixture.post('/project/2/stages', data=dict(
+            number='1', revision='1', action='return', teacher_comment='Добавьте измерения')).status_code, 302)
+        for user in (1, 3):
+            self.sign_in(user)
+            self.assertIn('MFL-002 · На доработке', self.client.get('/next').text)
+        self.assertEqual(self.fixture.post('/project/2/stages', data=dict(
+            number='1', revision='2', action='submit', result='Добавили измерения')).status_code, 302)
+        for user in (1, 3):
+            self.sign_in(user)
+            self.assertIn('MFL-002 · На проверке', self.client.get('/next').text)
 
     def test_task_and_history_links_work_without_javascript(self):
         self.sign_in()
@@ -76,6 +94,7 @@ class LinearViewTests(unittest.TestCase):
             page = self.client.get('/next/project/2?tab=' + tab).text
             self.assertIn(f'<section data-tab-panel="{tab}" >', page)
             self.assertIn('<section data-tab-panel="result" hidden>', page)
+            self.assertIn(f'href="?stage=1&amp;tab={tab}" data-stage-link="0"', page)
 
     def test_new_routes_cannot_mutate_data(self):
         self.sign_in()

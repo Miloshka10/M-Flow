@@ -12,11 +12,27 @@ const vertices = [[0,1,PHI],[0,-1,PHI],[0,1,-PHI],[0,-1,-PHI],[1,PHI,0],[-1,PHI,
 const edges = vertices.flatMap((a,i) => vertices.flatMap((b,j) => j > i && Math.hypot(...a.map((v,k) => v-b[k])) < 1.1 ? [[i,j]] : []));
 const connected=(a,b)=>edges.some(([x,y])=>x===Math.min(a,b)&&y===Math.max(a,b));
 const faces=vertices.flatMap((_,a)=>vertices.flatMap((_,b)=>vertices.flatMap((_,c)=>a<b&&b<c&&connected(a,b)&&connected(b,c)&&connected(a,c)?[[a,b,c]]:[])));
-const rotate = ([x,y,z], ax, ay, az = 0) => {
-  const y1=y*Math.cos(ax)-z*Math.sin(ax), z1=y*Math.sin(ax)+z*Math.cos(ax);
-  const x2=x*Math.cos(ay)+z1*Math.sin(ay), z2=-x*Math.sin(ay)+z1*Math.cos(ay);
-  return [x2*Math.cos(az)-y1*Math.sin(az), x2*Math.sin(az)+y1*Math.cos(az), z2];
-};
+function rotation(ax, ay, az = 0) {
+  const sinX = Math.sin(ax), cosX = Math.cos(ax);
+  const sinY = Math.sin(ay), cosY = Math.cos(ay);
+  const sinZ = Math.sin(az), cosZ = Math.cos(az);
+  return ([x, y, z]) => {
+    const y1 = y * cosX - z * sinX, z1 = y * sinX + z * cosX;
+    const x2 = x * cosY + z1 * sinY, z2 = -x * sinY + z1 * cosY;
+    return [x2 * cosZ - y1 * sinZ, x2 * sinZ + y1 * cosZ, z2];
+  };
+}
+
+function sampleRing(segments) {
+  return Array.from({length: segments + 1}, (_, step) => {
+    const angle = step / segments * TAU;
+    return [Math.cos(angle), Math.sin(angle), 0];
+  });
+}
+
+const referenceRing = sampleRing(128).map(rotation(1.15, .1));
+const stageRing = sampleRing(144);
+const dashedOrbit = [2, 5];
 
 export function clampOrbitView({yaw,pitch}) {
   return {yaw:Number.isFinite(yaw)?((yaw+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI:0,pitch:Math.max(-.95,Math.min(.95,Number.isFinite(pitch)?pitch:0))};
@@ -46,20 +62,25 @@ export function createOrbitScene(element, initial, callbacks={}) {
     let width=0,height=0,frame=0,last=0,visible=true,destroyed=false;
     let spinX=0,spinY=0,built=config.accepted;
     const seed=initial.seed||0;
+    const orbits = Array.from({length: 5}, (_, index) => {
+      const orient = rotation(.65 + index * .49, .2 + index * .56, index * .64 + seed * .12);
+      return {orient, track: stageRing.map(orient)};
+    });
     const accepted=config.accepted,active=config.active;
     const reveal=Array.from({length:5},(_,i)=>i<accepted+(active>=0?1:0)?1:0);
-    const project = ([x,y,z]) => {
-      const p=rotate([x,y,z], .28+spinY+view.pitch, -.2+spinX+view.yaw, -.16);
-      const k=620/(620-p[2]);
-      return [width/2+p[0]*k,height/2+p[1]*k,p[2],k];
-    };
     const line = (points,color,opacity,lineWidth=.7,dashed=false) => {
       ctx.beginPath();ctx.strokeStyle=color;ctx.globalAlpha=opacity;ctx.lineWidth=lineWidth;
-      ctx.setLineDash(dashed ? [2,5] : []);
-      points.forEach((p,i)=>i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1]));ctx.stroke();ctx.setLineDash([]);
+      if (dashed) ctx.setLineDash(dashedOrbit);
+      points.forEach((p,i)=>i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1]));
+      ctx.stroke();
+      if (dashed) ctx.setLineDash([]);
     };
-    const crystal = (position,radius,rotation,color,alpha) => {
-      const points=vertices.map(v=>project(rotate(v.map(n=>n*radius),rotation*.6,rotation,.25).map((n,i)=>n+position[i])));
+    const crystal = (project,position,radius,angle,color,alpha) => {
+      const orient = rotation(angle * .6, angle, .25);
+      const points = vertices.map(([x, y, z]) => {
+        const [a, b, c] = orient([x * radius, y * radius, z * radius]);
+        return project([a + position[0], b + position[1], c + position[2]]);
+      });
       if(radius>20) [...faces].sort((a,b)=>a.reduce((s,i)=>s+points[i][2],0)-b.reduce((s,i)=>s+points[i][2],0)).forEach(face=>{
         ctx.beginPath();face.forEach((i,n)=>n?ctx.lineTo(points[i][0],points[i][1]):ctx.moveTo(points[i][0],points[i][1]));ctx.closePath();ctx.globalAlpha=alpha*.035;ctx.fillStyle=color;ctx.fill();
       });
@@ -80,25 +101,31 @@ export function createOrbitScene(element, initial, callbacks={}) {
       const target=Math.max(1,layers);
       const spread=scale*(.80+Math.min(target,5)*.04);
       const centerSize=(25+built*10)*scale;
+      const orientView = rotation(.28 + spinY + view.pitch, -.2 + spinX + view.yaw, -.16);
+      const project = point => {
+        const [x, y, depth] = orientView(point);
+        const perspective = 620 / (620 - depth);
+        return [width / 2 + x * perspective, height / 2 + y * perspective, depth, perspective];
+      };
+      const projectRing = (points, radius) => points.map(([x, y, z]) => project([x * radius, y * radius, z * radius]));
       const origin=project([0,0,0]);
       line([[width/2-12, height/2],[width/2+12,height/2]],palette.grid,.11);
       line([[width/2,height/2-12],[width/2,height/2+12]],palette.grid,.11);
       // A quiet external reference ring stays fixed; the built structure moves within it.
-      const reference=Array.from({length:129},(_,i)=>project(rotate([Math.cos(i/128*TAU)*208*spread,Math.sin(i/128*TAU)*208*spread,0],1.15,.1,.0)));
-      line(reference,palette.reference,.2,.55);
+      line(projectRing(referenceRing, 208 * spread),palette.reference,.2,.55);
       const bodies=[];
       for (let i=0;i<layers;i++) {
         reveal[i]+=(1-reveal[i])*easing;
         const birth=reveal[i];
         const complete=i<c.accepted,focused=i===c.selected||i===c.hovered;
         const radius=(79+i*26)*spread*(.75+birth*.25);
-        const ax=.65+i*.49,ay=.2+i*.56,az=i*.64+seed*.12;
-        const path=Array.from({length:145},(_,j)=>project(rotate([Math.cos(j/144*TAU)*radius,Math.sin(j/144*TAU)*radius,0],ax,ay,az)));
-        line(path.slice(0,Math.max(2,Math.ceil(path.length*birth))),focused?palette.selected:palette.track,(complete ? (focused ? .58 : .35) : .28)*birth,focused?1:.75,!complete);
+        const {orient, track} = orbits[i];
+        const visiblePoints = Math.max(2, Math.ceil(track.length * birth));
+        line(projectRing(track.slice(0, visiblePoints), radius),focused?palette.selected:palette.track,(complete ? (focused ? .58 : .35) : .28)*birth,focused?1:.75,!complete);
         const count=complete?3+i:1;
         for (let n=0;n<count;n++) {
           const angle=t*(i%2 ? -.07:.055)/(1+i*.11)+n/count*TAU+i*1.79+seed*.43;
-          const position=rotate([Math.cos(angle)*radius,Math.sin(angle)*radius,0],ax,ay,az);
+          const position=orient([Math.cos(angle)*radius,Math.sin(angle)*radius,0]);
           const p=project(position),color=focused||!complete?palette.active:palette.node;
           if(n===0 && complete) line([origin,p],color,.08,.6);
           bodies.push({position,p,color,complete,focused,size:(n===0?12+i*1.5:3.2+i*.35)*scale*birth,angle,birth,index:i,node:n});
@@ -107,7 +134,7 @@ export function createOrbitScene(element, initial, callbacks={}) {
       bodies.sort((a,b)=>a.p[2]-b.p[2]);
       callbacks.onProject?.(bodies.filter(b=>b.node===0).map(b=>({index:b.index,x:b.p[0],y:b.p[1],depth:b.p[2]})));
       const paintBody = b => {
-        if(b.size>7*scale) crystal(b.position,b.size,t*.15+b.angle,b.color,(b.complete?.65:.55)*b.birth);
+        if(b.size>7*scale) crystal(project,b.position,b.size,t*.15+b.angle,b.color,(b.complete?.65:.55)*b.birth);
         else { ctx.fillStyle=b.color;ctx.globalAlpha=(b.complete?.75:.65)*b.birth;ctx.beginPath();ctx.arc(b.p[0],b.p[1],Math.max(1.3,b.size*b.p[3]*.5),0,TAU);ctx.fill(); }
         if(b.focused) {
           const pulse=c.reduced?0:(Math.sin(t*1.5)+1)*.5;
@@ -118,9 +145,9 @@ export function createOrbitScene(element, initial, callbacks={}) {
       // Nested polyhedra form the nucleus; accepted stages add a new crystalline shell.
       for(let i=c.accepted;i>=0;i--) {
         const r=centerSize*(.52+i*.105);
-        crystal([0,0,0],r,t*.075+i*.31+seed*.4,i===0?palette.core:palette.layer,i===0?.85:.29);
+        crystal(project,[0,0,0],r,t*.075+i*.31+seed*.4,i===0?palette.core:palette.layer,i===0?.85:.29);
       }
-      crystal([0,0,0],centerSize,t*.075+seed*.4,palette.shell,.8);
+      crystal(project,[0,0,0],centerSize,t*.075+seed*.4,palette.shell,.8);
       bodies.filter(b=>b.p[2]>=0).forEach(paintBody);
       ctx.globalAlpha=1;
     };

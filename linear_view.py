@@ -1,4 +1,5 @@
 """Incremental Linear-style presentation. Reads only; existing forms own all writes."""
+from collections import defaultdict
 from contextlib import closing
 from html import escape
 import json
@@ -8,15 +9,22 @@ from interface import APPEARANCE_VERSION, appearance_assets, icon, theme_button
 from deadlines import format_timestamp
 from material_links import safe_web_url
 from project_stages import get_stages, stages_from_rows, stage_summary, stage_needs_revision
-from work_history import load_history, EVENTS
+from work_history import event_context, recent_history, EVENTS
 
 NAMES = ('Тема', 'Работа 1', 'Работа 2', 'Работа 3', 'Документы')
+SCRIPT_VERSION = '20261111-workflow'
+
+
+def stage_status(stage):
+    if stage_needs_revision(stage):
+        return 'returned'
+    return 'progress' if stage['state'] == 'todo' else stage['state']
 
 
 def stage_model(stages):
     _, current = stage_summary(stages)
     return [dict(name=NAMES[i], status='locked' if current and s['number'] > current['number'] else
-                 'returned' if stage_needs_revision(s) else 'progress' if s['state'] == 'todo' else s['state'])
+                 stage_status(s))
             for i, s in enumerate(stages)]
 
 
@@ -30,17 +38,17 @@ def document(title, body):
             '<meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<title>{escape(title)} — M-Flow</title>{appearance_assets()}'
             f'<link rel="stylesheet" href="/static/linear-ui.css?v={APPEARANCE_VERSION}">'
-            f'<script type="module" src="/static/linear-ui.js?v={APPEARANCE_VERSION}"></script></head>'
+            f'<script type="module" src="/static/linear-ui.js?v={SCRIPT_VERSION}"></script></head>'
             f'<body data-linear-view><a class="skip-link" href="#linear-main">Перейти к содержанию</a>{body}</body></html>')
 
 
-def sidebar(user, projects, token, pid=None, stages=None, selected=0):
+def sidebar(user, projects, token, pid=None, stages=None, selected=0, tab='result'):
     links = ''.join(f'<a class="lx-nav-row" href="/next/project/{p["id"]}" '
                     f'data-active="{str(p["id"] == pid).lower()}">{icon("folder")}<span>{escape(p["name"])}</span></a>' for p in projects)
     steps = ''
     if stages:
         steps = '<div class="lx-nav-group"><span class="lx-nav-label">Этапы проекта</span>' + ''.join(
-            f'<a class="lx-nav-row" href="?stage={i+1}" data-stage-link="{i}" aria-label="Этап {i+1}: {s["name"]}" '
+            f'<a class="lx-nav-row" href="?stage={i+1}&amp;tab={tab}" data-stage-link="{i}" aria-label="Этап {i+1}: {s["name"]}" '
             f'aria-current="{"step" if i == selected else "false"}" {"aria-disabled=true tabindex=-1" if s["status"] == "locked" else ""}>'
             f'{icon("check" if s["status"] == "done" else "stages")}<span>{s["name"]}</span><small>{i+1}</small></a>'
             for i, s in enumerate(stages)) + '</div>'
@@ -100,50 +108,74 @@ def project_page(user, projects, project, stages, tasks, history, members, token
         comment = escape(stage['teacher_comment'] or ('Результат у учителя.' if status == 'review' else 'Здесь появится обратная связь учителя.'))
         properties.append(f'<div data-stage-info="{i}" {"hidden" if i != selected else ""}><h2 class="ln-inspector-title">Сведения</h2><dl class="lw-properties"><div><dt>Статус</dt><dd>{status_name(status)}</dd></div><div><dt>Этап</dt><dd>{i+1} / 5 · {NAMES[i]}</dd></div><div><dt>Обновлено</dt><dd>{format_timestamp(stage["updated_at"])}</dd></div></dl><section class="lw-review-panel"><div class="lw-review-panel-header">Обратная связь</div><div class="lw-review-panel-body"><p>{comment}</p>{action}</div></section></div>')
     task_rows = ''.join(f'<a class="ln-task" href="/project/{pid}?view_stage={t["stage_number"] or selected+1}#task-{t["id"]}">{icon("check" if t["status"] == "done" else "tasks")}<span>{escape(t["title"])}<small>{escape(t["assignee_name"] or "Не назначен")}</small></span><small>{escape({"done":"Готово","progress":"В работе","todo":"К выполнению"}.get(t["status"],t["status"]))}</small></a>' for t in tasks)
-    events = ''.join(f'<article class="ln-event"><span>{icon("history")}</span><div><strong>{escape(EVENTS.get(row["event"], "Обновление"))}</strong><p>{escape(row["actor_name"] or row["author_name"] or "Участник проекта")} · {format_timestamp(row["recorded_at"])}</p>{"<p>"+escape(row["comment"])+"</p>" if row["comment"] else ""}</div></article>' for row in history['items'])
+    events = ''.join(f'<article class="ln-event"><span>{icon("history")}</span><div><strong>{escape(EVENTS.get(row["event"], "Обновление"))}</strong>'
+                     f'<p>{event_context(row)} · {escape(row["actor_name"] or row["author_name"] or "Участник проекта")} · {format_timestamp(row["recorded_at"])}</p>'
+                     f'{"<p>"+escape(row["comment"])+"</p>" if row["comment"] else ""}</div></article>' for row in history)
     people = ''.join(f'<p>{escape(m["username"])}<small>{"Учитель" if m["role"] == "teacher" else "Ученик"}</small></p>' for m in members)
-    return document(name, f'''<div class="lx-app-shell lw-shell">{sidebar(user, projects, token, pid, model, selected)}
+    return document(name, f'''<div class="lx-app-shell lw-shell">{sidebar(user, projects, token, pid, model, selected, initial_tab)}
       <main class="lx-app-main lw-view" id="linear-main"><header class="lx-app-topbar lw-topbar">{icon('folder')}<span class="lw-id">MFL-{pid:03}</span><span class="lw-breadcrumb-title">{escape(name)}</span>{theme_button()}</header>
       <div class="lw-viewbar"><nav class="lw-tabs" aria-label="Раздел проекта"><a href="?stage={selected+1}&tab=result" data-tab="result" aria-current="{'page' if initial_tab == 'result' else 'false'}">Результат</a><a href="?stage={selected+1}&tab=tasks" data-tab="tasks" aria-current="{'page' if initial_tab == 'tasks' else 'false'}">Задачи</a><a href="?stage={selected+1}&tab=history" data-tab="history" aria-current="{'page' if initial_tab == 'history' else 'false'}">История</a></nav><div class="lw-toolbar-actions">{"".join(quick_actions)}<a class="lw-button ln-team-link" href="/project/{pid}/team">Команда</a></div></div>
-      <div class="lw-body"><section class="lw-content"><div class="lw-title-block"><h1>{escape(name)}</h1><p class="lw-stage-context"><span data-stage-caption>{NAMES[selected]}</span><span>·</span><span data-stage-status>{status_name(model[selected]['status'])}</span></p></div>
+      <div class="lw-body"><section class="lw-content"><div class="lw-title-block"><h1>{escape(name)}</h1><p class="lw-stage-context" aria-live="polite" aria-atomic="true"><span data-stage-caption>{NAMES[selected]}</span><span>·</span><span data-stage-status>{status_name(model[selected]['status'])}</span></p></div>
       <section data-tab-panel="result" {"hidden" if initial_tab != "result" else ""}>{''.join(panels)}{orbit(model, selected, pid)}<a class="lw-result-link" href="/project/{pid}/preparation">Видеозащита и итоговая оценка {icon('arrow')}</a></section>
       <section data-tab-panel="tasks" {"hidden" if initial_tab != "tasks" else ""}><div class="lw-section-title"><h2>Задачи команды</h2><a href="/project/{pid}#task-board">Доска задач {icon('arrow')}</a></div>{task_rows or '<p class="lw-muted">Задач пока нет.</p>'}</section>
       <section data-tab-panel="history" {"hidden" if initial_tab != "history" else ""}><div class="lw-section-title"><h2>Последние события</h2><a href="/project/{pid}/history">Вся история {icon('arrow')}</a></div>{events or '<p class="lw-muted">Здесь появятся отправки и решения учителя.</p>'}</section></section>
-      <aside class="lw-inspector ln-inspector" aria-label="Сведения и обратная связь">{''.join(properties)}<details class="ln-people"><summary>Команда · {len(members)}</summary>{people}</details></aside></div></main></div>''')
+      <aside class="lw-inspector ln-inspector" aria-label="Сведения и обратная связь">{''.join(properties)}
+      <details class="ln-people"><summary>Команда · {len(members)}</summary>{people}
+      <a class="lw-result-link" href="/project/{pid}/team">Открыть команду {icon('arrow')}</a></details></aside></div></main></div>''')
 
 
-def register_linear_views(app, login_required, current_user, get_db, projects_for_user, project_details, tasks_for_project, token):
+def register_linear_views(app, *, login_required, current_user, get_db, projects_for_user,
+                          project_details, tasks_for_project, members_for_project, token):
     @app.get('/next')
     @login_required
     def linear_home():
         user = current_user()
-        projects = projects_for_user()
-        rows = []
+        rows_by_project = defaultdict(list)
         with closing(get_db()) as conn:
+            projects = projects_for_user(connection=conn)
             if projects:
-                ids = tuple(p['id'] for p in projects)
-                rows = [dict(r) for r in conn.execute('SELECT project_id,number,state FROM project_stages WHERE project_id IN (' + ','.join('?' for _ in ids) + ')', ids)]
+                for row in conn.execute("""SELECT s.project_id, s.number, s.state, s.reviewed_by
+                    FROM project_stages s JOIN projects p ON p.id=s.project_id
+                    WHERE p.owner_id=? OR EXISTS (
+                        SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?
+                    )""", (user['id'], user['id'])):
+                    rows_by_project[row['project_id']].append(row)
         cards = []
-        empty_text = 'Проекты появятся после назначения руководителем.' if user['role'] == 'teacher' else 'Создайте проект на рабочем столе или примите приглашение.'
+        teacher = user['role'] == 'teacher'
         review_link = '<a class="lw-button" href="/teacher#review-queue">Все проверки</a>' if user['role'] == 'teacher' else ''
         for p in projects:
-            stages = stages_from_rows(r for r in rows if r['project_id'] == p['id'])
+            stages = stages_from_rows(rows_by_project[p['id']])
             accepted, current = stage_summary(stages)
-            label = status_name(stage_model(stages)[current['number']-1]['status']) if current else 'Все этапы приняты'
+            label = status_name(stage_status(current)) if current else 'Все этапы приняты'
             cards.append(f'<a class="ln-project-row" href="/next/project/{p["id"]}" data-project-name="{escape(p["name"].lower(), quote=True)}">{icon("folder")}<span>{escape(p["name"])}<small>MFL-{p["id"]:03} · {label}</small></span><span class="ln-progress">{accepted} / 5</span>{icon("arrow")}</a>')
-        return document('Проекты', f'<div class="lx-app-shell">{sidebar(user, projects, token())}<main class="lx-app-main" id="linear-main"><header class="lx-app-topbar">Обзор проектов{theme_button()}</header><section class="ln-projects"><h1>{"Проекты учеников" if user["role"] == "teacher" else "Мои проекты"}</h1><div class="ln-project-tools"><label>Найти проект<input type="search" data-project-search placeholder="Название проекта…"></label>{review_link}</div><div class="ln-project-list">{"".join(cards) or f"<p class=lw-muted>Проектов пока нет. {empty_text}</p>"}</div><p class="lw-muted" data-search-empty hidden>Ничего не найдено.</p></section></main></div>')
+        if cards:
+            contents = ('<div class="ln-project-tools"><label>Найти проект<input type="search" data-project-search placeholder="Название проекта…"></label>'
+                        f'{review_link}</div><div class="ln-project-list">{"".join(cards)}</div>'
+                        '<p class="lw-muted" data-search-empty hidden role="status">Ничего не найдено.</p>')
+        elif teacher:
+            contents = '<p class="lw-muted">Проекты появятся после назначения руководителем.</p>'
+        else:
+            contents = ('<p class="lw-muted">У вас пока нет проектов.</p>'
+                        '<a class="lw-button lw-button-primary" href="/#project-create">Создать проект</a> '
+                        '<a class="lw-button" href="/teams#team-invitations">Приглашения</a>')
+        return document('Проекты', f'''<div class="lx-app-shell">{sidebar(user, projects, token())}
+            <main class="lx-app-main" id="linear-main"><header class="lx-app-topbar">Обзор проектов{theme_button()}</header>
+            <section class="ln-projects"><h1>{"Проекты учеников" if teacher else "Мои проекты"}</h1>{contents}</section>
+            </main></div>''')
 
     @app.get('/next/project/<int:project_id>')
     @login_required
     def linear_project(project_id):
         user = current_user()
-        project = project_details(project_id) if 0 < project_id < 2**63 else None
-        if project is None:
-            return document('Нет доступа', f'<main class="ln-access" id="linear-main"><header class="lx-app-topbar"><a href="/next">К проектам</a>{theme_button()}</header><h1>Нет доступа к проекту</h1></main>'), 403
         with closing(get_db()) as conn:
+            project = project_details(project_id, connection=conn) if 0 < project_id < 2**63 else None
+            if project is None:
+                return document('Нет доступа', f'<main class="ln-access" id="linear-main"><header class="lx-app-topbar"><a href="/next">К проектам</a>{theme_button()}</header><h1>Нет доступа к проекту</h1></main>'), 403
             stages = get_stages(conn, project_id)
-            history = load_history(conn, project_id, 'all', 1)
-            members = [dict(r) for r in conn.execute('SELECT u.username,u.role FROM users u JOIN project_members m ON m.user_id=u.id WHERE m.project_id=? ORDER BY u.id', (project_id,))]
+            history = recent_history(conn, project_id)
+            members = members_for_project(project_id, connection=conn)
+            projects = projects_for_user(connection=conn)
+            tasks = tasks_for_project(project_id, connection=conn)
         _, current = stage_summary(stages)
         try:
             selected = int(request.args.get('stage', current['number'] if current else 5))-1
@@ -152,4 +184,4 @@ def register_linear_views(app, login_required, current_user, get_db, projects_fo
         selected = max(0, min(4, selected))
         if current and selected >= current['number']:
             selected = current['number']-1
-        return project_page(user, projects_for_user(), project, stages, tasks_for_project(project_id), history, members, token(), selected)
+        return project_page(user, projects, project, stages, tasks, history, members, token(), selected)

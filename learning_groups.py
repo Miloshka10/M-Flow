@@ -314,7 +314,10 @@ def render_groups(groups, user, token, preview=None):
     for group in groups:
         body += f'''<a class="group-panel group-link" href="/groups/{group['id']}"><span>{'В архиве' if group['archived'] else 'Действующая группа'}</span><h3>{escape(group['name'])}</h3>
             <p>Учитель: {escape(group['teacher_name'])}</p>{f'<p>Учеников: {group["members"]}</p>' if user['role'] == 'teacher' else ''}</a>'''
-    return body + ('<p>Групп пока нет. Создайте группу или примите код от учителя.</p>' if not groups else '') + '</div>'
+    if not groups:
+        empty = 'У вас пока нет учебных групп.' if user['role'] == 'teacher' else 'Вы ещё не вступили в учебную группу.'
+        body += f'<p>{empty}</p>'
+    return body + '</div>'
 
 
 def render_group(conn, user, group, data, token, code=None):

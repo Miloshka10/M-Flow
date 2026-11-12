@@ -11,7 +11,7 @@ from flask import (
 )
 import os
 import mimetypes
-from contextlib import closing
+from contextlib import closing, nullcontext
 from database import DATABASE_ERRORS
 from functools import wraps
 from werkzeug.security import (
@@ -165,8 +165,9 @@ def render_page(html, title=None):
     if '<main' in html and 'id="main-content"' not in html:
         html = html.replace('<main', '<main id="main-content"', 1)
     skip_target = 'main-content' if '<main' in html else 'page-content'
-    body_class = 'mf-v2 ui-authenticated' if 'data-interface-shell=' in html else 'mf-v2'
-    suite_attribute = ' data-design-suite' if 'data-interface-shell=' in html else ''
+    authenticated = 'data-interface-shell=' in html
+    body_class = 'mf-v2 ui-authenticated' if authenticated else 'mf-v2'
+    suite_attribute = ' data-design-suite' if authenticated else ''
     endpoint = request.endpoint or ''
     scenery_layout = ('access' if endpoint in ('forgot_password', 'reset_password_page', 'confirm_email_page')
                       else 'auth' if endpoint in ('login', 'register', 'teacher_login', 'teacher_register')
@@ -178,6 +179,12 @@ def render_page(html, title=None):
                    f'<script src="/static/auth.js?v={APPEARANCE_VERSION}" defer></script>'
                    if 'class="auth-page ' in html else '')
     work_assets = '<link rel="stylesheet" href="/static/work-screens.css?v=20261106-work">' if 'data-work-screens=' in html else ''
+    dashboard_script = '<script src="/static/dashboard.js?v=20261106-work" defer></script>' if 'id="project-create"' in html else ''
+    guard_script = '<script src="/static/form-guard.js?v=20261029" defer></script>' if ' data-guard-draft ' in html else ''
+    shell_scripts = ('<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
+                     '<script src="/static/interface.js?v=20261027-work" defer></script>'
+                     + guard_script
+                     + '<script src="/static/design-suite.js?v=20261106-work" defer></script>') if authenticated else guard_script
     return ('<!doctype html><html lang="ru" data-theme="dark"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<title>{escape(title) if title is not None else document_title(html)}</title>'
@@ -192,17 +199,13 @@ def render_page(html, title=None):
         '<link rel="stylesheet" href="/static/graphics.css?v=20261015">'
         f'<link rel="stylesheet" href="/static/notifications.css?v={APPEARANCE_VERSION}">'
         '<link rel="stylesheet" href="/static/deadlines.css?v=20261013-filters">'
-        '<script src="/static/dashboard.js?v=20261106-work" defer></script>'
         '<link rel="stylesheet" href="/static/navigation.css?v=20261017-fixes">'
-        '<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
         f'<link rel="stylesheet" href="/static/icon-symbols.css?v={APPEARANCE_VERSION}">'
         '<link rel="stylesheet" href="/static/interface.css?v=20261029-review">'
-        '<script src="/static/interface.js?v=20261027-work" defer></script>'
-        '<script src="/static/form-guard.js?v=20261029" defer></script>'
         '<link rel="stylesheet" href="/static/design-suite.css?v=20261101-mail-ui">'
-        '<script src="/static/design-suite.js?v=20261106-work" defer></script>'
             f'<link rel="stylesheet" href="/static/components.css?v={APPEARANCE_VERSION}">'
-            f'<link rel="stylesheet" href="/static/interface-v3.css?v={APPEARANCE_VERSION}">' + work_assets + auth_assets +
+            f'<link rel="stylesheet" href="/static/interface-v3.css?v={APPEARANCE_VERSION}">'
+            + work_assets + dashboard_script + shell_scripts + auth_assets +
             f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-interface-v3 data-scenery="{scenery_context}" data-scenery-layout="{scenery_layout}" data-design-page="{escape(endpoint, quote=True)}">'
             + f'<a class="skip-link" href="#{skip_target}">К содержимому</a>' + html
             + '</body></html>')
@@ -574,14 +577,12 @@ def is_project_owner(project_id):
 # PROJECTS
 # =========================================================
 
-def get_projects(with_counts=False):
+def get_projects(with_counts=False, *, connection=None):
 
     user = get_current_user()
 
     if user is None:
         return []
-
-    conn = get_db()
 
     columns = ""
     join = ""
@@ -592,36 +593,35 @@ def get_projects(with_counts=False):
             COALESCE(SUM(CASE WHEN t.status='progress' THEN 1 ELSE 0 END), 0) AS active,
             0 AS overdue"""
         join = "LEFT JOIN tasks t ON t.project_id=projects.id"
-    projects = conn.execute(f"""
-        SELECT projects.id, projects.name {columns}
-        FROM projects {join}
-        WHERE projects.owner_id=? OR EXISTS (
-            SELECT 1 FROM project_members m
-            WHERE m.project_id=projects.id AND m.user_id=?
-        )
-        GROUP BY projects.id ORDER BY projects.id DESC
-        """, params).fetchall()
+    with (closing(get_db()) if connection is None else nullcontext(connection)) as conn:
+        projects = conn.execute(f"""
+            SELECT projects.id, projects.name {columns}
+            FROM projects {join}
+            WHERE projects.owner_id=? OR EXISTS (
+                SELECT 1 FROM project_members m
+                WHERE m.project_id=projects.id AND m.user_id=?
+            )
+            GROUP BY projects.id ORDER BY projects.id DESC
+            """, params).fetchall()
 
-    if with_counts:
-        # One batched read for valid calendar dates and the student's next tasks.
-        # Never compare arbitrary legacy TEXT values lexicographically as dates.
-        today = business_today()
-        projects = [dict(row, deadlines=[]) for row in projects]
-        by_id = {row['id']: row for row in projects}
-        dated_tasks = conn.execute("""SELECT t.id,t.project_id,t.title,t.status,t.deadline,t.assignee_id
-            FROM tasks t JOIN projects p ON p.id=t.project_id
-            WHERE t.status!='done' AND t.deadline IS NOT NULL AND t.deadline!=''
-            AND (p.owner_id=? OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?))""",
-            (user['id'], user['id']))
-        for row in dated_tasks:
-            info = deadline_info(row['deadline'], row['status'], today)
-            project = by_id.get(row['project_id'])
-            if project is None or not info['active']:
-                continue
-            project['overdue'] += info['state'] == 'overdue'
-            if row['assignee_id'] in (None, user['id']):
-                project['deadlines'].append(dict(row, deadline_info=info))
-    conn.close()
+        if with_counts and projects:
+            # Read deadlines in one batch. Legacy text may not be a calendar date.
+            today = business_today()
+            projects = [dict(row, deadlines=[]) for row in projects]
+            by_id = {row['id']: row for row in projects}
+            dated_tasks = conn.execute("""SELECT t.id,t.project_id,t.title,t.status,t.deadline,t.assignee_id
+                FROM tasks t JOIN projects p ON p.id=t.project_id
+                WHERE t.status!='done' AND t.deadline IS NOT NULL AND t.deadline!=''
+                AND (p.owner_id=? OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?))""",
+                (user['id'], user['id']))
+            for row in dated_tasks:
+                info = deadline_info(row['deadline'], row['status'], today)
+                project = by_id.get(row['project_id'])
+                if project is None or not info['active']:
+                    continue
+                project['overdue'] += info['state'] == 'overdue'
+                if row['assignee_id'] in (None, user['id']):
+                    project['deadlines'].append(dict(row, deadline_info=info))
 
     return projects
 
@@ -674,40 +674,28 @@ def add_project(name):
     return project_id
 
 
-def get_project_details(project_id):
+def get_project_details(project_id, *, connection=None):
 
     user = get_current_user()
 
     if user is None:
         return None
 
-    conn = get_db()
-
-    project = conn.execute(
-        """
-        SELECT projects.id, projects.name, projects.owner_id
-        FROM projects
-        WHERE projects.id = ?
-        AND (
-            projects.owner_id = ?
-            OR EXISTS (
-                SELECT 1
-                FROM project_members
-                WHERE project_members.project_id = projects.id
-                AND project_members.user_id = ?
+    with (closing(get_db()) if connection is None else nullcontext(connection)) as conn:
+        return conn.execute("""
+            SELECT projects.id, projects.name, projects.owner_id
+            FROM projects
+            WHERE projects.id = ?
+            AND (
+                projects.owner_id = ?
+                OR EXISTS (
+                    SELECT 1
+                    FROM project_members
+                    WHERE project_members.project_id = projects.id
+                    AND project_members.user_id = ?
+                )
             )
-        )
-        """,
-        (
-            project_id,
-            user["id"],
-            user["id"]
-        )
-    ).fetchone()
-
-    conn.close()
-
-    return project
+            """, (project_id, user["id"], user["id"])).fetchone()
 
 
 def get_project_name(project_id):
@@ -719,43 +707,21 @@ def get_project_name(project_id):
 # TASKS
 # =========================================================
 
-def get_tasks(project_id):
-
-    conn = get_db()
-
-    tasks = conn.execute(
-        """
-        SELECT
-            tasks.id,
-            tasks.title,
-            tasks.done,
-            tasks.deadline,
-            tasks.status,
-            tasks.priority,
-            tasks.assignee_id,
-            tasks.description,
-            tasks.stage_number,
-            users.username AS assignee_name
-        FROM tasks
-        LEFT JOIN users
-            ON users.id = tasks.assignee_id
-        WHERE tasks.project_id = ?
-        ORDER BY
-            CASE priority
+def get_tasks(project_id, *, connection=None):
+    with (closing(get_db()) if connection is None else nullcontext(connection)) as conn:
+        return conn.execute("""
+            SELECT tasks.id, tasks.title, tasks.done, tasks.deadline, tasks.status, tasks.priority,
+                   tasks.assignee_id, tasks.description, tasks.stage_number, users.username AS assignee_name
+            FROM tasks LEFT JOIN users ON users.id = tasks.assignee_id
+            WHERE tasks.project_id = ?
+            ORDER BY CASE priority
                 WHEN 'urgent' THEN 1
                 WHEN 'high' THEN 2
                 WHEN 'normal' THEN 3
                 WHEN 'low' THEN 4
                 ELSE 5
-            END,
-            tasks.id
-        """,
-        (project_id,)
-    ).fetchall()
-
-    conn.close()
-
-    return tasks
+            END, tasks.id
+            """, (project_id,)).fetchall()
 
 
 def add_task(project_id, title, deadline, priority, assignee_id, description='', stage_number=None):
@@ -827,22 +793,17 @@ def add_task_update(project_id, task_id, user_id, body):
         conn.close()
 
 
-def get_task_update_history(project_id):
-
-    conn = get_db()
-    rows = conn.execute(
-        """
-        SELECT task_updates.task_id, task_updates.body,
-               task_updates.created_at, users.username
-        FROM task_updates
-        JOIN tasks ON tasks.id = task_updates.task_id
-        JOIN users ON users.id = task_updates.user_id
-        WHERE tasks.project_id = ?
-        ORDER BY task_updates.id DESC
-        """,
-        (project_id,)
-    ).fetchall()
-    conn.close()
+def get_task_update_history(project_id, *, connection=None):
+    with (closing(get_db()) if connection is None else nullcontext(connection)) as conn:
+        rows = conn.execute("""
+            SELECT task_updates.task_id, task_updates.body,
+                   task_updates.created_at, users.username
+            FROM task_updates
+            JOIN tasks ON tasks.id = task_updates.task_id
+            JOIN users ON users.id = task_updates.user_id
+            WHERE tasks.project_id = ?
+            ORDER BY task_updates.id DESC
+            """, (project_id,)).fetchall()
 
     history = {}
     for row in rows:
@@ -999,32 +960,15 @@ def update_task_priority(
 # MEMBERS
 # =========================================================
 
-def get_project_members(project_id):
-
-    conn = get_db()
-
-    members = conn.execute(
-        """
-        SELECT
-            users.id,
-            users.username,
-            users.role
-        FROM users
-        WHERE users.id = (SELECT owner_id FROM projects WHERE id = ?)
-        OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id = ? AND m.user_id = users.id)
-        ORDER BY
-            CASE
-                WHEN users.role = 'teacher' THEN 0
-                ELSE 1
-            END,
-            users.username
-        """,
-        (project_id, project_id)
-    ).fetchall()
-
-    conn.close()
-
-    return members
+def get_project_members(project_id, *, connection=None):
+    with (closing(get_db()) if connection is None else nullcontext(connection)) as conn:
+        return conn.execute("""
+            SELECT users.id, users.username, users.role
+            FROM users
+            WHERE users.id = (SELECT owner_id FROM projects WHERE id = ?)
+            OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id = ? AND m.user_id = users.id)
+            ORDER BY CASE WHEN users.role = 'teacher' THEN 0 ELSE 1 END, users.username
+            """, (project_id, project_id)).fetchall()
 
 
 def get_student_progress(project_id):
@@ -1169,7 +1113,7 @@ def render_auth_page(mode, error=None, role="student", field=None):
                 </aside>
             </div>
             <footer class="auth-page-footer"><a href="/data">Данные и помощь</a></footer>
-            <script type="module" src="/static/access-orbit.js?v={APPEARANCE_VERSION}"></script>
+            <script type="module" src="/static/access-orbit.js?v=20261111-orbit"></script>
         </div>
         """, title="Вход — M-Flow" if is_login else "Регистрация — M-Flow"
     )
@@ -1502,28 +1446,31 @@ def index():
     user = get_current_user()
     if user['role'] == 'teacher':
         return teacher_cabinet()
-    projects = get_projects(with_counts=True)
-    try:
-        result_params = result_parameters(request.args, projects)
-        selected = result_parameters({'result_project': request.args.get('project', '')}, projects)['project']
-        selected = selected or result_params['project'] or (projects[0]['id'] if projects else 0)
-        result_params['home_project'] = selected
-    except ValueError as error:
-        return render_error_page('Некорректный фильтр', str(error), 400)
-    except PermissionError as error:
-        return render_error_page('Нет доступа', str(error), 403)
     with closing(get_db()) as conn:
-        results = render_results(load_results(conn, user, result_params), result_params, projects)
+        projects = get_projects(with_counts=True, connection=conn)
+        try:
+            result_params = result_parameters(request.args, projects)
+            selected = result_parameters({'result_project': request.args.get('project', '')}, projects)['project']
+            selected = selected or result_params['project'] or (projects[0]['id'] if projects else 0)
+            result_params['home_project'] = selected
+        except ValueError as error:
+            return render_error_page('Некорректный фильтр', str(error), 400)
+        except PermissionError as error:
+            return render_error_page('Нет доступа', str(error), 403)
+        result_rows = load_results(conn, user, result_params)
         groups = own_groups(conn, user)
         project_states = load_project_states(conn, user) if projects else {}
         try:
             focus = load_focus(conn, user, next(p for p in projects if p['id'] == selected)) if selected else None
         except PermissionError as error:
             return render_error_page('Нет доступа', str(error), 403)
+        notification_data = notification_feed(conn, user['id'])
+    results = render_results(result_rows, result_params, projects)
+    header = render_header(user, notification_data)
     messages = ''.join(f'<div class="{escape(category, quote=True)}" role="status">{escape(message)}</div>'
                        for category, message in get_flashed_messages(with_categories=True))
     return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/student-results.css?v=20261015">'
-                       + student_dashboard(user, projects, csrf_token(), render_header(user), messages, results, focus,
+                       + student_dashboard(user, projects, csrf_token(), header, messages, results, focus,
                                            any(key.startswith("result_") for key in request.args), groups=groups,
                                            project_states=project_states))
 
@@ -1586,14 +1533,23 @@ def create_project():
 @login_required
 def project(project_id, stage_submitted=None, stage_error="", work_mode=False, unsaved=""):
 
-    details = get_project_details(project_id)
-    if details is None:
-        return render_error_page('Нет доступа', 'Проект не найден или вы не участвуете в нём.', 403)
-    project_name = details['name']
     current_user = get_current_user()
-    all_tasks = get_tasks(project_id)
-    task_update_history = get_task_update_history(project_id)
-    members = get_project_members(project_id)
+    with closing(get_db()) as conn:
+        details = get_project_details(project_id, connection=conn)
+        if details is None:
+            return render_error_page('Нет доступа', 'Проект не найден или вы не участвуете в нём.', 403)
+        all_tasks = get_tasks(project_id, connection=conn)
+        task_update_history = get_task_update_history(project_id, connection=conn)
+        members = get_project_members(project_id, connection=conn)
+        stages = get_stages(conn, project_id)
+        defense = defense_for(conn, project_id)
+        assessment_column = 'teacher_id' if current_user['role'] == 'teacher' else 'student_id'
+        published_assessments = conn.execute(f'''SELECT a.scores_json, u.username AS teacher_name
+            FROM project_assessments a JOIN users u ON u.id=a.teacher_id
+            WHERE a.project_id=? AND a.state='published' AND a.{assessment_column}=?
+            ORDER BY a.updated_at DESC, a.teacher_id''', (project_id, current_user['id'])).fetchall()
+        notification_data = notification_feed(conn, current_user['id'])
+    project_name = details['name']
     student_counts = defaultdict(lambda: [0, 0])
     for task in all_tasks:
         counts = student_counts[task['assignee_id']]
@@ -1604,17 +1560,6 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
                              completed_count=student_counts[member['id']][1])
                         for member in members if member['role'] == 'student'] if current_user['role'] == 'teacher' else []
     owner = current_user['role'] == 'student' and details['owner_id'] == current_user['id']
-    stage_conn = get_db()
-    try:
-        stages = get_stages(stage_conn, project_id)
-        defense = defense_for(stage_conn, project_id)
-        assessment_column = 'teacher_id' if current_user['role'] == 'teacher' else 'student_id'
-        published_assessments = stage_conn.execute(f'''SELECT a.scores_json, u.username AS teacher_name
-            FROM project_assessments a JOIN users u ON u.id=a.teacher_id
-            WHERE a.project_id=? AND a.state='published' AND a.{assessment_column}=?
-            ORDER BY a.updated_at DESC, a.teacher_id''', (project_id, current_user['id'])).fetchall()
-    finally:
-        stage_conn.close()
 
     # One calendar snapshot for filters, labels, metrics and project summary.
     deadline_today = business_today()
@@ -2107,7 +2052,7 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
         <link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">
         <link rel="stylesheet" href="/static/task-board.css?v=20261031"><link rel="stylesheet" href="/static/project-work.css?v=20261031-tasks"><script src="/static/project-work.js?v=20261106-work" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
         <div class="container">
-            {render_header(current_user)}
+            {render_header(current_user, notification_data)}
             <main class="project-workspace" data-work-screens="project" data-project-views data-work-default="{int(work_mode)}">
                 <div class="work-project-returns"><a href="{project_list_url(current_user['role'], project_id)}" class="back">{icon('arrow-left')} Все проекты</a>
                 {'<a class="action-link" href="/teacher#review-queue">К очереди проверки</a>' if current_user['role'] == 'teacher' else ''}</div>
@@ -3150,33 +3095,32 @@ def project_video_defense(project_id):
 @app.route("/project/<int:project_id>/stages", methods=["GET", "POST"])
 @login_required
 def project_stage_page(project_id):
+    if request.method in ('GET', 'HEAD'):
+        return project(project_id, work_mode=True)
+
     user = get_current_user()
     project_name = get_project_name(project_id)
     if project_name is None:
         return render_error_page("Нет доступа", "Вы не участвуете в этом проекте.", 403)
-    token = csrf_token()
-    conn = get_db()
-    error, status, submitted = "", 200, None
-    try:
-        if request.method == "POST":
-            try:
-                message = change_stage(conn, project_id, user, request.form)
-                flash(message)
-                return redirect(board_return(project_id, request.form.get("return_to"), default=f"/project/{project_id}/stages"))
-            except ValueError as exc:
-                error, status, submitted = str(exc), 400, request.form
+    with closing(get_db()) as conn:
+        try:
+            message = change_stage(conn, project_id, user, request.form)
+            flash(message)
+            return redirect(board_return(project_id, request.form.get("return_to"), default=f"/project/{project_id}/stages"))
+        except ValueError as exc:
+            error = str(exc)
         stages = get_stages(conn, project_id)
-        has_teacher = has_project_teacher(conn, project_id)
         _, current = stage_summary(stages)
+        submitted = request.form
         editable = current is not None and (current['state'] in ('todo', 'progress') if user['role'] == 'student' else current['state'] == 'review')
-        if submitted is not None and (current is None or submitted.get("number") != str(current["number"])
-                                      or submitted.get("revision") != str(current["revision"]) or not editable):
+        if not editable or submitted.get("number") != str(current["number"]) or submitted.get("revision") != str(current["revision"]):
             submitted = None
-    finally:
-        conn.close()
-    unsaved = render_unsaved_result(request.form, user, f'/project/{project_id}/stages') if error and submitted is None else ''
-    return project(project_id, stage_submitted=submitted, stage_error=error,
-                   work_mode=True, unsaved=unsaved), status
+    unsaved = render_unsaved_result(request.form, user, f'/project/{project_id}/stages') if submitted is None else ''
+    response = app.make_response(project(project_id, stage_submitted=submitted, stage_error=error,
+                                         work_mode=True, unsaved=unsaved))
+    if response.status_code == 200:
+        response.status_code = 400
+    return response
 
 
 @app.route("/project/<int:project_id>/assessment", methods=["GET", "POST"])
@@ -3330,37 +3274,25 @@ def project_assessment(project_id):
 
 def build_teacher_overview(teacher):
 
-    conn = get_db()
-    projects = conn.execute(
-        """
-        SELECT id, name, owner_id
-        FROM projects
-        WHERE owner_id = ? OR EXISTS (
-            SELECT 1 FROM project_members
-            WHERE project_members.project_id = projects.id
-            AND project_members.user_id = ?
-        )
-        ORDER BY id DESC
-        """,
-        (teacher["id"], teacher["id"])
-    ).fetchall()
-    # A fixed number of queries for all accessible projects, not per project.
-    # Repeat the access scope in SQL so private projects cannot enter a batch.
-    scope = """WITH visible_projects AS (
-        SELECT id FROM projects WHERE owner_id=? OR EXISTS (
-            SELECT 1 FROM project_members m
-            WHERE m.project_id=projects.id AND m.user_id=?
-        )
-    ) """
-    params = (teacher["id"], teacher["id"])
+    with closing(get_db()) as conn:
+        params = (teacher["id"], teacher["id"])
+        scope = """WITH visible_projects AS (
+            SELECT id, name, owner_id FROM projects WHERE owner_id=? OR EXISTS (
+                SELECT 1 FROM project_members m
+                WHERE m.project_id=projects.id AND m.user_id=?
+            )
+        ) """
+        projects = conn.execute(scope + "SELECT id, name, owner_id FROM visible_projects ORDER BY id DESC", params).fetchall()
+        if not projects:
+            return []
 
-    def grouped(sql):
-        result = defaultdict(list)
-        for row in conn.execute(scope + sql, params):
-            result[row["project_id"]].append(row)
-        return result
+        # Repeat the access scope so inaccessible projects never enter a batch.
+        def grouped(sql):
+            result = defaultdict(list)
+            for row in conn.execute(scope + sql, params):
+                result[row["project_id"]].append(row)
+            return result
 
-    try:
         tasks_by_project = grouped("""
             SELECT t.*, u.username AS assignee_name FROM tasks t
             JOIN visible_projects v ON v.id=t.project_id
@@ -3388,9 +3320,6 @@ def build_teacher_overview(teacher):
                 SELECT MAX(latest.id) FROM task_updates latest WHERE latest.task_id=t.id
             )
             JOIN users u ON u.id=r.user_id ORDER BY r.id DESC""")
-    finally:
-        conn.close()
-
     today = business_today()
     overview = []
 
@@ -3919,7 +3848,9 @@ def request_too_large(error):
 
 # Optional new presentation; existing authenticated handlers keep every mutation.
 from linear_view import register_linear_views
-register_linear_views(app, login_required, get_current_user, get_db, get_projects, get_project_details, get_tasks, csrf_token)
+register_linear_views(app, login_required=login_required, current_user=get_current_user, get_db=get_db,
+                      projects_for_user=get_projects, project_details=get_project_details,
+                      tasks_for_project=get_tasks, members_for_project=get_project_members, token=csrf_token)
 
 if __name__ == "__main__":
 
