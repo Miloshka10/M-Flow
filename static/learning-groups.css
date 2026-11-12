@@ -32,6 +32,20 @@
 .group-panel summary { cursor: pointer; font-weight: 700; min-height: 40px; }
 .group-panel[open] summary { margin-bottom: 20px; }
 .group-notice { border-left: 4px solid var(--mf-accent); padding: 16px; background: var(--mf-panel); border-radius: 10px; }
+.group-student-project { overflow-wrap: anywhere; }
+.group-student-project > p { margin: 0 0 16px; }
+.group-student-project > .eyebrow { color: var(--mf-muted); }
+.group-student-project > .eyebrow + h2 { margin: 8px 0; }
+.group-project-progress { color: var(--mf-muted); }
+.group-project-form { max-width: 560px; gap: 12px; }
+.group-project-step { border-top: 1px solid var(--mf-line); padding-top: 16px; }
+.group-project-step p { margin-bottom: 0; }
+.group-project-step .group-actions { margin-bottom: 0; }
+.group-project-step .group-actions > a { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; }
+.group-project-step button { min-height: 44px; }
+.group-project-step + a { display: inline-block; margin-top: 16px; }
+.group-student-project .ds-guide { margin-top: 16px; }
+.group-student-project .ds-guide .group-form { margin-top: 8px; }
 @media (max-width: 1000px) {
   .group-table, .group-table tbody, .group-table tr, .group-table td { display: block; width: auto; }
   .group-table thead { display: none; }

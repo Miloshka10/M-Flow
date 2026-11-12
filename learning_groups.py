@@ -14,7 +14,7 @@ from database import PostgresConnection, execute_schema_script, form_database_id
 from deadlines import format_timestamp
 from grading import load_scores, summarize
 from project_stages import STAGES, stage_label, get_stages
-from project_rules import has_project_teacher
+from project_rules import create_owned_project, has_project_teacher
 from project_workspace import next_step
 from video_defense import defense_for
 from teacher_queue import sent_date
@@ -29,6 +29,7 @@ PAGE_SIZE = 30
 CODE_ERROR = 'Код группы недоступен. Проверьте его или попросите учителя выдать новый.'
 VIEWS = {'all': 'Все ученики', 'review': 'Ждут проверки', 'unlinked': 'Нужно подключение',
          'no_project': 'Без проекта', 'stale': 'Работы без обновлений 14 дней'}
+GROUP_CSS = '<link rel="stylesheet" href="/static/learning-groups.css?v=20261112-student">'
 
 
 def initialize_groups(conn):
@@ -151,17 +152,24 @@ def change_group(conn, user, group_id, form):
             if user['role'] != 'student':
                 raise PermissionError('Выход доступен ученику группы.')
             conn.execute('DELETE FROM learning_group_members WHERE group_id=? AND student_id=?', (group_id, user['id']))
-        elif action in ('select', 'propose'):
+        elif action in ('select', 'propose', 'create_project'):
             if user['role'] != 'student' or group['archived']:
                 raise PermissionError('Выбирать проект может ученик действующей группы.')
-            member = conn.execute('SELECT 1 FROM learning_group_members WHERE group_id=? AND student_id=?', (group_id, user['id'])).fetchone()
+            member = conn.execute('''SELECT p.id AS current_project FROM learning_group_members m
+                LEFT JOIN projects p ON p.id=m.project_id AND p.owner_id=m.student_id
+                WHERE m.group_id=? AND m.student_id=?''', (group_id, user['id'])).fetchone()
             if member is None:
                 raise PermissionError('Вы больше не состоите в группе.')
-            raw = form.get('project_id', '')
-            pid = form_database_id(raw) if raw else None
+            if action == 'create_project':
+                if member['current_project'] is not None:
+                    raise ValueError('В группе уже выбран проект. Уберите привязку перед созданием нового.')
+                pid = create_owned_project(conn, user['id'], form.get('name', ''))
+            else:
+                raw = form.get('project_id', '')
+                pid = form_database_id(raw) if raw else None
             if action == 'propose' and pid is None:
                 raise ValueError('Выберите собственный проект для сопровождения.')
-            if pid is not None:
+            if pid is not None and action != 'create_project':
                 if isinstance(conn, PostgresConnection):
                     conn.execute('SELECT id FROM projects WHERE id=? FOR UPDATE', (pid,))
                 project = conn.execute('SELECT id FROM projects WHERE id=? AND owner_id=?', (pid, user['id'])).fetchone()
@@ -204,10 +212,12 @@ def change_group(conn, user, group_id, form):
 
 
 def own_groups(conn, user):
-    return [dict(r) for r in conn.execute('''SELECT g.*,u.username AS teacher_name,
+    return [dict(r) for r in conn.execute('''SELECT g.*,u.username AS teacher_name,p.id AS linked_project_id,
         (SELECT COUNT(*) FROM learning_group_members m WHERE m.group_id=g.id) AS members
-        FROM learning_groups g JOIN users u ON u.id=g.teacher_id WHERE g.teacher_id=? OR EXISTS (
-        SELECT 1 FROM learning_group_members m WHERE m.group_id=g.id AND m.student_id=?)
+        FROM learning_groups g JOIN users u ON u.id=g.teacher_id
+        LEFT JOIN learning_group_members member ON member.group_id=g.id AND member.student_id=?
+        LEFT JOIN projects p ON p.id=member.project_id AND p.owner_id=member.student_id
+        WHERE g.teacher_id=? OR member.student_id IS NOT NULL
         ORDER BY g.archived,g.id DESC LIMIT 50''', (user['id'], user['id']))]
 
 
@@ -297,7 +307,7 @@ def roster(conn, user, group, args):
 
 
 def render_groups(groups, user, token, preview=None):
-    body = '<link rel="stylesheet" href="/static/learning-groups.css?v=20261016"><p class="groups-intro">Учебная группа объединяет класс. Проекты, команды и руководство сохраняют свои правила доступа.</p>'
+    body = GROUP_CSS + '<p class="groups-intro">Учебная группа объединяет класс. Проекты, команды и руководство сохраняют свои правила доступа.</p>'
     if user['role'] == 'teacher':
         body += f'''<section class="group-panel"><h2>Новая учебная группа</h2><form method="post" class="group-form">{hidden_token(token)}
             <input type="hidden" name="action" value="create"><label>Название группы<input name="name" maxlength="120" required placeholder="Например, 10А — индивидуальные проекты"></label>
@@ -320,74 +330,116 @@ def render_groups(groups, user, token, preview=None):
     return body + '</div>'
 
 
+def render_student_project(conn, user, group, row, token):
+    archived = bool(group['archived'])
+    selected = row['project_id'] if row.get('project_name') else None
+    csrf = hidden_token(token)
+
+    def create_form():
+        return f'''<form method="post" class="group-form group-project-form">{csrf}
+            <input type="hidden" name="action" value="create_project">
+            <label>Название проекта<input name="name" maxlength="80" required></label>
+            <button data-ui-icon="plus">Создать проект для группы</button></form>'''
+
+    def select_form(projects):
+        placeholder = 'Убрать проект из группы' if selected else 'Выберите проект'
+        options = f'<option value="">{placeholder}</option>' + ''.join(
+            f'<option value="{p["id"]}"{" selected" if p["id"] == selected else ""}>{escape(p["name"])}</option>'
+            for p in projects)
+        return f'''<form method="post" class="group-form group-project-form">{csrf}
+            <input type="hidden" name="action" value="select">
+            <label>Мой проект<select name="project_id"{"" if selected else " required"}>{options}</select></label>
+            <button data-ui-icon="save">{"Сохранить выбор проекта" if selected else "Добавить проект в группу"}</button></form>'''
+
+    projects = conn.execute('SELECT id,name FROM projects WHERE owner_id=? ORDER BY id DESC', (user['id'],)).fetchall() if not archived else []
+    if selected is None:
+        if archived:
+            return '<p class="group-text">Проект для этой группы не выбран.</p>'
+        return f'''<section class="group-panel group-student-project"><h2>Добавьте проект в группу</h2>
+            <p>Учитель увидит название проекта. Для доступа к работе нужно согласовать руководство.</p>
+            {select_form(projects) if projects else create_form()}
+            {f'<details class="ds-guide"><summary>Создать новый проект</summary>{create_form()}</details>' if projects else ''}
+            </section>'''
+
+    hub_url = f'/supervision?project={selected}'
+    project_url = f'/project/{selected}'
+    states = get_stages(conn, selected)
+    defense = defense_for(conn, selected)
+    has_teacher = has_project_teacher(conn, selected)
+    published = conn.execute("SELECT 1 FROM project_assessments WHERE project_id=? AND student_id=? AND state='published' LIMIT 1", (selected, user['id'])).fetchone() is not None
+    pending = conn.execute("""SELECT kind FROM supervision_requests WHERE project_id=? AND owner_id=?
+        AND target_id=? AND state='pending' AND expires>? LIMIT 1""",
+        (selected, user['id'], group['teacher_id'], int(time.time()))).fetchone()
+    step = next_step(states, 'student', True, has_teacher, defense, published)
+    propose = ''
+    if not archived and not row['teacher_connected'] and not pending:
+        label = 'Предложить смену руководителя' if has_teacher else 'Отправить запрос учителю'
+        propose = f'''<form method="post">{csrf}<input type="hidden" name="project_id" value="{selected}">
+            <button name="action" value="propose"{' class="secondary"' if has_teacher else ''}>{label} {icon('arrow')}</button></form>'''
+
+    target = stage_result_target(step['target'])
+    if not target:
+        target = project_url
+    elif target == '/supervision':
+        target = hub_url
+    elif not target.startswith('/'):
+        target = project_url + (target if target.startswith('#') else '/' + target)
+    primary = f'<a class="btn" href="{escape(target, quote=True)}">{escape(step["action"] or "Открыть проект")} {icon("arrow")}</a>'
+    project_link = f'<a href="{project_url}">Открыть проект {icon("arrow")}</a>' if target != project_url else ''
+    title, description = escape(step['title']), escape(step['text'])
+    if pending:
+        title = 'Сопровождение ожидает согласования'
+        description = 'Запрос у учителя группы. Пока можно работать над проектом.'
+        if pending['kind'] == 'change':
+            description += ' Для смены нужно также согласие действующих руководителей.'
+        primary = f'<a class="btn" href="{hub_url}">Открыть согласование {icon("arrow")}</a>'
+    elif step['key'] == 'teacher-missing' and propose:
+        title = 'Согласуй сопровождение проекта'
+        description = 'После подтверждения учитель сможет проверять работу. Черновик можно начать уже сейчас.'
+        primary, propose = propose, ''
+
+    grade = f'<a href="{project_url}/assessment">Оценка учителя группы: {escape(row["grade"])}</a>' if row['grade'] else ''
+    change = f'<details class="ds-guide"><summary>Изменить проект в группе</summary>{select_form(projects)}</details>' if not archived else ''
+    return f'''<section class="group-panel group-student-project" aria-label="Мой проект в группе">
+        <span class="eyebrow">МОЙ ПРОЕКТ В ГРУППЕ</span><h2>{escape(row['project_name'])}</h2>
+        <p class="group-project-progress">{row['completed']} из 5 приняты · {escape(row['stage'])}</p>
+        <div class="group-project-step"><h3>{title}</h3><p>{description}</p>
+        <div class="group-actions">{primary}{project_link}</div></div>
+        {grade}{change}
+        {f'<details class="ds-guide"><summary>Руководство в группе</summary><p>Для смены нужно согласие действующих руководителей.</p>{propose}</details>' if propose else ''}
+        </section>'''
+
+
 def render_group(conn, user, group, data, token, code=None):
     gid, revision = group['id'], group['revision']
     def form(action, content):
         return f'<form method="post">{hidden_token(token)}<input type="hidden" name="revision" value="{revision}"><input type="hidden" name="action" value="{action}">{content}</form>'
-    body = f'''<link rel="stylesheet" href="/static/learning-groups.css?v=20261016">
-        <p class="groups-intro group-identity">Учитель: {escape(group['teacher_name'])} · {'Группа в архиве' if group['archived'] else 'Действующая группа'}</p><p class="group-text">{escape(group['description'])}</p>'''
+    body = GROUP_CSS + f'''<p class="groups-intro group-identity">Учитель: {escape(group['teacher_name'])}{' · В архиве' if group['archived'] else ''}</p><p class="group-text">{escape(group['description'])}</p>'''
     if group['archived']:
         body += '<p class="group-notice">Группа в архиве. Новые вступления и выбор проекта закрыты; существующие проекты и руководство сохранены.</p>'
-    if data['teacher']:
-        c = data['counts']
-        body += f'''<section class="group-stats" aria-label="Показатели группы"><div><strong>{c['total']}</strong>Учеников</div><div><strong>{c['review']}</strong>Ждут проверки</div>
-            <div><strong>{c['unlinked']}</strong>Нужно подключение</div><div><strong>{c['no_project']}</strong>Без проекта</div></section>'''
-        body += f'<details class="group-panel" {"open" if code or not c["total"] else ""}><summary data-ui-icon="link">Приглашение класса</summary><p>Один код можно передать всему классу. Он действует 7 дней, показывается только при создании. Новый код отменяет предыдущий, но сохраняет состав группы.</p><div class="group-actions">'
-        if not group['archived']:
-            body += form('invite', '<button data-ui-icon="plus">Создать новый код группы</button>') + form('revoke', '<button class="secondary" data-ui-icon="close">Отозвать код</button>')
-        body += '</div>'
-        active = conn.execute('SELECT expires FROM learning_group_invitations WHERE group_id=? AND revoked=0 AND expires>? ORDER BY id DESC LIMIT 1', (gid, int(time.time()))).fetchone()
-        if active:
-            expiry = format_timestamp(datetime.fromtimestamp(active['expires'], timezone.utc).isoformat())
-            body += f'<p>Код действует до {expiry}.</p>'
-        else:
-            body += '<p>Действующего кода нет.</p>'
-        if code:
-            body += f'<label class="group-code">Код группы<input readonly autocomplete="off" value="{escape(code, quote=True)}"></label><p role="status">Скопируйте код сейчас. Восстановить его позже нельзя; можно создать новый.</p>'
-        body += '</details>'
+    if not data['teacher']:
+        body += render_student_project(conn, user, group, data['rows'][0] if data['rows'] else {}, token)
+        return body + '<details class="group-panel"><summary>Выход из группы</summary><p>Проект, оценки и руководство сохранятся.</p>' + form('leave', '<button class="secondary" data-ui-icon="logout">Выйти из группы</button>') + '</details>'
+    c = data['counts']
+    body += f'''<section class="group-stats" aria-label="Показатели группы"><div><strong>{c['total']}</strong>Учеников</div><div><strong>{c['review']}</strong>Ждут проверки</div>
+        <div><strong>{c['unlinked']}</strong>Нужно подключение</div><div><strong>{c['no_project']}</strong>Без проекта</div></section>'''
+    body += f'<details class="group-panel" {"open" if code or not c["total"] else ""}><summary data-ui-icon="link">Приглашение класса</summary><p>Один код можно передать всему классу. Он действует 7 дней, показывается только при создании. Новый код отменяет предыдущий, но сохраняет состав группы.</p><div class="group-actions">'
+    if not group['archived']:
+        body += form('invite', '<button data-ui-icon="plus">Создать новый код группы</button>') + form('revoke', '<button class="secondary" data-ui-icon="close">Отозвать код</button>')
+    body += '</div>'
+    active = conn.execute('SELECT expires FROM learning_group_invitations WHERE group_id=? AND revoked=0 AND expires>? ORDER BY id DESC LIMIT 1', (gid, int(time.time()))).fetchone()
+    if active:
+        expiry = format_timestamp(datetime.fromtimestamp(active['expires'], timezone.utc).isoformat())
+        body += f'<p>Код действует до {expiry}.</p>'
     else:
-        selected = data['rows'][0]['project_id'] if data['rows'] else None
-        projects = conn.execute('SELECT id,name FROM projects WHERE owner_id=? ORDER BY id DESC', (user['id'],)).fetchall()
-        owned_ids = {p['id'] for p in projects}
-        pending_request = conn.execute("""SELECT kind FROM supervision_requests WHERE project_id=? AND owner_id=?
-            AND target_id=? AND state='pending' AND expires>? LIMIT 1""", (selected, user['id'], group['teacher_id'], int(time.time()))).fetchone() if selected in owned_ids else None
-        connected = bool(data['rows'] and data['rows'][0]['teacher_connected'])
-        options = '<option value="">Проект не выбран</option>' + ''.join(f'<option value="{p["id"]}" {"selected" if p["id"] == selected else ""}>{escape(p["name"])}</option>' for p in projects)
-        hub_url = f'/supervision?project={selected}' if selected in owned_ids else '/supervision'
-        if not group['archived']:
-            proposal = '<button name="action" value="propose" class="secondary">Предложить сопровождение учителю</button>'
-            hint = 'Если руководитель уже есть, предложение создаёт обычный запрос на согласованную смену. Учителя не меняются автоматически.'
-            if connected or pending_request:
-                proposal = ''
-                hint = ('Учитель группы уже сопровождает выбранный проект.' if connected else 'Предложение отправлено. Дождитесь согласования в разделе «Руководитель проекта».') + ' Чтобы предложить другой проект, сначала сохраните новый выбор.'
-            selector = f'''<form method="post" class="group-form">{hidden_token(token)}<label>Мой проект<select name="project_id">{options}</select></label><div class="group-actions">
-                <button name="action" value="select" data-ui-icon="save">Сохранить выбор проекта</button>{proposal}</div></form>''' if projects else f'<p>У тебя пока нет собственного проекта. Сначала создай его, затем выбери для группы.</p><a href="/#project-create">Создать проект {icon('arrow')}</a>'
-            body += f'''<section class="group-panel"><h2>Мой проект в группе</h2>
-                {selector}<details class="ds-guide"><summary>Проект и доступ учителя</summary><p>Выберите один собственный проект. Учитель увидит его название. Работы и оценки доступны только действующему руководителю.</p>
-                <p>{hint}</p></details><a href="{hub_url}">Руководитель проекта и согласования {icon('arrow')}</a></section>'''
-        if selected in owned_ids:
-            states = get_stages(conn, selected)
-            defense = defense_for(conn, selected)
-            has_teacher = has_project_teacher(conn, selected)
-            published = conn.execute("SELECT 1 FROM project_assessments WHERE project_id=? AND student_id=? AND state='published' LIMIT 1", (selected, user['id'])).fetchone() is not None
-            step = next_step(states, 'student', True, has_teacher, defense, published)
-            if step['key'] == 'teacher-missing' and not group['archived']:
-                step.update(title='Согласуй сопровождение проекта', text='Предложи проект учителю группы кнопкой выше. После его подтверждения можно отправлять результаты на проверку.', target=hub_url, action='Проверить согласования')
-            if pending_request:
-                step.update(title='Сопровождение ожидает согласования',
-                    text='Учитель группы должен подтвердить предложение.' + (' При смене также нужны согласия текущих руководителей.' if pending_request['kind'] == 'change' else '') + ' Повторно отправлять запрос не нужно.',
-                    target=hub_url, action='Открыть согласование')
-            target = stage_result_target(step['target'])
-            if not target:
-                target = f'/project/{selected}'
-            elif not target.startswith('/'):
-                target = f'/project/{selected}' + (target if target.startswith('#') else '/' + target)
-            body += f'<section class="group-panel" aria-label="Следующий шаг проекта"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>{escape(step["title"])}</h2><p>{escape(step["text"])}</p><a href="{escape(target, quote=True)}">{escape(step["action"] or "Открыть проект")} {icon('arrow')}</a></section>'
-    if data['teacher']:
-        options = ''.join(f'<option value="{key}" {"selected" if key == data["view"] else ""}>{label}</option>' for key, label in VIEWS.items())
-        body += f'''<form method="get" class="group-filters"><label>Поиск ученика<input name="q" maxlength="100" value="{escape(data['query'], quote=True)}"></label><label>Состояние учеников<select name="view">{options}</select></label><button data-ui-icon="filter">Показать</button><a href="/groups/{gid}">Сбросить</a></form>'''
-    body += f'<section aria-label="Проекты учеников"><h2>{"Ученики и проекты" if data["teacher"] else "Мой прогресс"}</h2><p>Показано {len(data["rows"])} из {data["filtered"]}</p><div class="group-table-wrap"><table class="group-table"><thead><tr>'
-    columns = ('Ученик', 'Проект', 'Этапы', 'Проверка', 'Моя оценка' if data['teacher'] else 'Оценка учителя группы', 'Последнее изменение', 'Действия')
+        body += '<p>Действующего кода нет.</p>'
+    if code:
+        body += f'<label class="group-code">Код группы<input readonly autocomplete="off" value="{escape(code, quote=True)}"></label><p role="status">Скопируйте код сейчас. Восстановить его позже нельзя; можно создать новый.</p>'
+    body += '</details>'
+    options = ''.join(f'<option value="{key}" {"selected" if key == data["view"] else ""}>{label}</option>' for key, label in VIEWS.items())
+    body += f'''<form method="get" class="group-filters"><label>Поиск ученика<input name="q" maxlength="100" value="{escape(data['query'], quote=True)}"></label><label>Состояние учеников<select name="view">{options}</select></label><button data-ui-icon="filter">Показать</button><a href="/groups/{gid}">Сбросить</a></form>'''
+    body += f'<section aria-label="Проекты учеников"><h2>Ученики и проекты</h2><p>Показано {len(data["rows"])} из {data["filtered"]}</p><div class="group-table-wrap"><table class="group-table"><thead><tr>'
+    columns = ('Ученик', 'Проект', 'Этапы', 'Проверка', 'Моя оценка', 'Последнее изменение', 'Действия')
     body += ''.join(f'<th scope="col">{label}</th>' for label in columns) + '</tr></thead><tbody>'
     for row in data['rows']:
         pid = row['project_id']
@@ -400,9 +452,9 @@ def render_group(conn, user, group, data, token, code=None):
             if row['pending'] and not row['stage_review']:
                 actions = f'<a href="/project/{pid}/defense">Проверить видеозащиту {icon('arrow')}</a>'
             else:
-                actions = f'<a href="{stage_target}">{"Проверить этап" if data["teacher"] and row["stage_review"] else "Открыть этапы"} {icon('arrow')}</a>'
+                actions = f'<a href="{stage_target}">{"Проверить этап" if row["stage_review"] else "Открыть этапы"} {icon('arrow')}</a>'
             grade = row['grade'] or 'Не опубликована'
-            grade_target = f'/project/{pid}/assessment' + (f'?student_id={row["student_id"]}' if data['teacher'] else '')
+            grade_target = f'/project/{pid}/assessment' + f'?student_id={row["student_id"]}'
             grade = f'<a href="{grade_target}">{grade}</a>'
             updated = format_timestamp(row['updated'].isoformat()) if row['updated'] else 'Нет данных'
             if row['stale']:
@@ -410,9 +462,8 @@ def render_group(conn, user, group, data, token, code=None):
         else:
             stages, grade, updated = '—', '—', '—'
             review = 'Нужно выбрать проект' if not row['project_name'] else 'Ожидается согласование' if row['proposed'] else 'Работы пока недоступны'
-            actions = f'<a href="/supervision">Рассмотреть подключение {icon('arrow')}</a>' if row['proposed'] and data['teacher'] else '—'
-        if data['teacher']:
-            actions += form('remove', f'<input type="hidden" name="student_id" value="{row["student_id"]}"><button class="secondary" data-ui-icon="trash">Убрать из группы</button>')
+            actions = f'<a href="/supervision">Рассмотреть подключение {icon('arrow')}</a>' if row['proposed'] else '—'
+        actions += form('remove', f'<input type="hidden" name="student_id" value="{row["student_id"]}"><button class="secondary" data-ui-icon="trash">Убрать из группы</button>')
         cells = (escape(row['username']), project, stages, review, grade, updated, actions)
         body += '<tr>' + ''.join(f'<td data-label="{label}"><div class="group-cell">{cell}</div></td>' for label, cell in zip(columns, cells)) + '</tr>'
     body += '</tbody></table></div>'
@@ -424,10 +475,7 @@ def render_group(conn, user, group, data, token, code=None):
             query = urlencode(dict(page=page, q=data['query'], view=data['view']))
             body += f'<a href="/groups/{gid}?{escape(query, quote=True)}">{icon("arrow-left" if page < data["page"] else "arrow")} {label}</a>'
     body += '</nav></section><p class="groups-intro">Группа показывает выбранные проекты. Членство в группе не открывает работы, личные оценки других учеников или черновики других учителей. Последнее изменение учитывает работы и решения учителя.</p>'
-    if data['teacher']:
-        body += f'''<details class="group-panel"><summary data-ui-icon="settings">Настройки группы</summary><form method="post" class="group-form">{hidden_token(token)}<input type="hidden" name="revision" value="{revision}"><input type="hidden" name="action" value="edit">
-            <label>Название группы<input name="name" maxlength="120" required value="{escape(group['name'], quote=True)}"></label><label>Описание для учеников<textarea name="description" maxlength="600" rows="3">{escape(group['description'])}</textarea></label><button data-ui-icon="save">Сохранить настройки группы</button></form>
-            {form('restore' if group['archived'] else 'archive', '<button class="secondary" data-ui-icon="archive">' + ('Восстановить группу' if group['archived'] else 'Отправить группу в архив') + '</button>')}</details>'''
-    else:
-        body += '<details class="group-panel"><summary>Выход из группы</summary><p>Выход скроет вас из списка класса. Проект, команда, оценки, действующий руководитель и отдельные запросы сопровождения сохранятся. Запрос можно отменить в разделе «Руководитель проекта».</p>' + form('leave', '<button class="secondary" data-ui-icon="logout">Выйти из группы</button>') + '</details>'
+    body += f'''<details class="group-panel"><summary data-ui-icon="settings">Настройки группы</summary><form method="post" class="group-form">{hidden_token(token)}<input type="hidden" name="revision" value="{revision}"><input type="hidden" name="action" value="edit">
+        <label>Название группы<input name="name" maxlength="120" required value="{escape(group['name'], quote=True)}"></label><label>Описание для учеников<textarea name="description" maxlength="600" rows="3">{escape(group['description'])}</textarea></label><button data-ui-icon="save">Сохранить настройки группы</button></form>
+        {form('restore' if group['archived'] else 'archive', '<button class="secondary" data-ui-icon="archive">' + ('Восстановить группу' if group['archived'] else 'Отправить группу в архив') + '</button>')}</details>'''
     return body

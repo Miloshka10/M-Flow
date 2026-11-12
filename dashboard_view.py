@@ -9,6 +9,7 @@ from ui_components import state_badge
 
 def student_dashboard(user, projects, token, header, messages, results='', focus=None, results_open=False, groups=(), project_states=None):
     project_states = project_states or {}
+    active_groups = [group for group in groups if not group['archived']]
     selected_id = focus['project']['id'] if focus else None
     cards = []
     for p in projects:
@@ -48,6 +49,11 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
         if target == '/supervision':
             target = f'/supervision?project={p["id"]}'
         url = base + target if target and target.startswith('#') else target if target and target.startswith('/') else f'{base}/{target}' if target else base
+        if step['key'] == 'teacher-missing':
+            linked_group = next((group for group in active_groups if group.get('linked_project_id') == p['id']), None)
+            if linked_group:
+                url = f'/groups/{linked_group["id"]}'
+                step = dict(step, text='Запрос руководителю и его статус доступны в учебной группе.', action='Открыть учебную группу')
         options = ''.join(f'<option value="{item["id"]}" {"selected" if item["id"] == p["id"] else ""}>{escape(item["name"])}</option>' for item in projects)
         switch = (f'<form class="focus-switch ds-home-only" method="get" action="/"><label for="current-project">Текущий проект</label>'
                   f'<select id="current-project" name="project">{options}</select><button class="secondary">Выбрать</button></form>') if len(projects) > 1 else ''
@@ -70,10 +76,19 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
             <details class="ds-guide"><summary>О сроках</summary><p>Твои задачи и задачи без ответственного · {TIMEZONE_LABEL}.
             Показано {min(6,len(upcoming))} из {len(upcoming)}.</p></details></section>{group_widget}</div>'''
     else:
-        hero = '''<section class="home-focus home-welcome ds-home-only"><div class="ui-hello-empty">
-            <h2>Здесь начнётся ваш проект</h2><p>Если учитель создал группу, введите её код. Для своей идеи можно сразу создать проект.</p>
-            <div class="welcome-actions"><a class="btn" href="/groups#group-code">Ввести код группы</a>
-            <a class="btn secondary" href="#project-create" data-open-project>Создать проект</a></div>
+        if active_groups:
+            group_url = f'/groups/{active_groups[0]["id"]}' if len(active_groups) == 1 else '/groups'
+            group_action = 'Продолжить в группе' if len(active_groups) == 1 else 'Выбрать группу'
+            hint = f'Вы уже в группе «{escape(active_groups[0]["name"])}».' if len(active_groups) == 1 else 'Выберите, для какой группы создать проект.'
+            independent = '<a class="action-link" href="#project-create" data-open-project>Создать проект вне группы</a>'
+        else:
+            group_url, group_action = '/groups#group-code', 'Ввести код группы'
+            hint = 'Если учитель создал группу, введите её код. Для своей идеи можно сразу создать проект.'
+            independent = '<a class="btn secondary" href="#project-create" data-open-project>Создать проект</a>'
+        hero = f'''<section class="home-focus home-welcome ds-home-only"><div class="ui-hello-empty">
+            <h2>Здесь начнётся ваш проект</h2><p>{hint}</p>
+            <div class="welcome-actions"><a class="btn" href="{group_url}">{group_action}</a>
+            {independent}</div>
             <a class="action-link" href="/teams#team-invitations">Приглашения в команды</a></div></section>'''
     projects_html = f'''<section class="workspace-projects" id="my-projects"><div class="section-title"><h2>Мои проекты</h2>
         <a class="action-link" href="#project-create" data-open-project>{icon('plus')} Новый проект</a></div>

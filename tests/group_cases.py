@@ -59,7 +59,7 @@ class LearningGroupCases:
         self.assertNotIn('candidate-engineer', self.client.get(f'/groups/{gid}').text)
         self.assertIn('Учебные группы', self.client.get('/').text)
         self.sign_in(4)
-        self.assertIn('Создать проект <svg', self.client.get(f'/groups/{gid}').text)
+        self.assertIn('Создать проект для группы', self.client.get(f'/groups/{gid}').text)
         self.assertNotIn('value="propose"', self.client.get(f'/groups/{gid}').text)
 
     def test_groups_project_selection_is_owner_only_and_proposal_reuses_supervision(self):
@@ -99,6 +99,61 @@ class LearningGroupCases:
         self.assertEqual(self.supervision_row()['kind'], 'connect')
         self.assertEqual(self.supervision_reply(1).status_code, 302)
         self.assertEqual(self.client.get('/project/50').status_code, 200)
+
+    def test_groups_create_project_in_class_requires_membership_and_separate_teacher_approval(self):
+        self.add_candidate()
+        gid = self.group_create(teacher=2)
+        code = self.group_code(gid, teacher=2)
+        url = f'/groups/{gid}'
+        name = '  Карта маршрутов  '
+        for uid in (2, 3):
+            self.assertEqual(self.group_post(gid, user=uid, action='create_project', name=name).status_code, 403)
+        self.group_join(code)
+        self.assertEqual(self.group_join(code, user=4).status_code, 302)
+        self.assertIn(f'href="{url}">Продолжить в группе', self.client.get('/').text)
+        self.sign_in(3)
+        before = self.database_snapshot()
+        self.assertEqual(self.client.post(url, data=dict(action='create_project', name=name)).status_code, 400)
+        for bad in (' ', 'x' * 81):
+            self.assertEqual(self.group_post(gid, user=3, action='create_project', name=bad).status_code, 400)
+        self.assertEqual(self.database_snapshot(), before)
+
+        response = self.group_post(gid, user=3, action='create_project', name=name)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, url)
+        page = self.client.get(url).text
+        self.assertIn('Отправить запрос учителю', page)
+        self.assertIn('Карта маршрутов', page)
+        self.assertIn(f'href="{url}">Открыть учебную группу', self.client.get('/').text)
+        conn = self.module.get_db()
+        project = conn.execute('''SELECT p.id,p.name,p.owner_id FROM learning_group_members g
+            JOIN projects p ON p.id=g.project_id WHERE g.group_id=? AND g.student_id=?''', (gid, 3)).fetchone()
+        pid = project['id']
+        self.assertEqual((project['name'], project['owner_id']), (name.strip(), 3))
+        self.assertEqual([r[0] for r in conn.execute('SELECT user_id FROM project_members WHERE project_id=?', (pid,))], [3])
+        self.assertEqual(conn.execute('SELECT COUNT(*) FROM supervision_requests WHERE project_id=?', (pid,)).fetchone()[0], 0)
+        conn.close()
+        before = self.database_snapshot()
+        self.assertEqual(self.group_post(gid, user=3, action='create_project', name=name).status_code, 400)
+        self.assertEqual(self.database_snapshot(), before)
+
+        self.sign_in(2)
+        self.assertIn(name.strip(), self.client.get(url).text)
+        self.assertEqual(self.client.get(f'/project/{pid}').status_code, 403)
+        self.assertEqual(self.group_post(gid, user=3, action='propose', project_id=str(pid)).status_code, 302)
+        self.assertIn('Сопровождение ожидает согласования', self.client.get(url).text)
+        self.sign_in(2)
+        self.assertEqual(self.client.get(f'/project/{pid}').status_code, 403)
+        self.assertEqual(self.supervision_reply(2).status_code, 302)
+        self.assertEqual(self.client.get(f'/project/{pid}').status_code, 200)
+
+    def test_groups_do_not_create_projects_in_archived_group(self):
+        gid = self.group_create()
+        self.group_join(self.group_code(gid))
+        self.assertEqual(self.group_post(gid, action='archive').status_code, 302)
+        before = self.database_snapshot()
+        self.assertEqual(self.group_post(gid, user=3, action='create_project', name='Архивный проект').status_code, 403)
+        self.assertEqual(self.database_snapshot(), before)
 
     def test_groups_student_next_step_tracks_existing_workflow_and_pending_consent(self):
         pid = self.supervision_empty_project()

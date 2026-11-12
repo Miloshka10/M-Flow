@@ -35,7 +35,7 @@ from deadlines import business_today, deadline_info, deadline_text, parse_deadli
 from deadlines import DEADLINE_FILTERS, TASK_SORTS, matches_deadline, task_sort_key
 from notifications import (initialize_notifications, notify, notify_project,
                            notification_feed, mark_read, render_bell, render_items)
-from project_rules import has_project_teacher
+from project_rules import create_owned_project, has_project_teacher
 from teacher_supervision import (initialize_supervision, create_invite, preview_invite, request_connection,
                                 invitation_action, request_end, respond_request, render_hub, participant)
 from auth_security import reserve_supervision_attempt
@@ -632,46 +632,6 @@ def is_valid_date(value):
         return True
 
     return parse_deadline(value) is not None
-
-
-def add_project(name):
-
-    user = get_current_user()
-
-    if user is None:
-        return None
-
-    conn = get_db()
-
-    project_id = insert_id(conn,
-        """
-        INSERT INTO projects
-        (name, owner_id)
-        VALUES (?, ?)
-        """,
-        (
-            name,
-            user["id"]
-        )
-    )
-
-    conn.execute(
-        """
-        INSERT INTO project_members
-        (project_id, user_id)
-        VALUES (?, ?)
-        ON CONFLICT(project_id, user_id) DO NOTHING
-        """,
-        (
-            project_id,
-            user["id"]
-        )
-    )
-
-    conn.commit()
-    conn.close()
-
-    return project_id
 
 
 def get_project_details(project_id, *, connection=None):
@@ -1485,41 +1445,17 @@ def index():
 )
 @login_required
 def create_project():
-    if get_current_user()['role'] != 'student':
+    user = get_current_user()
+    if user['role'] != 'student':
         return render_error_page('Нет доступа', 'Проекты создают ученики. Учитель проверяет результаты в кабинете.', 403)
-
-    name = request.form.get(
-        "name",
-        ""
-    ).strip()
-
-
-    if not name:
-
-        flash(
-            "Введите название проекта.",
-            "error"
-        )
-
-        return redirect("/")
-
-    if len(name) > 80:
-
-        flash(
-            "Название проекта должно быть не длиннее 80 символов.",
-            "error"
-        )
-
-        return redirect("/")
-
-
-    add_project(name)
-
-    flash(
-        "Проект создан!",
-        "success"
-    )
-
+    with closing(get_db()) as conn:
+        try:
+            create_owned_project(conn, user['id'], request.form.get('name', ''))
+            conn.commit()
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect("/")
+    flash("Проект создан!", "success")
     return redirect("/")
 
 
@@ -2757,7 +2693,7 @@ def learning_groups_page():
                     preview = (preview_group_code(conn, user, raw), raw)
                 elif action == 'join':
                     gid = join_group(conn, user, request.form.get('code', '').strip())
-                    flash('Вы в учебной группе. Выберите свой проект; руководство согласуется отдельно.')
+                    flash('Вы в учебной группе.')
                     return redirect(f'/groups/{gid}')
                 else:
                     raise ValueError('Выберите действие в актуальной форме.')
@@ -2792,8 +2728,9 @@ def learning_group_page(group_id):
                     flash('Вы вышли из группы. Проект и действующее руководство сохранены.')
                     return redirect('/groups')
                 if action != 'invite':
-                    flash('Запрос сопровождения создан. Откройте «Руководитель проекта» для согласования.' if action == 'propose'
-                          else 'Выбор проекта для группы обновлён. Доступ к работам не изменён.' if action == 'select'
+                    flash('Запрос отправлен учителю.' if action == 'propose'
+                          else 'Проект создан и добавлен в группу.' if action == 'create_project'
+                          else 'Выбор проекта сохранён.' if action == 'select'
                           else 'Группа обновлена. Проекты и действующее руководство сохранены.')
                     return redirect(f'/groups/{group_id}')
                 group = group_for(conn, user, group_id)
