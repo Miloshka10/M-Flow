@@ -1,6 +1,6 @@
 """A bounded view of the existing teacher overview, not a new workflow/state store."""
 from interface import icon
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html import escape
 from urllib.parse import urlencode
 
@@ -9,6 +9,12 @@ from group_assignments import assignment_date
 
 WORK_KINDS = {'all': 'Все работы', 'stage': 'Этапы', 'defense': 'Видеозащиты', 'report': 'Отчёты — информация'}
 WORK_SORTS = {'oldest': 'Сначала ранние', 'newest': 'Сначала новые'}
+QUEUE_DEFAULTS = {'q': '', 'focus': 'all', 'kind': 'all', 'sort': 'oldest', 'page': 1, 'group': None, 'project': None}
+PROJECT_FOCUS = {
+    'all': 'Все проекты', 'overdue': 'Просрочены задачи учеников', 'review': 'Ожидают моей проверки',
+    'attention': 'Требуют внимания', 'done': 'Все задачи выполнены',
+}
+TEACHER_QUEUE_CSS = '<link rel="stylesheet" href="/static/teacher-queue.css?v=20261114-review">'
 PAGE_SIZE = 20
 
 
@@ -22,6 +28,18 @@ def sent_date(value):
         return None
 
 
+def queue_filters(args):
+    filters = {'q': args.get('q', '').strip()[:100]}
+    for key, options in (('focus', PROJECT_FOCUS), ('kind', WORK_KINDS), ('sort', WORK_SORTS)):
+        value = args.get(key)
+        filters[key] = value if value in options else QUEUE_DEFAULTS[key]
+    try:
+        filters['page'] = max(1, int(args.get('page', '1')))
+    except ValueError:
+        filters['page'] = 1
+    return filters
+
+
 def entries(project):
     pid = project['id']
     names = [s['name'] for s in project['students']]
@@ -32,14 +50,14 @@ def entries(project):
         yield dict(common, key=f'stage-{pid}-{stage["number"]}', kind='stage',
                    title=f'Этап {stage["number"]}: {stage["title"]}', author=stage.get('author_name'),
                    sent=stage.get('updated_at'), revision=stage['revision'], requires_decision=True,
-                   href=f'/project/{pid}/stages#stage-{stage["number"]}', action='Проверить этап', body='',
+                   work=f'stage-{stage["number"]}', action='Проверить этап', body='',
                    previous_decision=bool(stage.get('reviewed_by')),
                    history_href=f'/project/{pid}/history?work=stage-{stage["number"]}')
     defense = project['defense']
     if defense.get('revision') and defense['state'] == 'submitted':
         yield dict(common, key=f'defense-{pid}', kind='defense', title='Видеозащита',
                    author=defense.get('author_name'), sent=defense.get('updated_at'), revision=defense['revision'],
-                   requires_decision=True, href=f'/project/{pid}/defense', action='Проверить видеозащиту', body='')
+                   requires_decision=True, work='defense', action='Проверить видеозащиту', body='')
     for entry in project['reports']:
         report = entry['report']
         yield dict(common, key=f'report-{pid}-{report["id"]}', kind='report',
@@ -82,22 +100,25 @@ def queue_page(projects, kind='all', sort='oldest', page=1, query=''):
                 decisions=sum(i['requires_decision'] for i in items), start=start)
 
 
-def queue_url(params, page):
-    values = {k: v for k, v in params.items() if v not in ('', None)}
-    values['page'] = page
-    return '/teacher?' + urlencode(values) + '#review-queue'
+def _queue_query(params):
+    return urlencode({key: params[key] for key, default in QUEUE_DEFAULTS.items()
+                      if key in params and params[key] not in (None, default)})
 
 
-def render_classrooms(groups, project_ids, decisions, selected):
+def queue_url(params, page=None):
+    query = _queue_query(params if page is None else dict(params, page=page))
+    return '/teacher' + ('?' + query if query else '') + '#review-queue'
+
+
+def review_url(project_id, work, params=None):
+    query = _queue_query(params or {})
+    return f'/teacher/review/{project_id}/{work}' + ('?' + query if query else '')
+
+
+def render_classrooms(groups, project_ids, decisions):
     active = [group for group in groups if not group['archived']]
-    if not active and selected is None:
+    if not active:
         return ''
-    if selected is not None:
-        group = next(group for group in groups if group['id'] == selected)
-        return f'''<div class="classroom-queue-scope" aria-label="Учебная группа очереди">
-            <strong>{escape(group['name'])}</strong>
-            <a class="action-link" href="/groups/{selected}">Открыть группу {icon('arrow')}</a>
-            <a class="action-link" href="/teacher#review-queue">Все работы</a></div>'''
     cards = []
     for group in active:
         group_id = group['id']
@@ -117,11 +138,11 @@ def render_classrooms(groups, project_ids, decisions, selected):
         </section>'''
 
 
-def render_queue(result, params, has_projects=True):
-    html = (f'<p class="t-muted">Найдено работ: {result["total"]} · Требуется решение: {result["decisions"]}.</p><details class="ui-queue-note"><summary>Как устроена очередь</summary><p class="t-muted">'
-            'Сначала результаты для решения, затем информационные отчёты; сортировка по дате внутри групп.</p>'
-            '<p class="t-muted">Отчёты: последний по каждой задаче, без статуса проверки. '
-            'Прочтение уведомления не означает проверку результата. Даты: Москва (UTC+3).</p></details>')
+def render_queue(result, params, has_projects=True, *, groups=(), group_projects=None):
+    group_id = params.get('group')
+    group_projects = group_projects or {}
+    now = datetime.now(timezone.utc)
+    html = ''
     previous_group = None
     first_decision = next((item['key'] for item in result['items'] if item['requires_decision']), None)
     for item in result['items']:
@@ -136,6 +157,11 @@ def render_queue(result, params, has_projects=True):
             local = None
         date_html = (f'<time datetime="{date.isoformat()}">Отправлено: {local:%d.%m.%Y %H:%M} МСК</time>'
                      if local else 'Дата отправки не указана')
+        waiting = ''
+        if item['requires_decision'] and local and date <= now:
+            hours = (now - date) // timedelta(hours=1)
+            elapsed = f'{hours // 24} д.' if hours >= 24 else f'{hours} ч.' if hours else 'меньше часа'
+            waiting = f'<strong class="queue-wait">Ожидание: {elapsed}</strong>'
         label = {'stage': 'Этап ожидает проверки', 'defense': 'Видеозащита ожидает проверки',
                  'report': 'Информационный отчёт · решение не требуется'}[item['kind']]
         author = escape(item['author'] or 'не указан')
@@ -146,25 +172,27 @@ def render_queue(result, params, has_projects=True):
         previous = '<p class="work-previous-decision">Есть предыдущее решение</p>' if item.get('previous_decision') else ''
         history = (f'<a class="action-link work-review-history" href="{item["history_href"]}">История этапа</a>'
                    if item.get('previous_decision') else '')
-        target = item['href']
-        if item['kind'] == 'stage':
-            path, _, anchor = target.partition('#')
-            group = params.get('group')
-            target = path + (f'?group={group}' if group else '') + f'#{anchor}-result'
+        target = (review_url(item['project_id'], item['work'], dict(params, page=result['page']))
+                  if item['requires_decision'] else item['href'])
+        classes = [group['name'] for group in groups if item['project_id'] in group_projects.get(group['id'], ())
+                   and (group_id == group['id'] if group_id else not group['archived'])]
+        scope = escape(classes[0]) + (f' · ещё {len(classes) - 1}' if len(classes) > 1 else '') if classes else ''
         html += f'''<article class="teacher-attention-item teacher-queue-item" data-work-kind="{item['kind']}"
             data-work-key="{item['key']}"><span class="v3-submission-mark" aria-hidden="true">{icon('video' if item['kind'] == 'defense' else 'review')}</span>
             <div class="v3-submission-main"><strong class="v3-submission-label">{label}</strong><h4>{escape(item['project_name'])}</h4>
-            <p class="v3-submission-type">{escape(item['title'])}</p><p class="t-muted">Автор: {author}</p>{previous}{material}</div>
-            <div class="v3-submission-side"><p class="t-muted">{date_html}</p>
+            <p class="v3-submission-type">{escape(item['title'])}</p>
+            <p class="t-muted">Автор: {author}{f' · {scope}' if scope else ''}</p>{previous}{material}</div>
+            <div class="v3-submission-side"><p class="queue-timing">{waiting}{date_html}</p>
             <a class="{'btn' if item['key'] == first_decision else 'action-link'}" href="{escape(target, quote=True)}">{item['action']} {icon('arrow')}</a>{history}</div></article>'''
     if not result['items']:
         filtered = bool(params.get('q') or params.get('project') or params.get('focus', 'all') != 'all' or params.get('kind', 'all') != 'all')
-        html += ('<p class="t-muted">В этой группе нет работ по выбранным условиям.</p>' if params.get('group') else
-                 '<div class="work-empty"><h3>Здесь появятся работы учеников</h3><p>Создайте приглашение руководителя. Ученик выберет свой проект, затем вы подтвердите сопровождение. После отправки результата здесь появится работа для проверки.</p></div>' if not has_projects else
-                 '<div class="work-empty"><h3>Сейчас нет работ для проверки</h3><p>Новые результаты появятся после отправки учениками. Проекты и предыдущие решения остаются доступны ниже.</p></div>' if not filtered else
-                 '<p class="t-muted">Нет работ по выбранным условиям. '
-                 '<a class="action-link" href="/teacher#review-queue">Сбросить фильтры</a>. '
-                 'Новые сдачи появятся после отправки учениками.</p>')
+        if filtered:
+            html += (f'<p class="t-muted">Нет работ по выбранным условиям. '
+                     f'<a class="action-link" href="{queue_url(dict(group=group_id))}">Сбросить фильтры</a></p>')
+        elif has_projects or group_id:
+            html += '<div class="work-empty"><h3>Сейчас нет работ для проверки</h3><p>Новые сдачи появятся здесь после отправки учениками.</p></div>'
+        else:
+            html += '<div class="work-empty"><h3>Здесь появятся работы учеников</h3><p>Подключите первый проект, чтобы начать проверять сдачи.</p></div>'
     if result['pages'] > 1:
         links = ''
         if result['page'] > 1:

@@ -1,9 +1,70 @@
-/* Existing palette and panels; only the queue's content/controls need layout rules. */
-.teacher-queue-item h4 { margin: 8px 0; font-size: 16px; }
+/* Queue and focused review use the existing theme variables. */
+.teacher-queue-heading { display: grid; gap: 8px; }
+.teacher-queue-heading h2 { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 14px; margin: 0; }
+.teacher-queue-heading p { margin: 0; }
+.teacher-queue-group {
+  display: inline-block;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--mf-accent-soft);
+  color: var(--mf-text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.teacher-queue-toolbar, .teacher-queue-actions { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 18px; }
+.teacher-queue-toolbar { justify-content: space-between; }
+.teacher-queue-actions .action-link { min-height: 40px; display: inline-flex; align-items: center; gap: 6px; }
+.teacher-queue-heading .teacher-filters { margin: 0 0 12px; }
+.review-panel > .success { margin: 8px 0; }
+.teacher-queue-item h4 { margin: 8px 0; font-size: 16px; overflow-wrap: anywhere; }
 .teacher-queue-item p { margin: 8px 0; overflow-wrap: anywhere; }
 .teacher-queue-body { white-space: pre-wrap; font-size: 13px; }
+.queue-timing { display: grid; gap: 2px; color: var(--mf-muted); }
+.queue-wait { color: var(--mf-text); font-weight: 600; }
 .teacher-queue-pages { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 18px; }
+.teacher-task-attention { margin: 18px 0; }
+.teacher-task-attention .teacher-attention-item {
+  display: grid; gap: 4px; padding: 14px 0; border-bottom: 1px solid var(--mf-line);
+}
+
+.teacher-review-page h1 { margin: 12px 0 4px; font-size: clamp(26px, 3vw, 36px); overflow-wrap: anywhere; }
+.teacher-review-page .review-group { margin: 0 0 12px; color: var(--mf-muted); overflow-wrap: anywhere; }
+.review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "content decision" "related decision";
+  gap: 12px 16px;
+  align-items: start;
+  margin-top: 16px;
+}
+.review-layout .card { margin: 0; min-width: 0; }
+.review-content { grid-area: content; }
+.review-decision { grid-area: decision; }
+.review-work-heading { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; justify-content: space-between; }
+.review-work-heading h2, .review-decision h2, .review-previous h3 { margin: 0; overflow-wrap: anywhere; }
+.review-work-heading h2, .review-decision h2 { font-size: 18px; }
+.review-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0; color: var(--mf-muted); font-size: 13px; overflow-wrap: anywhere; }
+.review-meta strong { color: var(--mf-text); }
+.review-text { margin: 16px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.review-related { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 16px; }
+.review-layout > .review-related { grid-area: related; margin: 0; padding-inline: 8px; }
+.review-related a, .review-material { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+.review-previous { margin-top: 20px; padding: 12px 14px; border: 1px solid var(--mf-line); border-inline-start: 3px solid var(--mf-warning); border-radius: 8px; background: var(--mf-panel); }
+.review-previous h3 { font-size: 14px; }
+.review-previous .review-text { margin: 8px 0 0; }
+.review-decision label { display: block; margin: 14px 0 6px; font-weight: 600; }
+.review-decision textarea { width: 100%; font-size: 16px; }
+.review-buttons { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 14px; }
+.review-buttons button { margin: 0; min-height: 44px; }
 body .teacher-filters select { min-width: 0; max-width: 100%; }
 @media (max-width: 800px) {
   body .teacher-filters select { flex: 1 1 100%; width: 100%; }
+  .review-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas: "content" "decision" "related";
+  }
+  html body.mf-v2 .review-layout .card { padding: 16px; }
 }

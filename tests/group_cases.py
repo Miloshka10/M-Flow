@@ -262,7 +262,7 @@ class LearningGroupCases:
         self.sign_in(1)
         queue = self.client.get(f'/teacher?group={gid}').text
         self.assertIn(f'data-work-key="stage-{pid}-1"', queue)
-        self.assertIn(f'href="{project}/stages?group={gid}#stage-1-result"', queue)
+        self.assertIn(f'href="/teacher/review/{pid}/stage-1?group={gid}"', queue)
         self.assertNotIn('data-work-key="stage-1-1"', queue)
         teacher_project = self.client.get(project + '/stages').text
         self.assertIn(f'href="/teacher?group={gid}#review-queue">К очереди группы', teacher_project)
@@ -281,15 +281,34 @@ class LearningGroupCases:
         unrelated_project = self.client.get(f'{project}/stages?group={unrelated_group}').text
         self.assertNotIn(f'href="/teacher?group={unrelated_group}#review-queue"', unrelated_project)
         review = self.client.get(url + '?view=review').text
-        self.assertIn(f'href="{project}/stages#stage-1-result">Ожидают решения: 1', review)
-        stage(1, 1, 1, 'return', teacher_comment='Укажите время замеров')
+        self.assertIn(f'href="/teacher/review/{pid}/stage-1?group={gid}">Ожидают решения: 1', review)
+        queue_path = f'/teacher?group={other_group}&q=Шум&kind=stage&sort=newest'
+        queue = self.client.get(queue_path).text
+        self.assertLess(queue.index('id="review-queue"'), queue.index('data-review-count='))
+        self.assertIn('Вторая группа того же учителя', self.queue_html(queue))
+        review_path = f'/teacher/review/{pid}/stage-1?{queue_path.split("?")[1]}'
+        focused = self.client.get(review_path)
+        self.assertEqual(focused.status_code, 200)
+        self.assertIn('Отправка №1', focused.text)
+        self.assertNotIn('id="task-board"', focused.text)
+        returned = self.post(review_path, data=dict(revision='1', action='return', teacher_comment='Укажите время замеров'))
+        self.assertEqual(returned.status_code, 302)
+        self.assertEqual(returned.location, f'/teacher?q=%D0%A8%D1%83%D0%BC&kind=stage&sort=newest&group={other_group}#review-queue')
         self.assertIn('<tbody></tbody>', self.client.get(url + '?view=review').text)
         revision = self.client.get(url + '?view=revision').text
         self.assertIn(f'href="{project}/stages#stage-1-result">Посмотреть замечание', revision)
         self.sign_in(3)
         self.assertIn('Перейти к доработке', self.client.get(url).text)
-        stage(3, 1, 2, 'submit')
-        stage(1, 1, 3, 'accept')
+        stage(3, 1, 2, 'save')
+        stage(3, 1, 3, 'submit')
+        self.sign_in(1)
+        focused = self.client.get(review_path).text
+        self.assertIn('Отправка №2', focused)
+        self.assertIn('Замечание к предыдущей отправке', focused)
+        self.assertIn('Укажите время замеров', focused)
+        accepted = self.post(review_path, data=dict(revision='4', action='accept'))
+        self.assertEqual(accepted.location, returned.location)
+        self.assertIn('Эта работа уже принята', self.client.get(review_path).text)
         self.assertIn('<tbody></tbody>', self.client.get(url + '?view=revision').text)
         for number in range(2, 6):
             fields = {'presentation_url': 'https://example.org/slides'} if number == 5 else {}
@@ -300,8 +319,11 @@ class LearningGroupCases:
         self.assertEqual(self.post(project + '/defense', data=dict(revision='0', action='submit',
             video_url='https://example.org/video', description='Выступление по итогам замеров')).status_code, 302)
         self.sign_in(1)
-        self.assertIn(f'href="{project}/defense">Ожидают решения: 1', self.client.get(url + '?view=review').text)
-        self.assertEqual(self.post(project + '/defense', data=dict(revision='1', action='accept')).status_code, 302)
+        self.assertIn(f'href="/teacher/review/{pid}/defense?group={gid}">Ожидают решения: 1', self.client.get(url + '?view=review').text)
+        defense_review = f'/teacher/review/{pid}/defense?group={gid}'
+        self.assertIn('Отправка №1', self.client.get(defense_review).text)
+        self.assertEqual(self.post(defense_review, data=dict(revision='1', action='accept')).location,
+                         f'/teacher?group={gid}#review-queue')
         self.assertEqual(self.post(project + '/assessment', data=self.assessment_data()).status_code, 302)
         self.sign_in(3)
         page = self.client.get(url).text
