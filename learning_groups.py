@@ -254,6 +254,20 @@ def teacher_group_projects(conn, teacher_id):
     return groups
 
 
+def teacher_review_group(conn, teacher_id, project_id, raw_group_id):
+    if not raw_group_id:
+        return None
+    try:
+        group_id = form_database_id(raw_group_id)
+    except ValueError:
+        return None
+    return group_id if conn.execute('''SELECT 1 FROM learning_groups g
+        JOIN learning_group_members m ON m.group_id=g.id
+        JOIN projects p ON p.id=m.project_id AND p.owner_id=m.student_id
+        JOIN project_members pm ON pm.project_id=p.id AND pm.user_id=g.teacher_id
+        WHERE g.id=? AND g.teacher_id=? AND p.id=? LIMIT 1''', (group_id, teacher_id, project_id)).fetchone() else None
+
+
 def roster(conn, user, group, args):
     """Bounded at 300 members, batched metadata only; no student work or notes."""
     teacher = user['role'] == 'teacher' and user['id'] == group['teacher_id']
@@ -515,7 +529,9 @@ def render_group(conn, user, group, data, token, code=None, assignment_form=None
         else:
             stages, grade, updated = '—', '—', '—'
             review = 'Нужно выбрать проект' if not row['project_name'] else 'Ожидается согласование' if row['proposed'] else 'Работы пока недоступны'
-            actions = f'<a href="/supervision">Рассмотреть подключение {icon('arrow')}</a>' if row['proposed'] else '—'
+            if row['proposed']:
+                review = f'<a class="group-review-link" href="/supervision">Рассмотреть подключение {icon("arrow")}</a>'
+            actions = '—'
         actions += form('remove', f'<input type="hidden" name="student_id" value="{row["student_id"]}"><button class="secondary" data-ui-icon="trash">Убрать из группы</button>')
         cells = (escape(row['username']), project, stages, review, grade, updated, actions)
         body += '<tr>' + ''.join(f'<td data-label="{label}"><div class="group-cell">{cell}</div></td>' for label, cell in zip(columns, cells)) + '</tr>'

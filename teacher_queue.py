@@ -146,12 +146,17 @@ def render_queue(result, params, has_projects=True):
         previous = '<p class="work-previous-decision">Есть предыдущее решение</p>' if item.get('previous_decision') else ''
         history = (f'<a class="action-link work-review-history" href="{item["history_href"]}">История этапа</a>'
                    if item.get('previous_decision') else '')
+        target = item['href']
+        if item['kind'] == 'stage':
+            path, _, anchor = target.partition('#')
+            group = params.get('group')
+            target = path + (f'?group={group}' if group else '') + f'#{anchor}-result'
         html += f'''<article class="teacher-attention-item teacher-queue-item" data-work-kind="{item['kind']}"
             data-work-key="{item['key']}"><span class="v3-submission-mark" aria-hidden="true">{icon('video' if item['kind'] == 'defense' else 'review')}</span>
             <div class="v3-submission-main"><strong class="v3-submission-label">{label}</strong><h4>{escape(item['project_name'])}</h4>
             <p class="v3-submission-type">{escape(item['title'])}</p><p class="t-muted">Автор: {author}</p>{previous}{material}</div>
             <div class="v3-submission-side"><p class="t-muted">{date_html}</p>
-            <a class="{'btn' if item['key'] == first_decision else 'action-link'}" href="{item['href'] + ('-result' if item['kind'] == 'stage' else '')}">{item['action']} {icon('arrow')}</a>{history}</div></article>'''
+            <a class="{'btn' if item['key'] == first_decision else 'action-link'}" href="{escape(target, quote=True)}">{item['action']} {icon('arrow')}</a>{history}</div></article>'''
     if not result['items']:
         filtered = bool(params.get('q') or params.get('project') or params.get('focus', 'all') != 'all' or params.get('kind', 'all') != 'all')
         html += ('<p class="t-muted">В этой группе нет работ по выбранным условиям.</p>' if params.get('group') else

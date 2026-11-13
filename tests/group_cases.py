@@ -262,10 +262,24 @@ class LearningGroupCases:
         self.sign_in(1)
         queue = self.client.get(f'/teacher?group={gid}').text
         self.assertIn(f'data-work-key="stage-{pid}-1"', queue)
+        self.assertIn(f'href="{project}/stages?group={gid}#stage-1-result"', queue)
         self.assertNotIn('data-work-key="stage-1-1"', queue)
         teacher_project = self.client.get(project + '/stages').text
         self.assertIn(f'href="/teacher?group={gid}#review-queue">К очереди группы', teacher_project)
         self.assertIn(f'href="{url}#group-assignment"', teacher_project)
+        # A project may also be linked to a group with no published assignment.
+        other_group = self.group_create(name='Вторая группа того же учителя')
+        self.group_join(self.group_code(other_group))
+        self.assertEqual(self.group_post(other_group, user=3, action='select', project_id=str(pid)).status_code, 302)
+        unrelated_group = self.group_create(name='Группа без этого проекта')
+        self.sign_in(1)
+        contextual_project = self.client.get(f'{project}/stages?group={other_group}').text
+        self.assertIn(f'href="/teacher?group={other_group}#review-queue">К очереди группы', contextual_project)
+        return_urls = re.findall(r'name="return_to" value="([^"]+)"', contextual_project)
+        self.assertTrue(any(f'group={other_group}&amp;' in target and target.endswith('#stage-1-result')
+                            for target in return_urls))
+        unrelated_project = self.client.get(f'{project}/stages?group={unrelated_group}').text
+        self.assertNotIn(f'href="/teacher?group={unrelated_group}#review-queue"', unrelated_project)
         review = self.client.get(url + '?view=review').text
         self.assertIn(f'href="{project}/stages#stage-1-result">Ожидают решения: 1', review)
         stage(1, 1, 1, 'return', teacher_comment='Укажите время замеров')

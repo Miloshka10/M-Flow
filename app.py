@@ -42,7 +42,8 @@ from auth_security import reserve_supervision_attempt
 from group_assignments import CLASSROOM_CSS, assignment_links
 from learning_groups import (initialize_groups, create_group, preview_code as preview_group_code,
                              join_group, change_group, own_groups, group_for, roster,
-                             project_assignment_groups, render_groups, render_group, teacher_group_projects)
+                             project_assignment_groups, render_groups, render_group, teacher_group_projects,
+                             teacher_review_group)
 from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue, render_classrooms
 from dashboard_view import student_dashboard
 from graphics import illustration
@@ -1471,6 +1472,13 @@ def create_project():
 def project(project_id, stage_submitted=None, stage_error="", work_mode=False, unsaved=""):
 
     current_user = get_current_user()
+    board_args = request.args
+    if request.method == 'POST' and request.path.endswith(('/add', '/stages')):
+        try:
+            board_args = dict(parse_qsl(urlsplit(board_return(project_id, request.form.get('return_to'))).query, max_num_fields=20))
+        except ValueError:
+            board_args = {}
+    review_group = None
     with closing(get_db()) as conn:
         details = get_project_details(project_id, connection=conn)
         if details is None:
@@ -1486,6 +1494,8 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
             WHERE a.project_id=? AND a.state='published' AND a.{assessment_column}=?
             ORDER BY a.updated_at DESC, a.teacher_id''', (project_id, current_user['id'])).fetchall()
         classroom_assignments = project_assignment_groups(conn, current_user, project_id)
+        if current_user['role'] == 'teacher':
+            review_group = teacher_review_group(conn, current_user['id'], project_id, board_args.get('group'))
         notification_data = notification_feed(conn, current_user['id'])
     project_name = details['name']
     student_counts = defaultdict(lambda: [0, 0])
@@ -1503,12 +1513,6 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
     deadline_today = business_today()
     # ---------- фильтры (поиск, приоритет, только мои, срок) ----------
 
-    board_args = request.args
-    if request.method == 'POST' and request.path.endswith(('/add', '/stages')):
-        try:
-            board_args = dict(parse_qsl(urlsplit(board_return(project_id, request.form.get('return_to'))).query, max_num_fields=20))
-        except ValueError:
-            board_args = {}
     if stage_error:
         # The failed current-stage form stays visible even if an old return URL
         # points at a different stage. Keep the other validated task filters.
@@ -1584,6 +1588,8 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
                        due=deadline_filter, sort=sort_mode, assignee=assignee_filter, stage=stage_filter, column=column, view_stage=board_args.get('view_stage', '') if board_args.get('view_stage') in ('1','2','3','4','5') else '')
     filters_html = render_filters(project_id, current_user, members, board_state)
     canonical_filters = {k:v for k,v in board_state.items() if v and not (k == 'sort' and v == 'priority') and not (k == 'column' and v == 'todo')}
+    if review_group is not None:
+        canonical_filters['group'] = review_group
     board_location = f'/project/{project_id}' + ('?' + urlencode(canonical_filters) if canonical_filters else '')
 
 
@@ -1984,13 +1990,15 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
                                       classroom_assignments=classroom_assignments)
     work_html, selected_stage = render_project_work(project_id, current_user, owner, members,
         stages, defense, published_assessments, tasks, all_tasks, render_task_card,
-        filters_html + '<details class="board-deadlines"><summary data-ui-icon="calendar">Ближайшие сроки</summary>' + hot_html + '</details>', add_task_section, board_state, csrf_token(), stage_submitted, stage_error, unsaved)
+        filters_html + '<details class="board-deadlines"><summary data-ui-icon="calendar">Ближайшие сроки</summary>' + hot_html + '</details>', add_task_section, board_state, csrf_token(), stage_submitted, stage_error, unsaved,
+        review_group=review_group)
     queue_return = ''
     if current_user['role'] == 'teacher':
         queue_return = '<a class="action-link" href="/teacher#review-queue">К очереди проверки</a>'
-        if len(classroom_assignments) == 1:
-            group_id = classroom_assignments[0]['id']
-            queue_return = f'<a class="action-link" href="/teacher?group={group_id}#review-queue">К очереди группы</a>'
+        if review_group is None and len(classroom_assignments) == 1:
+            review_group = classroom_assignments[0]['id']
+        if review_group is not None:
+            queue_return = f'<a class="action-link" href="/teacher?group={review_group}#review-queue">К очереди группы</a>'
     return render_page(
         PAGE_STYLE
         + (CLASSROOM_CSS if classroom_assignments else '')
