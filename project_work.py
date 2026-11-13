@@ -11,7 +11,7 @@ SHORT_NAMES = ('Тема проекта', 'Работа · 1', 'Работа · 
 
 def render_project_work(pid, user, owner, members, stages, defense, assessments,
                         tasks, all_tasks, render_task, filters, create, state,
-                        token, submitted=None, error='', unsaved=''):
+                        token, submitted=None, error='', unsaved='', *, review_group=None):
     completed, current = stage_summary(stages)
     current_number = current['number'] if current else 5
     selected = int(state.get('view_stage') or (state.get('stage') if state.get('stage') in ('1', '2', '3', '4', '5') else current_number))
@@ -20,6 +20,8 @@ def render_project_work(pid, user, owner, members, stages, defense, assessments,
 
     def location(number, anchor=None):
         args = {k: v for k, v in state.items() if v and k != 'column'}
+        if review_group is not None:
+            args['group'] = review_group
         args['view_stage'] = str(number)
         return escape(base + '?' + urlencode(args) + '#' + (anchor or f'stage-{number}'), quote=True)
 

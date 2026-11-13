@@ -35,14 +35,16 @@ from deadlines import business_today, deadline_info, deadline_text, parse_deadli
 from deadlines import DEADLINE_FILTERS, TASK_SORTS, matches_deadline, task_sort_key
 from notifications import (initialize_notifications, notify, notify_project,
                            notification_feed, mark_read, render_bell, render_items)
-from project_rules import has_project_teacher
+from project_rules import create_owned_project, has_project_teacher
 from teacher_supervision import (initialize_supervision, create_invite, preview_invite, request_connection,
                                 invitation_action, request_end, respond_request, render_hub, participant)
 from auth_security import reserve_supervision_attempt
+from group_assignments import CLASSROOM_CSS, assignment_links
 from learning_groups import (initialize_groups, create_group, preview_code as preview_group_code,
                              join_group, change_group, own_groups, group_for, roster,
-                             render_groups, render_group)
-from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue
+                             project_assignment_groups, render_groups, render_group, teacher_group_projects,
+                             teacher_review_group)
+from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue, render_classrooms
 from dashboard_view import student_dashboard
 from graphics import illustration
 from project_workspace import render_workspace, task_deadline
@@ -632,46 +634,6 @@ def is_valid_date(value):
         return True
 
     return parse_deadline(value) is not None
-
-
-def add_project(name):
-
-    user = get_current_user()
-
-    if user is None:
-        return None
-
-    conn = get_db()
-
-    project_id = insert_id(conn,
-        """
-        INSERT INTO projects
-        (name, owner_id)
-        VALUES (?, ?)
-        """,
-        (
-            name,
-            user["id"]
-        )
-    )
-
-    conn.execute(
-        """
-        INSERT INTO project_members
-        (project_id, user_id)
-        VALUES (?, ?)
-        ON CONFLICT(project_id, user_id) DO NOTHING
-        """,
-        (
-            project_id,
-            user["id"]
-        )
-    )
-
-    conn.commit()
-    conn.close()
-
-    return project_id
 
 
 def get_project_details(project_id, *, connection=None):
@@ -1469,7 +1431,7 @@ def index():
     header = render_header(user, notification_data)
     messages = ''.join(f'<div class="{escape(category, quote=True)}" role="status">{escape(message)}</div>'
                        for category, message in get_flashed_messages(with_categories=True))
-    return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/student-results.css?v=20261015">'
+    return render_page(PAGE_STYLE + CLASSROOM_CSS + '<link rel="stylesheet" href="/static/student-results.css?v=20261015">'
                        + student_dashboard(user, projects, csrf_token(), header, messages, results, focus,
                                            any(key.startswith("result_") for key in request.args), groups=groups,
                                            project_states=project_states))
@@ -1485,41 +1447,17 @@ def index():
 )
 @login_required
 def create_project():
-    if get_current_user()['role'] != 'student':
+    user = get_current_user()
+    if user['role'] != 'student':
         return render_error_page('Нет доступа', 'Проекты создают ученики. Учитель проверяет результаты в кабинете.', 403)
-
-    name = request.form.get(
-        "name",
-        ""
-    ).strip()
-
-
-    if not name:
-
-        flash(
-            "Введите название проекта.",
-            "error"
-        )
-
-        return redirect("/")
-
-    if len(name) > 80:
-
-        flash(
-            "Название проекта должно быть не длиннее 80 символов.",
-            "error"
-        )
-
-        return redirect("/")
-
-
-    add_project(name)
-
-    flash(
-        "Проект создан!",
-        "success"
-    )
-
+    with closing(get_db()) as conn:
+        try:
+            create_owned_project(conn, user['id'], request.form.get('name', ''))
+            conn.commit()
+        except ValueError as exc:
+            flash(str(exc), "error")
+            return redirect("/")
+    flash("Проект создан!", "success")
     return redirect("/")
 
 
@@ -1534,6 +1472,13 @@ def create_project():
 def project(project_id, stage_submitted=None, stage_error="", work_mode=False, unsaved=""):
 
     current_user = get_current_user()
+    board_args = request.args
+    if request.method == 'POST' and request.path.endswith(('/add', '/stages')):
+        try:
+            board_args = dict(parse_qsl(urlsplit(board_return(project_id, request.form.get('return_to'))).query, max_num_fields=20))
+        except ValueError:
+            board_args = {}
+    review_group = None
     with closing(get_db()) as conn:
         details = get_project_details(project_id, connection=conn)
         if details is None:
@@ -1548,6 +1493,9 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
             FROM project_assessments a JOIN users u ON u.id=a.teacher_id
             WHERE a.project_id=? AND a.state='published' AND a.{assessment_column}=?
             ORDER BY a.updated_at DESC, a.teacher_id''', (project_id, current_user['id'])).fetchall()
+        classroom_assignments = project_assignment_groups(conn, current_user, project_id)
+        if current_user['role'] == 'teacher':
+            review_group = teacher_review_group(conn, current_user['id'], project_id, board_args.get('group'))
         notification_data = notification_feed(conn, current_user['id'])
     project_name = details['name']
     student_counts = defaultdict(lambda: [0, 0])
@@ -1565,12 +1513,6 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
     deadline_today = business_today()
     # ---------- фильтры (поиск, приоритет, только мои, срок) ----------
 
-    board_args = request.args
-    if request.method == 'POST' and request.path.endswith(('/add', '/stages')):
-        try:
-            board_args = dict(parse_qsl(urlsplit(board_return(project_id, request.form.get('return_to'))).query, max_num_fields=20))
-        except ValueError:
-            board_args = {}
     if stage_error:
         # The failed current-stage form stays visible even if an old return URL
         # points at a different stage. Keep the other validated task filters.
@@ -1646,6 +1588,8 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
                        due=deadline_filter, sort=sort_mode, assignee=assignee_filter, stage=stage_filter, column=column, view_stage=board_args.get('view_stage', '') if board_args.get('view_stage') in ('1','2','3','4','5') else '')
     filters_html = render_filters(project_id, current_user, members, board_state)
     canonical_filters = {k:v for k,v in board_state.items() if v and not (k == 'sort' and v == 'priority') and not (k == 'column' and v == 'todo')}
+    if review_group is not None:
+        canonical_filters['group'] = review_group
     board_location = f'/project/{project_id}' + ('?' + urlencode(canonical_filters) if canonical_filters else '')
 
 
@@ -2042,12 +1986,22 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
     workspace_html = render_workspace(project_id, project_name, current_user, owner, members,
                                       stages, defense, published_assessments, all_tasks,
                                       completed_tasks, progress, overdue_count, today=deadline_today,
-                                      active='tasks' if work_mode else 'overview')
+                                      active='tasks' if work_mode else 'overview',
+                                      classroom_assignments=classroom_assignments)
     work_html, selected_stage = render_project_work(project_id, current_user, owner, members,
         stages, defense, published_assessments, tasks, all_tasks, render_task_card,
-        filters_html + '<details class="board-deadlines"><summary data-ui-icon="calendar">Ближайшие сроки</summary>' + hot_html + '</details>', add_task_section, board_state, csrf_token(), stage_submitted, stage_error, unsaved)
+        filters_html + '<details class="board-deadlines"><summary data-ui-icon="calendar">Ближайшие сроки</summary>' + hot_html + '</details>', add_task_section, board_state, csrf_token(), stage_submitted, stage_error, unsaved,
+        review_group=review_group)
+    queue_return = ''
+    if current_user['role'] == 'teacher':
+        queue_return = '<a class="action-link" href="/teacher#review-queue">К очереди проверки</a>'
+        if review_group is None and len(classroom_assignments) == 1:
+            review_group = classroom_assignments[0]['id']
+        if review_group is not None:
+            queue_return = f'<a class="action-link" href="/teacher?group={review_group}#review-queue">К очереди группы</a>'
     return render_page(
         PAGE_STYLE
+        + (CLASSROOM_CSS if classroom_assignments else '')
         + f"""
         <link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">
         <link rel="stylesheet" href="/static/task-board.css?v=20261031"><link rel="stylesheet" href="/static/project-work.css?v=20261031-tasks"><script src="/static/project-work.js?v=20261106-work" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
@@ -2055,8 +2009,9 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
             {render_header(current_user, notification_data)}
             <main class="project-workspace" data-work-screens="project" data-project-views data-work-default="{int(work_mode)}">
                 <div class="work-project-returns"><a href="{project_list_url(current_user['role'], project_id)}" class="back">{icon('arrow-left')} Все проекты</a>
-                {'<a class="action-link" href="/teacher#review-queue">К очереди проверки</a>' if current_user['role'] == 'teacher' else ''}</div>
+                {queue_return}</div>
                 {messages}
+                {assignment_links(classroom_assignments)}
                 {workspace_html}
 
 
@@ -2757,7 +2712,7 @@ def learning_groups_page():
                     preview = (preview_group_code(conn, user, raw), raw)
                 elif action == 'join':
                     gid = join_group(conn, user, request.form.get('code', '').strip())
-                    flash('Вы в учебной группе. Выберите свой проект; руководство согласуется отдельно.')
+                    flash('Вы в учебной группе.')
                     return redirect(f'/groups/{gid}')
                 else:
                     raise ValueError('Выберите действие в актуальной форме.')
@@ -2778,7 +2733,7 @@ def learning_group_page(group_id):
         limited = group_attempt(user)
         if limited:
             return limited
-    error, status, code = '', 200, None
+    error, status, code, assignment_form = '', 200, None, None
     with closing(get_db()) as conn:
         try:
             group = group_for(conn, user, group_id)
@@ -2791,9 +2746,14 @@ def learning_group_page(group_id):
                 if action == 'leave':
                     flash('Вы вышли из группы. Проект и действующее руководство сохранены.')
                     return redirect('/groups')
+                if action == 'save_assignment':
+                    flash('Задание опубликовано.' if request.form.get('assignment_revision') == '0'
+                          else 'Задание обновлено.')
+                    return redirect(f'/groups/{group_id}')
                 if action != 'invite':
-                    flash('Запрос сопровождения создан. Откройте «Руководитель проекта» для согласования.' if action == 'propose'
-                          else 'Выбор проекта для группы обновлён. Доступ к работам не изменён.' if action == 'select'
+                    flash('Запрос отправлен учителю.' if action == 'propose'
+                          else 'Проект создан и добавлен в группу.' if action == 'create_project'
+                          else 'Выбор проекта сохранён.' if action == 'select'
                           else 'Группа обновлена. Проекты и действующее руководство сохранены.')
                     return redirect(f'/groups/{group_id}')
                 group = group_for(conn, user, group_id)
@@ -2801,12 +2761,14 @@ def learning_group_page(group_id):
         except (ValueError, PermissionError) as exc:
             conn.rollback()
             error, status = str(exc), 403 if isinstance(exc, PermissionError) else 400
+            if status == 400 and request.method == 'POST' and request.form.get('action') == 'save_assignment':
+                assignment_form = request.form
             try:
                 group = group_for(conn, user, group_id)
             except PermissionError:
                 return render_error_page('Нет доступа', 'Вы больше не состоите в учебной группе.', 403)
             data = roster(conn, user, group, {})
-        body = render_group(conn, user, group, data, csrf_token(), code)
+        body = render_group(conn, user, group, data, csrf_token(), code, assignment_form=assignment_form)
     return render_collaboration_page(user, group['name'], body, error=error, status=status,
                                      back_url='/groups', back_label='Учебные группы')
 
@@ -3544,6 +3506,17 @@ def teacher_cabinet():
             403
         )
 
+    with closing(get_db()) as conn:
+        groups = [group for group in own_groups(conn, user) if group['teacher_id'] == user['id']]
+        group_projects = teacher_group_projects(conn, user['id']) if groups else {}
+    group_id = None
+    if request.args.get('group'):
+        try:
+            group_id = form_database_id(request.args['group'])
+        except ValueError:
+            return render_error_page('Некорректный фильтр', 'Выберите учебную группу из списка.', 400)
+        if group_id not in {group['id'] for group in groups}:
+            return render_error_page('Нет доступа', 'Учебная группа недоступна вашему аккаунту.', 403)
     overview = build_teacher_overview(user)
 
     query = request.args.get("q", "").strip()[:100]
@@ -3573,6 +3546,7 @@ def teacher_cabinet():
     visible_projects = [
         project for project in overview
         if project_matches(project, query_folded)
+        and (group_id is None or project['id'] in group_projects.get(group_id, ()))
         and (project_id is None or project['id'] == project_id)
         and (focus == "all" or (focus not in ('done', 'review') and project["health"] == focus)
              or focus == 'done' and project['total'] > 0 and project['counts']['done'] == project['total']
@@ -3581,7 +3555,7 @@ def teacher_cabinet():
     ]
     queue = queue_page(visible_projects, kind, sort, page, query_folded)
     queue_html = render_queue(queue, dict(q=query, focus=focus, kind=kind,
-                                         project=project_id, sort=sort), has_projects=bool(overview))
+                                         project=project_id, sort=sort, group=group_id), has_projects=bool(overview))
     kind_options = ''.join(f'<option value="{v}" {"selected" if kind == v else ""}>{label}</option>'
                            for v, label in WORK_KINDS.items())
     sort_options = ''.join(f'<option value="{v}" {"selected" if sort == v else ""}>{label}</option>'
@@ -3589,6 +3563,12 @@ def teacher_cabinet():
     project_options = '<option value="">Все проекты</option>' + ''.join(
         f'<option value="{p["id"]}" {"selected" if project_id == p["id"] else ""}>{escape(p["name"])}</option>'
         for p in overview)
+    group_filter = ''
+    if groups:
+        group_options = ''.join(
+            f'<option value="{g["id"]}"{" selected" if group_id == g["id"] else ""}>{escape(g["name"])}{" · архив" if g["archived"] else ""}</option>'
+            for g in groups)
+        group_filter = f'<select name="group" aria-label="Учебная группа"><option value="">Все группы</option>{group_options}</select>'
 
     total_tasks = sum(p["total"] for p in overview)
     done_tasks = sum(p["counts"]["done"] for p in overview)
@@ -3638,12 +3618,17 @@ def teacher_cabinet():
     attention_title = 'Просроченные задачи учеников' if focus == 'overdue' else 'Сроки и назначение задач'
 
     overdue_class = "warn" if overdue_tasks else ""
-    review_count = sum(bool(p['current_stage'] and p['current_stage']['state'] == 'review')
-                       + bool(p['defense_state'] == DEFENSE_STATES['submitted']) for p in overview)
+    decisions_by_project = {
+        p['id']: bool(p['current_stage'] and p['current_stage']['state'] == 'review')
+        + bool(p['defense_state'] == DEFENSE_STATES['submitted']) for p in overview
+    }
+    review_count = sum(decisions_by_project.values())
+    classrooms = render_classrooms(groups, group_projects, decisions_by_project, group_id)
 
     return render_page(
         PAGE_STYLE
         + TEACHER_STYLE
+        + (CLASSROOM_CSS if classrooms else '')
         + '<link rel="stylesheet" href="/static/teacher-queue.css?v=20261014">'
         + f"""
         <div class="container workspace teacher-workspace">
@@ -3670,12 +3655,14 @@ def teacher_cabinet():
                     <span>Без ответственного: <b>{unassigned_tasks}</b></span>
                     <span>Сроки задач: {TIMEZONE_LABEL}. Ожидание проверки — не просрочка сдачи.</span>
                 </details>
-                <details class="ui-teacher-filters" {'open' if query or focus != 'all' or kind != 'all' or sort != 'oldest' or project_id is not None or queue['page'] > 1 else ''}><summary data-ui-icon="filter">Поиск и фильтры работ</summary>
+                {classrooms}
+                <details class="ui-teacher-filters" {'open' if query or focus != 'all' or kind != 'all' or sort != 'oldest' or project_id is not None or group_id is not None or queue['page'] > 1 else ''}><summary data-ui-icon="filter">Поиск и фильтры работ</summary>
                 <form class="teacher-filters" method="get">
                     <input type="search" name="q" value="{escape(query)}"
                         aria-label="Поиск проекта, автора или работы" placeholder="Найти проект, автора или работу">
                     <select name="focus" aria-label="Состояние проектов">{focus_options}</select>
                     <select name="project" aria-label="Проект очереди">{project_options}</select>
+                    {group_filter}
                     <select name="kind" aria-label="Тип работы">{kind_options}</select>
                     <select name="sort" aria-label="Порядок отправки работ">{sort_options}</select>
                     <button type="submit" data-ui-icon="filter">Показать</button>

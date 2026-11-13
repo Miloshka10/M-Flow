@@ -51,14 +51,16 @@ VISIBLE = """n.recipient_id=? AND EXISTS (SELECT 1 FROM projects p WHERE p.id=n.
 
 
 def notification_feed(conn, user_id, before=None, limit=12):
-    count = conn.execute(f'SELECT COUNT(*) FROM notifications n WHERE {VISIBLE} AND n.read_at IS NULL',
-                         (user_id,)).fetchone()[0]
     extra = ' AND n.id<?' if before is not None else ''
-    rows = conn.execute(f'''SELECT n.*, p.name AS project_name FROM notifications n
-        JOIN projects p ON p.id=n.project_id WHERE {VISIBLE}{extra}
-        ORDER BY n.id DESC LIMIT ?''',
-        (user_id, before, limit) if before is not None else (user_id, limit)).fetchall()
-    return count, rows
+    params = (user_id, user_id, before, limit) if before is not None else (user_id, user_id, limit)
+    # Keep the total even when the latest page is empty or its cursor is past the last row.
+    rows = conn.execute(f'''SELECT latest.*, totals.unread_count FROM (
+            SELECT COUNT(*) AS unread_count FROM notifications n WHERE {VISIBLE} AND n.read_at IS NULL
+        ) totals LEFT JOIN (
+            SELECT n.*,p.name AS project_name FROM notifications n JOIN projects p ON p.id=n.project_id
+            WHERE {VISIBLE}{extra} ORDER BY n.id DESC LIMIT ?
+        ) latest ON 1=1 ORDER BY latest.id DESC''', params).fetchall()
+    return rows[0]['unread_count'], rows if rows[0]['id'] is not None else []
 
 
 def mark_read(conn, user_id, notification_id=None):

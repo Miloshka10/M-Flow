@@ -11,6 +11,27 @@ from unittest.mock import patch
 from werkzeug.security import generate_password_hash
 
 
+def seed_classroom(conn, due_date):
+    conn.execute('''INSERT INTO learning_group_assignments
+        (group_id,title,goal,criteria,due_date,materials,revision) VALUES(1,?,?,?,?,?,1)''',
+        ('Школьная среда: карта наблюдений', 'Соберите наблюдения вокруг школы и объясните результаты.',
+         'Укажите места, время и метод наблюдения. Подготовьте карту и короткий вывод.',
+         due_date, 'https://example.org/method'))
+    for pid, uid, title in ((4, 11, 'Карта школьного двора'), (5, 12, 'Маршрут до школы')):
+        conn.execute('INSERT INTO projects(id,name,owner_id) VALUES(?,?,?)', (pid, title, uid))
+        conn.executemany('INSERT INTO project_members(project_id,user_id) VALUES(?,?)', [(pid, uid), (pid, 1)])
+        conn.execute('UPDATE learning_group_members SET project_id=? WHERE group_id=1 AND student_id=?', (pid, uid))
+    conn.execute('''INSERT INTO project_stages
+        (project_id,number,state,result,teacher_comment,submitted_by,reviewed_by,revision)
+        VALUES(4,1,'progress','Наблюдения в школьном дворе','Укажите места и время наблюдений.',11,1,2)''')
+    conn.executemany('''INSERT INTO project_stages
+        (project_id,number,state,result,presentation_url,submitted_by,reviewed_by,revision)
+        VALUES(5,?,'done',?,?,12,1,2)''',
+        [(number, result, 'https://example.org/slides' if number == 5 else '')
+         for number, result in enumerate(('Выбран маршрут', 'Составлен план наблюдений',
+                                         'Собраны данные', 'Сделаны выводы', 'Подготовлена презентация'), 1)])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--deadlines', action='store_true', help='Add isolated deadline cases for visual QA')
@@ -19,7 +40,10 @@ def main():
     parser.add_argument('--results', action='store_true', help='Isolated student feedback, private grades and a review cycle')
     parser.add_argument('--graphics', action='store_true', help='Add an empty student account for graphics QA')
     parser.add_argument('--groups', action='store_true', help='Classroom roster, private projects and join flow on synthetic data')
+    parser.add_argument('--classroom', action='store_true', help='Published assignment, review, revision and defense fixtures')
+    parser.add_argument('--port', type=int, default=5091, help='Local HTTP port')
     options = parser.parse_args()
+    options.groups = options.groups or options.classroom
     if options.groups and (options.supervision or options.results or options.queue or options.deadlines):
         parser.error('--groups uses an independent classroom fixture; only --graphics can be combined with it')
     root = Path(__file__).resolve().parents[1]
@@ -54,6 +78,8 @@ def main():
                     uid = 10+n
                     conn.execute("INSERT INTO users(id,username,password,role) VALUES(?,?,?,'student')", (uid,f'preview-classmate-{n+1:02d}',password))
                     conn.execute('INSERT INTO learning_group_members(group_id,student_id) VALUES(1,?)', (uid,))
+                if options.classroom:
+                    seed_classroom(conn, (module.business_today() + timedelta(days=14)).isoformat())
             if options.supervision:
                 conn.execute("INSERT INTO users(id,username,password,role) VALUES(3,'preview-next-teacher',?,'teacher')", (password,))
                 conn.execute("INSERT INTO projects(id,name,owner_id) VALUES(2,'Другой проект ученика',2)")
@@ -78,8 +104,9 @@ def main():
             from notifications import notify
             if not options.supervision:
                 notify(conn, 1, 'preview:submit', 'Этап 1 отправлен на проверку', '', '/project/1/stages', [1])
-                notify(conn, 1, 'preview:review', 'Этап 1: нужна доработка',
-                       'Уточните, какие измерения будет выполнять метеостанция.', '/project/1/stages', [2])
+                if not options.classroom:
+                    notify(conn, 1, 'preview:review', 'Этап 1: нужна доработка',
+                           'Уточните, какие измерения будет выполнять метеостанция.', '/project/1/stages', [2])
             if options.deadlines or options.queue:
                 today = module.business_today()
                 conn.executemany('INSERT INTO tasks(project_id,title,deadline,status,assignee_id) VALUES(1,?,?,?,2)',
@@ -102,7 +129,7 @@ def main():
                     [(10+n, f'Результат измерения {n+1}: проверен датчик и сохранены данные.', '2026-10-01 12:00:00') for n in range(45)])
             conn.commit()
             conn.close()
-            module.app.run(host='127.0.0.1', port=5091, debug=False, use_reloader=False)
+            module.app.run(host='127.0.0.1', port=options.port, debug=False, use_reloader=False)
 
 
 if __name__ == '__main__':

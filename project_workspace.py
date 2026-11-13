@@ -73,10 +73,14 @@ def next_step(stages, role, owner, has_teacher, defense, has_published=False):
                 'Опубликованной оценки пока нет. Дождись решения учителя; баллы не выставляются автоматически.', 'assessment', 'Посмотреть свои оценки')
 
 
-def render_workspace(project_id, name, user, owner, members, stages, defense, assessments, tasks, completed_tasks, progress, overdue, today=None, active='overview'):
+def render_workspace(project_id, name, user, owner, members, stages, defense, assessments, tasks, completed_tasks, progress, overdue, today=None, active='overview', classroom_assignments=()):
     done, current = stage_summary(stages)
     has_teacher = any(member['role'] == 'teacher' for member in members)
     step = next_step(stages, user['role'], owner, has_teacher, defense, bool(assessments))
+    if owner and step['key'] == 'teacher-missing' and classroom_assignments:
+        group_target = f'/groups/{classroom_assignments[0]["id"]}#group-project' if len(classroom_assignments) == 1 else '/groups'
+        step = dict(step, target=group_target, action='Открыть учебную группу',
+                    text='В учебной группе можно отправить запрос руководителю или проверить его статус.')
     base = f'/project/{project_id}'
     target = stage_result_target(step['target'])
     if target == '/supervision':

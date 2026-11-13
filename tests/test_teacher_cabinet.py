@@ -619,7 +619,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for uid, prefix in ((3, 'student'), (1, 'teacher')):
             self.sign_in(uid)
             before = self.database_snapshot()
-            self.assertEqual(self.count_page_queries('/notifications'), 3)  # Previously 5.
+            self.assertEqual(self.count_page_queries('/notifications'), 2)
             page = self.client.get('/notifications').text
             bell = page.split('<section class="notification-panel"')[1].split('</section>')[0]
             main = page.split('class="notifications-page"')[1]
@@ -634,7 +634,10 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             older_main = older.split('class="notifications-page"')[1]
             self.assertIn(prefix + '-item-39', older_bell)
             self.assertNotIn(prefix + '-item-39', older_main)
-            self.assertEqual(self.count_page_queries('/notifications?before=' + str(cursor)), 5)
+            self.assertEqual(self.count_page_queries('/notifications?before=' + str(cursor)), 3)
+            empty_page = self.client.get('/notifications?before=1').text.split('class="notifications-page"')[1]
+            self.assertIn('Непрочитанных: 40', empty_page)
+            self.assertNotIn('class="notification-item', empty_page)
             self.assertEqual(self.database_snapshot(), before)
 
     def test_current_user_query_failure_always_closes_connection(self):
@@ -858,7 +861,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
 
     def setUp(self):
         conn = self.module.get_db()
-        for table in ("account_email_tokens", "account_emails", "project_defense_plans", "work_history", "work_history_sources", "learning_group_invitations", "learning_group_members", "learning_groups", "supervision_requests", "teacher_invitations", "auth_sessions", "auth_limits", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
+        for table in ("account_email_tokens", "account_emails", "project_defense_plans", "work_history", "work_history_sources", "learning_group_assignments", "learning_group_invitations", "learning_group_members", "learning_groups", "supervision_requests", "teacher_invitations", "auth_sessions", "auth_limits", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
             conn.execute(f"DELETE FROM {table}")
         conn.executemany("INSERT INTO users(id, username, password, role) VALUES(?, ?, ?, ?)", [
             (1, "teacher-one", self.password, "teacher"),
@@ -1259,7 +1262,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
                          [(f'Card {n}',) for n in range(30)])
         conn.commit()
         conn.close()
-        # Two constant queries for the shared notification count + preview.
+        # These budgets include the notification count and preview.
         for path, budget in zip(paths, (9, 9, 10)):
             with self.subTest(path=path):
                 self.assertEqual(self.count_page_queries(path), before[path])
