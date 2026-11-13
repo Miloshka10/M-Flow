@@ -44,7 +44,9 @@ from learning_groups import (initialize_groups, create_group, preview_code as pr
                              join_group, change_group, own_groups, group_for, roster,
                              project_assignment_groups, render_groups, render_group, teacher_group_projects,
                              teacher_review_group)
-from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue, render_classrooms
+from teacher_queue import (WORK_KINDS, WORK_SORTS, PROJECT_FOCUS, TEACHER_QUEUE_CSS, project_matches,
+                           queue_filters, queue_page, queue_url, review_url, render_queue, render_classrooms)
+from teacher_review import render_review
 from dashboard_view import student_dashboard
 from graphics import illustration
 from project_workspace import render_workspace, task_deadline
@@ -60,7 +62,7 @@ from teamwork import (initialize_teamwork, profile_for, save_profile, directory,
                       render_directory, render_team)
 from video_defense import initialize_defenses, defense_for, change_defense, render_defense, DEFENSE_STATES
 from defense_preparation import initialize_preparation, plan_for, save_plan, render_preparation
-from work_history import initialize_history, history_parameters, load_history, render_history
+from work_history import initialize_history, history_parameters, load_history, render_history, review_history, WORKS
 from task_board import initialize_task_board, task_fields, board_return, render_filters, create_form, task_edit_fields
 from database import (DatabaseSettings, DatabaseUnavailable, INTEGRITY_ERRORS,
                       PostgresConnection, connect_database, execute_schema_script,
@@ -1495,7 +1497,8 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
             ORDER BY a.updated_at DESC, a.teacher_id''', (project_id, current_user['id'])).fetchall()
         classroom_assignments = project_assignment_groups(conn, current_user, project_id)
         if current_user['role'] == 'teacher':
-            review_group = teacher_review_group(conn, current_user['id'], project_id, board_args.get('group'))
+            group = teacher_review_group(conn, current_user['id'], project_id, board_args.get('group'))
+            review_group = group['id'] if group and group['contains_project'] else None
         notification_data = notification_feed(conn, current_user['id'])
     project_name = details['name']
     student_counts = defaultdict(lambda: [0, 0])
@@ -2615,7 +2618,7 @@ def render_header(user, notification_data=None):
             count, rows = notification_feed(conn, user['id'])
     else:
         count, rows = notification_data
-    bell = render_bell(count, rows, csrf_input())
+    bell = render_bell(count, rows, csrf_input(), teacher=user['role'] == 'teacher')
     return shell_header(user, request.path, bell, logout_form(), query=request.args)
 
 
@@ -2642,7 +2645,7 @@ def notifications_page():
         <main class="notifications-page"><h1>Уведомления</h1><p>Непрочитанных: {count}</p>
         <form method="post" action="/notifications/read-all">{csrf_input()}
         <button class="secondary" type="submit" data-ui-icon="check">Прочитать все</button></form>
-        {render_items(rows[:30], csrf_input())}{older}</main></div>''')
+        {render_items(rows[:30], csrf_input(), teacher=user['role'] == 'teacher')}{older}</main></div>''')
 
 
 @app.route('/notifications/<int:notification_id>/read', methods=['POST'])
@@ -2854,7 +2857,7 @@ def render_unsaved_result(form, user, target, defense=False):
         <p>Результат уже изменён или недоступен для редактирования. Скопируйте свой текст перед обновлением страницы,
         сравните с актуальной версией и повторите действие только если оно доступно. Этот текст не подставлен в новую форму.</p>
         <details><summary data-ui-icon="link">Показать текст для копирования</summary>{content}</details>
-        <a href="{target}">Открыть актуальную версию {icon('arrow')}</a></aside>'''
+        <a href="{escape(target, quote=True)}">Открыть актуальную версию {icon('arrow')}</a></aside>'''
 
 
 def render_collaboration_page(user, title, body, project_id=None, error="", status=200, back_url=None, back_label=None):
@@ -3083,6 +3086,70 @@ def project_stage_page(project_id):
     if response.status_code == 200:
         response.status_code = 400
     return response
+
+
+@app.route('/teacher/review/<int:project_id>/<work>', methods=['GET', 'POST'])
+@login_required
+def teacher_review_work(project_id, work):
+    user = get_current_user()
+    if user['role'] != 'teacher':
+        return render_error_page('Нет доступа', 'Проверка работ доступна только учителям.', 403)
+    if work == 'all' or work not in WORKS:
+        return render_error_page('Работа не найдена', 'Откройте сдачу из очереди работ.', 404)
+
+    defense = work == 'defense'
+    number = 0 if defense else int(work[-1])
+    filters = queue_filters(request.args)
+    # A project filter can only refer to the work's own project.
+    if request.args.get('project') == str(project_id):
+        filters['project'] = project_id
+    error, submitted = '', None
+    with closing(get_db()) as conn:
+        project_details = get_project_details(project_id, connection=conn)
+        if project_details is None:
+            return render_error_page('Нет доступа', 'Вы не участвуете в этом проекте.', 403)
+        group = teacher_review_group(conn, user['id'], project_id, request.args.get('group'))
+        if group:
+            filters['group'] = group['id']
+        back = queue_url(filters)
+        if request.method == 'POST':
+            change = change_defense if defense else change_stage
+            form = request.form.to_dict()
+            if not defense:
+                form['number'] = str(number)
+            try:
+                flash(change(conn, project_id, user, form))
+                return redirect(back)
+            except ValueError as exc:
+                if not participant(conn, project_id, user['id']):
+                    return render_error_page('Нет доступа', 'Вы больше не участвуете в этом проекте.', 403)
+                error = str(exc)
+        if defense:
+            record = defense_for(conn, project_id)
+        else:
+            stages = get_stages(conn, project_id)
+            record = stages[number - 1]
+            _, current = stage_summary(stages)
+            if record['state'] == 'review' and record is not current:
+                record = dict(record, state='progress')
+        pending = record['state'] == ('submitted' if defense else 'review')
+        submission, previous = (review_history(conn, project_id, 'defense' if defense else 'stage', number, record['revision'])
+                                if pending else (None, None))
+        if error and pending and request.form.get('revision') == str(record['revision']):
+            submitted = request.form
+
+    body = render_review(project_id, work, record, submission, previous, csrf_token(), submitted)
+    if error and submitted is None:
+        body = render_unsaved_result(request.form, user, review_url(project_id, work, filters), defense=defense) + body
+    back_label = 'К очереди группы' if group else 'К очереди проверки'
+    group_label = f'<p class="review-group">{escape(group["name"])}</p>' if group and group['contains_project'] else ''
+    messages = notice(error, error=True) if error else ''
+    html = PAGE_STYLE + TEACHER_QUEUE_CSS + f'''<div class="container">{render_header(user)}
+        <main class="teacher-review-page">
+            <a class="back" href="{escape(back, quote=True)}">{icon("arrow-left")} {back_label}</a>
+            <h1>{escape(project_details["name"])}</h1>{group_label}{messages}{body}
+        </main></div>'''
+    return render_page(html, title=f'Проверка · {project_details["name"]} — M-Flow'), 400 if error else 200
 
 
 @app.route("/project/<int:project_id>/assessment", methods=["GET", "POST"])
@@ -3519,14 +3586,8 @@ def teacher_cabinet():
             return render_error_page('Нет доступа', 'Учебная группа недоступна вашему аккаунту.', 403)
     overview = build_teacher_overview(user)
 
-    query = request.args.get("q", "").strip()[:100]
-    focus = request.args.get("focus", "all")
-    if focus not in ("all", "overdue", "attention", "done", "review"):
-        focus = "all"
-    kind = request.args.get('kind', 'all')
-    kind = kind if kind in WORK_KINDS else 'all'
-    sort = request.args.get('sort', 'oldest')
-    sort = sort if sort in WORK_SORTS else 'oldest'
+    filters = queue_filters(request.args)
+    query, focus, kind, sort = (filters[key] for key in ('q', 'focus', 'kind', 'sort'))
     project_filter = request.args.get('project', '')
     project_id = None
     if project_filter:
@@ -3538,10 +3599,6 @@ def teacher_cabinet():
             return render_error_page('Некорректный фильтр', 'Выберите проект из списка.', 400)
         if project_id not in {p['id'] for p in overview}:
             return render_error_page('Нет доступа', 'Проект недоступен вашему аккаунту.', 403)
-    try:
-        page = max(1, int(request.args.get('page', '1')))
-    except ValueError:
-        page = 1
     query_folded = query.casefold()
     visible_projects = [
         project for project in overview
@@ -3553,9 +3610,9 @@ def teacher_cabinet():
              or focus == 'review' and project['needs_review']
              or focus == "attention" and bool(project["attention"]))
     ]
-    queue = queue_page(visible_projects, kind, sort, page, query_folded)
-    queue_html = render_queue(queue, dict(q=query, focus=focus, kind=kind,
-                                         project=project_id, sort=sort, group=group_id), has_projects=bool(overview))
+    queue = queue_page(visible_projects, kind, sort, filters['page'], query_folded)
+    filters.update(project=project_id, group=group_id, page=queue['page'])
+    queue_html = render_queue(queue, filters, has_projects=bool(overview), groups=groups, group_projects=group_projects)
     kind_options = ''.join(f'<option value="{v}" {"selected" if kind == v else ""}>{label}</option>'
                            for v, label in WORK_KINDS.items())
     sort_options = ''.join(f'<option value="{v}" {"selected" if sort == v else ""}>{label}</option>'
@@ -3579,10 +3636,8 @@ def teacher_cabinet():
         s["id"] for p in overview for s in p["students"]
     }
 
-    messages = ""
-
-    for category, text in session.pop("_flashes", []):
-        messages += f'<div class="{category}">{escape(text)}</div>'
+    messages = ''.join(notice(text, error=category == 'error')
+                       for category, text in get_flashed_messages(with_categories=True))
 
     projects_html = "".join(
         render_teacher_project(project) for project in visible_projects
@@ -3600,8 +3655,7 @@ def teacher_cabinet():
 
     focus_options = "".join(
         f'<option value="{value}" {"selected" if focus == value else ""}>{label}</option>'
-        for value, label in (("all", "Все проекты"), ("overdue", "Просрочены задачи учеников"), ("review", "Ожидают моей проверки"),
-                             ("attention", "Требуют внимания"), ("done", "Все задачи выполнены"))
+        for value, label in PROJECT_FOCUS.items()
     )
     attention_items = sorted(
         [(project, item) for project in visible_projects for item in project["attention"]
@@ -3623,26 +3677,52 @@ def teacher_cabinet():
         + bool(p['defense_state'] == DEFENSE_STATES['submitted']) for p in overview
     }
     review_count = sum(decisions_by_project.values())
-    classrooms = render_classrooms(groups, group_projects, decisions_by_project, group_id)
+    classrooms = render_classrooms(groups, group_projects, decisions_by_project)
+    selected_group = next((group for group in groups if group['id'] == group_id), None)
+    group_context = (f'<span class="teacher-queue-group">{escape(selected_group["name"])}'
+                     + (' · архив' if selected_group['archived'] else '') + '</span>') if selected_group else ''
+    all_groups = queue_url(dict(filters, group=None, page=1))
+    group_links = (f'<a class="action-link" href="/groups/{group_id}">Открыть группу {icon("arrow")}</a>'
+                   f'<a class="action-link" href="{escape(all_groups, quote=True)}">Снять фильтр группы</a>') if selected_group else ''
 
     return render_page(
         PAGE_STYLE
         + TEACHER_STYLE
         + (CLASSROOM_CSS if classrooms else '')
-        + '<link rel="stylesheet" href="/static/teacher-queue.css?v=20261014">'
+        + TEACHER_QUEUE_CSS
         + f"""
         <div class="container workspace teacher-workspace">
             {render_header(user)}
             <main data-work-screens="teacher" class="{'work-teacher-empty' if not overview else ''}">
-                <div class="workspace-intro"><span>РАБОЧЕЕ ПРОСТРАНСТВО УЧИТЕЛЯ</span><span>M-Flow / проверка</span></div>
                 <section class="teacher-hero workspace-hero">
-                    <div class="hero-copy"><span class="hero-kicker">РАБОЧЕЕ ПРОСТРАНСТВО УЧИТЕЛЯ</span>
-                        <h1>Кабинет учителя</h1>
-                        <p class="work-section-copy">{'Результаты для проверки и проекты ваших учеников.' if overview else 'Подключите первый проект, чтобы сопровождать работу учеников.'}</p>
-                    </div>
-                    <a class="btn {'secondary' if overview else ''}" href="/supervision">{icon('link')} Подключить проект</a>
+                    <h1>Кабинет учителя</h1>
+                    <a class="{'action-link' if overview else 'btn'}" href="/supervision">{icon('link')} Подключить проект</a>
                 </section>
-                {messages}
+                <section class="teacher-panel review-panel" id="review-queue" aria-labelledby="review-queue-title">
+                    <div class="teacher-queue-heading">
+                        <h2 id="review-queue-title">Очередь работ {group_context}</h2>
+                        <div class="teacher-queue-toolbar">
+                            <p class="t-muted">Найдено работ: {queue['total']} · Требуется решение: {queue['decisions']}.</p>
+                            <div class="teacher-queue-actions">{group_links}</div></div>
+                        <details class="ui-teacher-filters"{' open' if not queue['items'] and (query or kind != 'all' or focus != 'all' or project_id) else ''}>
+                            <summary data-ui-icon="filter">Поиск и фильтры работ</summary>
+                            <form class="teacher-filters" method="get" action="/teacher#review-queue">
+                                <input type="search" name="q" value="{escape(query, quote=True)}"
+                                    aria-label="Поиск проекта, автора или работы" placeholder="Найти проект, автора или работу">
+                                <select name="focus" aria-label="Состояние проектов">{focus_options}</select>
+                                <select name="project" aria-label="Проект очереди">{project_options}</select>
+                                {group_filter}
+                                <select name="kind" aria-label="Тип работы">{kind_options}</select>
+                                <select name="sort" aria-label="Порядок отправки работ">{sort_options}</select>
+                                <button type="submit" data-ui-icon="filter">Показать</button>
+                                <a href="{queue_url(dict(group=group_id))}" class="back">Сбросить фильтры</a>
+                            </form>
+                        </details>
+                    </div>
+                    {messages}
+                    {queue_html}
+                </section>
+                {classrooms}
                 <div class="t-stats" role="group" aria-label="Сводка по всем вашим проектам">
                     <a class="t-stat" href="/teacher?focus=review#review-queue"><strong data-review-count="{review_count}">{review_count:02d}</strong><span>На проверке</span></a>
                     <a class="t-stat" href="/teacher#teacher-projects"><strong>{len(overview)}</strong><span>Проектов</span></a>
@@ -3655,23 +3735,7 @@ def teacher_cabinet():
                     <span>Без ответственного: <b>{unassigned_tasks}</b></span>
                     <span>Сроки задач: {TIMEZONE_LABEL}. Ожидание проверки — не просрочка сдачи.</span>
                 </details>
-                {classrooms}
-                <details class="ui-teacher-filters" {'open' if query or focus != 'all' or kind != 'all' or sort != 'oldest' or project_id is not None or group_id is not None or queue['page'] > 1 else ''}><summary data-ui-icon="filter">Поиск и фильтры работ</summary>
-                <form class="teacher-filters" method="get">
-                    <input type="search" name="q" value="{escape(query)}"
-                        aria-label="Поиск проекта, автора или работы" placeholder="Найти проект, автора или работу">
-                    <select name="focus" aria-label="Состояние проектов">{focus_options}</select>
-                    <select name="project" aria-label="Проект очереди">{project_options}</select>
-                    {group_filter}
-                    <select name="kind" aria-label="Тип работы">{kind_options}</select>
-                    <select name="sort" aria-label="Порядок отправки работ">{sort_options}</select>
-                    <button type="submit" data-ui-icon="filter">Показать</button>
-                    <a href="/teacher" class="back">Сбросить</a>
-                </form></details>
-                <div class="teacher-dashboard-grid">
-                    <section class="teacher-panel review-panel" id="review-queue"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>Очередь работ</h2>{queue_html}</section>
-                    <section class="teacher-panel" id="task-attention"><h2>{attention_title}</h2><p class="t-muted">Дедлайны учеников отдельно от ожидания проверки учителем.</p>{attention_html}</section>
-                </div>
+                <section class="teacher-panel teacher-task-attention" id="task-attention"><h2>{attention_title}</h2>{attention_html}</section>
                 <details class="ds-teacher-projects" id="teacher-projects"><summary>Проекты учеников</summary><div class="section-title"><h2>Проекты</h2>
                     <span class="t-muted">Показано {len(visible_projects)} из {len(overview)}</span></div>
                 {projects_html}</details>

@@ -261,12 +261,13 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         queue = self.queue_html(self.client.get('/teacher').text)
         self.assertEqual(re.findall(r'data-work-kind="(\w+)"', queue), ['defense','stage','report','report'])
         for text in ('Автор: student-one', 'Команда: student-one', '01.03.2026 15:00 МСК',
-                     '/project/2/stages#stage-1', '/project/1/defense', '/project/1#task-1',
+                     '/teacher/review/2/stage-1', '/teacher/review/1/defense', '/project/1#task-1',
                      'Информационный отчёт · решение не требуется', '&lt;script&gt;Отчёт команды&lt;/script&gt;'):
             self.assertIn(text, queue)
+        self.assertEqual(queue.count('Ожидание:'), 2)
         self.assertNotIn('Private', queue)
         self.assertNotIn('<script>Отчёт', queue)
-        self.assertNotIn('<form', queue)
+        self.assertNotIn('method="post"', queue)
         self.assertNotIn('Просрочено', queue)
         self.assertEqual(self.database_snapshot(), before)
         self.sign_in(2)
@@ -286,7 +287,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             self.assertEqual(set(re.findall(r'data-work-kind="(\w+)"', queue)), {kind})
         page = self.client.get('/teacher?kind=stage&project=2&focus=review&q=STUDENT&sort=newest').text
         self.assertIn('data-work-key="stage-2-1"', self.queue_html(page))
-        self.assertNotIn('Owned project', self.queue_html(page))
+        self.assertNotIn('<h4>Owned project</h4>', self.queue_html(page))
         for value in ('stage','2','review','newest'):
             self.assertIn(f'value="{value}" selected', page)
         self.assertIn('data-review-count="2"', page)
@@ -337,6 +338,39 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertEqual(self.post('/project/1/defense', data=dict(revision='3', action='accept')).status_code, 302)
         self.assertNotIn('defense-1', self.queue_html(self.client.get('/teacher').text))
 
+    def test_focused_review_rejects_lost_access_and_stale_decisions(self):
+        self.seed_review_queue()
+        path = '/teacher/review/2/stage-1'
+        self.sign_in(1)
+        self.assertIn('Номер отправки не сохранён', self.client.get(path).text)
+        before = self.database_snapshot()
+        decision = dict(revision='1', action='return', teacher_comment='Уточните место')
+        self.assertEqual(self.client.post(path, data=decision).status_code, 400)
+        self.assertEqual(self.post(path, data=dict(decision, teacher_comment='')).status_code, 400)
+        self.assertEqual(self.post('/teacher/review/2/stage-2', data=decision).status_code, 400)
+        self.assertEqual(self.database_snapshot(), before)
+        self.assertEqual(self.post(path, data=decision).status_code, 302)
+
+        self.sign_in(3)
+        self.assertEqual(self.client.get(path).status_code, 403)
+        self.assertEqual(self.post(path, data=decision).status_code, 403)
+        self.assertEqual(self.post('/project/2/stages', data=dict(number='1', action='submit',
+            revision='2', result='Актуальная отправка')).status_code, 302)
+        self.sign_in(1)
+        before = self.database_snapshot()
+        stale = self.post(path, data=dict(decision, action='accept', teacher_comment='Старый ввод'))
+        self.assertEqual(stale.status_code, 400)
+        self.assertIn('Актуальная отправка', stale.text)
+        self.assertIn('Ваш ввод не сохранён', stale.text)
+        self.assertNotIn('>Старый ввод</textarea>', stale.text)
+        self.assertEqual(self.database_snapshot(), before)
+        self.assertIn(f'href="{path}"', self.client.get('/notifications').text)
+
+        self.sign_in(2)
+        self.assertEqual(self.client.get(path).status_code, 403)
+        self.assertEqual(self.post(path, data=dict(decision, revision='3')).status_code, 403)
+        self.assertEqual(self.client.get('/teacher/review/2/all').status_code, 404)
+
     def test_review_queue_pagination_preserves_filters_latest_reports_and_fixed_query_count(self):
         self.seed_review_queue()
         self.sign_in(1)
@@ -360,7 +394,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             all_keys.extend(keys)
             if page < 3:
                 link = re.search(r'href="([^"]+)">Следующая', queue).group(1)
-                for fragment in ('q=student','focus=all','kind=report','project=2','sort=newest','page='+str(page+1),'#review-queue'):
+                for fragment in ('q=student','kind=report','project=2','sort=newest','page='+str(page+1),'#review-queue'):
                     self.assertIn(fragment, link)
         self.assertEqual(len(all_keys), 45)
         self.assertEqual(len(set(all_keys)), 45)

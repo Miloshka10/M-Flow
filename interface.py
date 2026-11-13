@@ -117,6 +117,7 @@ def shell_header(user, path, bell, logout, query=None):
     home = '/teacher' if teacher else '/'
     current = ('groups' if path.startswith('/groups') else 'team' if path.startswith(('/teams', '/skills'))
                else 'settings' if path == '/settings' else 'profile' if path == '/profile'
+               else 'review' if teacher and path.startswith('/teacher/review/')
                else 'projects' if path.startswith('/project/') else 'home' if path in ('/', '/teacher') else '')
     query = query or {}
     selected = (query.get('project') or query.get('result_project', '')) if path == '/' else ''

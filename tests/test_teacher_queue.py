@@ -10,7 +10,7 @@ class QueueDateTests(unittest.TestCase):
                        state='review', revision=1, updated_at='2026-11-06 09:00:00'), defense={}, reports=[])
         html = render_queue(queue_page([project]), {})
         self.assertNotIn('ds-queue-material', html)
-        self.assertIn('class="btn" href="/project/2/stages#stage-1-result"', html)
+        self.assertIn('class="btn" href="/teacher/review/2/stage-1"', html)
         project['current_stage'] = None
         project['reports'] = [dict(task_title='Task', task_id=10, report=dict(id=20, username='Student',
                               created_at='2026-11-06 09:00:00', body='Report <script>'))]
