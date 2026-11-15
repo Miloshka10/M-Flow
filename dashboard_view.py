@@ -2,7 +2,7 @@
 from html import escape
 from deadlines import deadline_text, TIMEZONE_LABEL
 from interface import icon
-from design_suite import stage_track, compact_stage_route
+from design_suite import cabinet_shortcuts, stage_track, compact_stage_route
 from navigation import stage_result_target
 from ui_components import state_badge
 
@@ -16,14 +16,16 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
         state = project_states.get(p['id'], dict(label='В работе', tone='work', stages_done=0))
         selected = ' aria-current="true"' if p['id'] == selected_id else ''
         details = f'{p["done"]} из {p["total"]} задач выполнено · {percent}%' if p['total'] else 'Задачи ещё не добавлены'
-        overdue = f'<span class="tile-alert">Просрочено: {p["overdue"]}</span>' if p['overdue'] else ''
+        overdue = f' <span class="tile-alert">· Просрочено: {p["overdue"]}</span>' if p['overdue'] else ''
         cards.append(f'''<article class="ds-project-card" data-project-name="{escape(p['name'], quote=True)}" data-project-tone="{state['tone']}">
             <a class="project-row project-tile" href="/project/{p['id']}"{selected}>
-            <div class="ds-card-body">
-            <div class="ds-card-title"><h3>{escape(p['name'])}</h3>{state_badge(state['label'], state['tone'])}{overdue}</div>
-            <div class="ds-card-progress">{stage_track(state['stages_done'])}<span class="ds-stage-count" aria-hidden="true">Принято {state['stages_done']} из 5 этапов</span></div>
-            <span class="ds-card-open" aria-hidden="true">{icon('arrow')}</span></div></a>
-            <details class="ds-card-details"><summary>Задачи</summary><p>{details}</p></details></article>''')
+                <div class="ds-project-identity"><span class="tile-folder">{icon('folder')}</span>
+                    <div><h3>{escape(p['name'])}</h3><span class="ds-project-meta">{details}{overdue}</span></div>
+                </div>
+                <span class="ui-state {state['tone']}">{escape(state['label'])}</span>
+                <div class="ds-row-progress">{stage_track(state['stages_done'])}<span class="ds-stage-count">Принято {state['stages_done']} из 5 этапов</span></div>
+                <span class="ds-card-open" aria-hidden="true">{icon('arrow')}</span>
+            </a></article>''')
     upcoming = sorted([(p, task) for p in projects for task in p.get('deadlines', [])],
                       key=lambda pair: (pair[1]['deadline_info']['date'], pair[1]['id']))
     upcoming_rows = ''.join(
@@ -49,7 +51,7 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
             target = f'/supervision?project={p["id"]}'
         url = base + target if target and target.startswith('#') else target if target and target.startswith('/') else f'{base}/{target}' if target else base
         options = ''.join(f'<option value="{item["id"]}" {"selected" if item["id"] == p["id"] else ""}>{escape(item["name"])}</option>' for item in projects)
-        switch = (f'<form class="focus-switch ds-home-only" method="get" action="/"><label for="current-project">Текущий проект</label>'
+        switch = (f'<form class="focus-switch" method="get" action="/"><label for="current-project">Сменить проект</label>'
                   f'<select id="current-project" name="project">{options}</select><button class="secondary">Выбрать</button></form>') if len(projects) > 1 else ''
         feedback = (f'<aside class="focus-feedback ds-feedback"><h3>Замечание учителя</h3>'
                     f'{"<small>" + escape(focus.get("reviewer", "")) + "</small>" if focus.get("reviewer") else ""}'
@@ -82,10 +84,11 @@ def student_dashboard(user, projects, token, header, messages, results='', focus
         <div class="ds-project-tools" hidden><label>Поиск проектов<input type="search" data-project-search placeholder="Найти проект…"></label>
         <label>Состояние<select data-project-filter><option value="all">Все</option><option value="work">В работе</option>
         <option value="review">На проверке</option><option value="revision">Нужна доработка</option><option value="accepted">Защита принята</option></select></label></div>
+        <div class="ds-project-columns" aria-hidden="true"><span>Проект</span><span>Состояние</span><span>Этапы</span></div>
         <div class="projects-list project-grid">{''.join(cards)}</div><p data-project-empty hidden role="status">Проекты не найдены.</p>
         {create}</section>'''
     groups_html = group_widget if not focus and groups else ''
     secondary = f'<details class="home-details" {"open" if results_open else ""}><summary data-ui-icon="results">Мои результаты</summary>{results}</details>'
     return f'''<div class="container workspace student-workspace">{header}<main id="main-content" class="simple-home work-home" data-work-screens="home" data-suite-dashboard data-suite-view="{'results' if results_open else 'home'}">
         {messages}<div class="ui-page-heading"><h1 id="dashboard-title" tabindex="-1" data-home-title="Привет, {escape(user["username"], quote=True)}.">Привет, {escape(user["username"])}.</h1></div>
-        {hero}{projects_html}{groups_html}{secondary}</main></div>'''
+        {hero}{projects_html}{cabinet_shortcuts()}{groups_html}{secondary}</main></div>'''

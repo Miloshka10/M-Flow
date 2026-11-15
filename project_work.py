@@ -66,7 +66,7 @@ def render_project_work(pid, user, owner, members, stages, defense, assessments,
         values = submitted if submitted is not None and submitted.get('number') == str(number) else None
         result = render_stages(stages, user, token, values, has_teacher, pid,
                                only_number=number, compact=True, return_to=location(number, f'stage-{number}-result').replace('&amp;', '&'))
-        default_view = 'result' if s['state'] in ('done', 'review') or kind == 'returned' else 'tasks'
+        default_view = 'result' if s['state'] in ('done', 'review') or kind == 'returned' or s['result'].strip() or (error and number == current_number) else 'tasks'
         panels.append(f'''<section class="pw-stage pw-stage-{kind}" id="stage-{number}" data-work-panel="{number}" data-default-view="{default_view}" data-review-role="{user['role']}">
             <header class="pw-stage-heading"><span class="eyebrow">ЭТАП {number} / 5{' · ТЕКУЩИЙ' if current and number == current['number'] else ''}</span>
             <h2>{escape(s['title'])}</h2>{f'<p>{STAGE_DESCRIPTIONS[number]}</p>' if text != STAGE_DESCRIPTIONS[number] else ''}</header>
@@ -75,11 +75,13 @@ def render_project_work(pid, user, owner, members, stages, defense, assessments,
             <div class="pw-mobile-views" role="group" aria-label="Задачи и результат этапа {number}">
             <button type="button" data-work-view-button="tasks" aria-pressed="true" aria-controls="stage-{number}-tasks">Задачи</button>
             <button type="button" data-work-view-button="result" aria-pressed="false" aria-controls="stage-{number}-result">Результат этапа</button></div>
-            <div class="pw-grid"><section class="pw-tasks" id="stage-{number}-tasks"><div class="pw-task-heading"><h3>Задачи этапа</h3>
+            <div class="pw-grid"><section class="pw-result" id="stage-{number}-result" tabindex="-1" aria-label="Результат этапа {number}">
+            {f'<p class="error" role="alert" tabindex="-1" data-work-error>{escape(error)}</p>{unsaved}' if error and (number == current_number) else ''}{result}
+            <details class="pw-next pw-{kind}" data-next-step="{key}"><summary>Что дальше</summary>
+            <strong>{escape(title)}</strong><p>{escape(text)}</p>{f'<a class="action-link" href="{target}">{escape(action)} {icon("arrow")}</a>' if target else ''}</details></section>
+            <section class="pw-tasks" id="stage-{number}-tasks"><div class="pw-task-heading"><h3>Задачи этапа</h3>
             {f'<a class="board-add action-link" href="#task-create">{icon("plus")} Задача</a>' if owner else ''}</div>
-            <div data-work-tools-slot></div>{task_list(rows, number)}<div data-unassigned-slot></div></section>
-            <aside class="pw-result" id="stage-{number}-result" tabindex="-1" aria-label="Результат этапа {number}">
-            {f'<p class="error" role="alert" tabindex="-1" data-work-error>{escape(error)}</p>{unsaved}' if error and (number == current_number) else ''}{result}</aside></div></section>''')
+            <div data-work-tools-slot></div>{task_list(rows, number)}<div data-unassigned-slot></div></section></div></section>''')
     general = [t for t in tasks if t['stage_number'] is None]
     unassigned = f'''<details class="pw-unassigned" id="tasks-without-stage"><summary>Без этапа · {len(general)}</summary>
         <p>Общие дела проекта. Владелец может привязать их к этапу.</p>{task_list(general, None)}</details>'''

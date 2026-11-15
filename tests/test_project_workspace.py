@@ -68,7 +68,7 @@ class ProjectWorkspaceTests(unittest.TestCase):
         before = self.fixture.database_snapshot()
         page = self.page()
         self.assertIn('data-next-step="ready"', page)
-        self.assertIn('href="/project/2/stages#stage-1"', page)
+        self.assertIn('href="/project/2/stages#stage-1-result"', page)
         self.assertIn('Перейти к отправке', page)
         self.assertEqual(self.fixture.database_snapshot(), before)
 
@@ -90,7 +90,7 @@ class ProjectWorkspaceTests(unittest.TestCase):
         self.assertIn('data-next-step="review"', self.page(1))
         self.assertEqual(self.stage(1, 'return', revision=1, teacher_comment='Уточните цель <script>x</script>').status_code, 302)
         returned = self.page()
-        for text in ('data-next-step="revise"', 'Нужна доработка', 'Что исправить · этап 1',
+        for text in ('data-next-step="revise"', 'href="/project/2/stages#stage-1-result"', 'Нужна доработка', 'Что исправить · этап 1',
                      'teacher-one', '&lt;script&gt;x&lt;/script&gt;', 'Последнее обновление этапа:'):
             self.assertIn(text, returned)
         self.assertNotIn('<script>x</script>', returned)

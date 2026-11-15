@@ -33,18 +33,18 @@ def next_step(stages, role, owner, has_teacher, defense, has_published=False):
                     ('Попроси владельца принять приглашение руководителя для проекта. Можно готовить черновик, но отправка на проверку пока недоступна.' if editable else
                      'Попроси владельца согласовать подключение руководителя. Отправленный результат нельзя менять до решения учителя.' if current else
                      'Попроси владельца согласовать подключение руководителя для продолжения проверки защиты и оценивания.'),
-                    '/supervision' if owner else (f'stages#stage-{current["number"]}' if editable else None),
+                    '/supervision' if owner else (f'stages#stage-{current["number"]}-result' if editable else None),
                     'Принять приглашение' if owner else ('Подготовить черновик' if editable else None))
     if role == 'teacher':
         if current and current['state'] == 'review':
             return step('review', 'Результат ждёт проверки', 'Прочитайте результат текущего этапа. Примите его или верните ученикам с пояснением.',
-                        f'stages#stage-{current["number"]}', 'Проверить этап')
+                        f'stages#stage-{current["number"]}-result', 'Проверить этап')
         if defense['state'] == 'submitted':
             return step('defense-review', 'Видеозащита ждёт проверки', 'Откройте запись выступления и сохраните решение по защите.', 'defense', 'Проверить видеозащиту')
         if current:
             if stage_needs_revision(current):
                 return step('await-revision', 'Ожидается исправленный результат', 'Ученики дорабатывают этап по замечанию учителя. Проверка станет доступна после повторной отправки.',
-                            f'stages#stage-{current["number"]}', 'Посмотреть замечание')
+                            f'stages#stage-{current["number"]}-result', 'Посмотреть замечание')
             return step('await-result', 'Ученики готовят результат', 'Этап ещё не отправлен. Можно посмотреть задачи и отчёты; принять черновик вместо отправленного результата нельзя.',
                         '#task-board', 'Посмотреть задачи и отчёты')
         return step('stages-accepted', 'Все пять этапов приняты',
@@ -53,7 +53,7 @@ def next_step(stages, role, owner, has_teacher, defense, has_published=False):
                     'assessment' if defense['state'] == 'accepted' else 'defense',
                     'Перейти к оцениванию' if defense['state'] == 'accepted' else 'Посмотреть видеозащиту')
     if current:
-        target = f'stages#stage-{current["number"]}'
+        target = f'stages#stage-{current["number"]}-result'
         if current['state'] == 'review':
             return step('await-review', 'Результат у учителя', 'Этап отправлен на проверку. Пока результат нельзя менять; можно продолжить работу с задачами.', '#task-board', 'Перейти к задачам')
         if stage_needs_revision(current):

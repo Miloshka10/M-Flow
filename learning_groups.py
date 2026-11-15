@@ -296,28 +296,31 @@ def roster(conn, user, group, args):
                 page=page, pages=pages, query=query, view=view, teacher=teacher)
 
 
-def render_groups(groups, user, token, preview=None):
-    body = '<link rel="stylesheet" href="/static/learning-groups.css?v=20261016"><p class="groups-intro">Учебная группа объединяет класс. Проекты, команды и руководство сохраняют свои правила доступа.</p>'
+def render_groups(groups, user, token, preview=None, form_open=False):
+    body = '<link rel="stylesheet" href="/static/learning-groups.css?v=20261016">'
+    expanded = ' open' if form_open or not groups else ''
     if user['role'] == 'teacher':
-        body += f'''<section class="group-panel"><h2>Новая учебная группа</h2><form method="post" class="group-form">{hidden_token(token)}
+        form = f'''<details class="group-panel ds-group-form"{expanded}><summary data-ui-icon="plus">Новая учебная группа</summary><form method="post" class="group-form">{hidden_token(token)}
             <input type="hidden" name="action" value="create"><label>Название группы<input name="name" maxlength="120" required placeholder="Например, 10А — индивидуальные проекты"></label>
-            <label>Описание для учеников<textarea name="description" maxlength="600" rows="2"></textarea></label><button data-ui-icon="plus">Создать группу</button></form></section>'''
+            <label>Описание для учеников<textarea name="description" maxlength="600" rows="2"></textarea></label><button data-ui-icon="plus">Создать группу</button></form></details>'''
     else:
-        body += f'''<section class="group-panel" id="group-code"><h2>Вступить в группу</h2><form method="post" class="group-form">{hidden_token(token)}
-            <input type="hidden" name="action" value="preview"><label>Код группы от учителя<input name="code" autocomplete="off" maxlength="32" required></label><button data-ui-icon="review">Проверить код группы</button></form></section>'''
+        form = f'''<details class="group-panel ds-group-form" id="group-code"{expanded}><summary data-ui-icon="plus">Вступить в группу</summary><form method="post" class="group-form">{hidden_token(token)}
+            <input type="hidden" name="action" value="preview"><label>Код группы от учителя<input name="code" autocomplete="off" maxlength="32" required></label><button data-ui-icon="review">Проверить код группы</button></form></details>'''
+    if expanded:
+        body += form
     if preview:
         group, code = preview
         body += f'''<section class="group-panel"><h2>{escape(group['name'])}</h2><p>Учитель: {escape(group['teacher_name'])}</p><p class="group-text">{escape(group['description'])}</p>
             <p>После вступления учитель увидит ваш логин. Вы сами выберете проект; доступ к работам требует отдельного согласования. Другие ученики не увидят ваш проект или оценки через группу.</p>
             <form method="post">{hidden_token(token)}<input type="hidden" name="action" value="join"><input type="hidden" name="code" value="{escape(code, quote=True)}"><button data-ui-icon="check">Подтвердить вступление</button></form></section>'''
-    body += '<h2>Мои учебные группы</h2><div class="group-list">'
+    body += '<div class="group-list" aria-label="Мои учебные группы">'
     for group in groups:
-        body += f'''<a class="group-panel group-link" href="/groups/{group['id']}"><span>{'В архиве' if group['archived'] else 'Действующая группа'}</span><h3>{escape(group['name'])}</h3>
+        body += f'''<a class="group-panel group-link" href="/groups/{group['id']}">{icon('groups')}<span>{'В архиве' if group['archived'] else 'Действующая группа'}</span><h2>{escape(group['name'])}</h2>
             <p>Учитель: {escape(group['teacher_name'])}</p>{f'<p>Учеников: {group["members"]}</p>' if user['role'] == 'teacher' else ''}</a>'''
     if not groups:
         empty = 'У вас пока нет учебных групп.' if user['role'] == 'teacher' else 'Вы ещё не вступили в учебную группу.'
-        body += f'<p>{empty}</p>'
-    return body + '</div>'
+        body += f'<p class="t-muted">{empty}</p>'
+    return body + '</div>' + ('' if expanded else form)
 
 
 def render_group(conn, user, group, data, token, code=None):

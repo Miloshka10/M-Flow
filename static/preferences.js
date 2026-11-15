@@ -33,10 +33,10 @@
   apply();
   system.addEventListener('change', apply);
   function syncForm() {
-    const theme = document.getElementById('site-theme');
-    if (!theme) return;
-    theme.value = preferences.theme;
-    document.getElementById('site-animations').checked = preferences.animations;
+    const form = document.getElementById('site-preferences');
+    if (!form) return;
+    form.elements.theme.value = preferences.theme;
+    form.elements.animations.checked = preferences.animations;
   }
   function save() {
     apply();
@@ -64,8 +64,7 @@
     const form = document.getElementById('site-preferences');
     if (!form) return;
     form.addEventListener('submit', event => event.preventDefault());
-    const theme = document.getElementById('site-theme');
-    const animations = document.getElementById('site-animations');
+    const {theme, animations} = form.elements;
     form.addEventListener('change', () => { preferences = {theme: theme.value, animations: animations.checked}; save(); });
     document.getElementById('reset-preferences').addEventListener('click', () => { preferences = {...defaults}; save(); });
   });

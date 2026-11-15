@@ -16,6 +16,7 @@ from supervision_cases import SupervisionCases
 from results_cases import StudentResultsCases
 from group_cases import LearningGroupCases
 from navigation_cases import NavigationCases
+from review_center_cases import ReviewCenterCases
 from history_cases import WorkHistoryCases
 from board_cases import TaskBoardCases
 from workspace_cases import ProjectWorkCases
@@ -46,7 +47,7 @@ class FormTokens(HTMLParser):
             self.current = None
 
 
-class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, NavigationCases, WorkHistoryCases, TaskBoardCases, ProjectWorkCases, DefensePreparationCases, QualityReviewCases, AccountRecoveryCases, unittest.TestCase):
+class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, NavigationCases, WorkHistoryCases, TaskBoardCases, ProjectWorkCases, DefensePreparationCases, QualityReviewCases, ReviewCenterCases, AccountRecoveryCases, unittest.TestCase):
     def test_result_pages_show_moscow_update_time_for_both_roles(self):
         self.stage_post(3)
         self.defense_post()
@@ -1426,7 +1427,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             self.assertNotIn('project-kit.svg', page)
         self.sign_in(3)
         page = self.client.get('/').text
-        self.assertIn('class="ds-card-progress"', page)
+        self.assertIn('class="ds-project-identity"', page)
+        self.assertIn('class="ds-stage-track" aria-hidden="true"', page)
         self.assertIn('aria-hidden="true"', page)
         self.assertIn('href="/teams#people"', page)
         self.assertNotIn('blank-study.svg', page)  # Existing projects, not an empty state.

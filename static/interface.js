@@ -47,8 +47,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const hadFocus = drawer.contains(document.activeElement) || managingBackground;
       drawer.open = false; restoreBackground();
       if (!mobile.matches && hadFocus) {
-        (document.querySelector('.ui-sidebar [aria-current]') || document.querySelector('.ui-sidebar .brand'))?.focus();
-      } else if (mobile.matches && document.activeElement.closest('.ui-sidebar')) {
+        (document.querySelector('.ui-sidebar :is(.ui-primary-nav,.ui-sidebar-bottom) [aria-current]')
+          || document.querySelector('.ui-sidebar-brand .brand'))?.focus();
+      } else if (mobile.matches && document.activeElement.closest('.ui-sidebar-brand,.ui-primary-nav,.ui-sidebar-bottom')) {
         drawer.querySelector('summary').focus();
       }
     });
@@ -78,7 +79,9 @@ document.addEventListener('DOMContentLoaded', () => {
       // Reopened validation forms must remain visible, including filtered POSTs.
       if (onTasks && target) target.scrollIntoView({block: 'start'});
     } else if (target) target.scrollIntoView({block:'start'});
-    const activeKey = id === 'student-results' ? 'results' : id === 'my-projects' || id === 'teacher-projects' ? 'projects' : id === 'review-queue' ? 'review' : null;
+    const activeKey = id === 'student-results' ? 'results'
+      : ['my-projects', 'project-create', 'teacher-projects'].includes(id) ? 'projects'
+      : id === 'review-queue' ? 'review' : null;
     initialNav.forEach((original, link) => {
       const current = activeKey ? link.dataset.navKey === activeKey : Boolean(original);
       if (current) link.setAttribute('aria-current', original || 'page'); else link.removeAttribute('aria-current');

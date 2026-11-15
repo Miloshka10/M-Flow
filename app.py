@@ -44,6 +44,8 @@ from learning_groups import (initialize_groups, create_group, preview_code as pr
                              render_groups, render_group)
 from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue
 from dashboard_view import student_dashboard
+from design_suite import cabinet_shortcuts
+import review_center
 from graphics import illustration
 from project_workspace import render_workspace, task_deadline
 from project_work import render_project_work
@@ -182,9 +184,9 @@ def render_page(html, title=None):
     dashboard_script = '<script src="/static/dashboard.js?v=20261106-work" defer></script>' if 'id="project-create"' in html else ''
     guard_script = '<script src="/static/form-guard.js?v=20261029" defer></script>' if ' data-guard-draft ' in html else ''
     shell_scripts = ('<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
-                     '<script src="/static/interface.js?v=20261027-work" defer></script>'
+                     '<script src="/static/interface.js?v=20261115-panel" defer></script>'
                      + guard_script
-                     + '<script src="/static/design-suite.js?v=20261106-work" defer></script>') if authenticated else guard_script
+                     + '<script src="/static/design-suite.js?v=20261115-cabinet" defer></script>') if authenticated else guard_script
     return ('<!doctype html><html lang="ru" data-theme="dark"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<title>{escape(title) if title is not None else document_title(html)}</title>'
@@ -201,10 +203,9 @@ def render_page(html, title=None):
         '<link rel="stylesheet" href="/static/deadlines.css?v=20261013-filters">'
         '<link rel="stylesheet" href="/static/navigation.css?v=20261017-fixes">'
         f'<link rel="stylesheet" href="/static/icon-symbols.css?v={APPEARANCE_VERSION}">'
-        '<link rel="stylesheet" href="/static/interface.css?v=20261029-review">'
-        '<link rel="stylesheet" href="/static/design-suite.css?v=20261101-mail-ui">'
-            f'<link rel="stylesheet" href="/static/components.css?v={APPEARANCE_VERSION}">'
-            f'<link rel="stylesheet" href="/static/interface-v3.css?v={APPEARANCE_VERSION}">'
+        f'<link rel="stylesheet" href="/static/components.css?v={APPEARANCE_VERSION}">'
+        '<link rel="stylesheet" href="/static/interface.css?v=20261115-panel">'
+        '<link rel="stylesheet" href="/static/design-suite.css?v=20261115-card-art">'
             + work_assets + dashboard_script + shell_scripts + auth_assets +
             f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-interface-v3 data-scenery="{scenery_context}" data-scenery-layout="{scenery_layout}" data-design-page="{escape(endpoint, quote=True)}">'
             + f'<a class="skip-link" href="#{skip_target}">К содержимому</a>' + html
@@ -2050,7 +2051,7 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
         PAGE_STYLE
         + f"""
         <link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">
-        <link rel="stylesheet" href="/static/task-board.css?v=20261031"><link rel="stylesheet" href="/static/project-work.css?v=20261031-tasks"><script src="/static/project-work.js?v=20261106-work" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
+        <link rel="stylesheet" href="/static/task-board.css?v=20261031"><link rel="stylesheet" href="/static/project-work.css?v=20261115-cabinet"><script src="/static/project-work.js?v=20261115-cabinet" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
         <div class="container">
             {render_header(current_user, notification_data)}
             <main class="project-workspace" data-work-screens="project" data-project-views data-work-default="{int(work_mode)}">
@@ -2684,9 +2685,9 @@ def notifications_page():
     # this response; older pages must still fetch the latest items for the bell.
     header = render_header(user, (count, rows[:12]) if before is None else None)
     return render_page(PAGE_STYLE + f'''<div class="container">{header}
-        <main class="notifications-page"><h1>Уведомления</h1><p>Непрочитанных: {count}</p>
+        <main class="notifications-page"><div class="notification-heading"><div><h1>Уведомления</h1><p>Непрочитанных: {count}</p></div>
         <form method="post" action="/notifications/read-all">{csrf_input()}
-        <button class="secondary" type="submit" data-ui-icon="check">Прочитать все</button></form>
+        <button class="secondary" type="submit" data-ui-icon="check">Прочитать все</button></form></div>
         {render_items(rows[:30], csrf_input())}{older}</main></div>''')
 
 
@@ -2704,23 +2705,31 @@ def read_notifications(notification_id=None):
 def site_settings():
     user = get_current_user()
     header = render_header(user) if user else access_header()
+    account = (f'''<section class="card settings-card" aria-labelledby="account-settings-heading">
+            <h2 id="account-settings-heading">Аккаунт</h2>
+            <div class="settings-links"><a href="/profile">{icon('profile')}<span>Профиль и пароль</span>{icon('arrow')}</a>
+            <a href="/profile/email">{icon('link')}<span>Почта для восстановления</span>{icon('arrow')}</a></div>
+        </section>''' if user else '')
     return render_page(f'''<div class="container">{header}<main class="settings-page">
-        <h1>Настройки сайта</h1>
-        <p class="settings-intro">Оформление сохраняется в этом браузере.</p>
-        <section class="card settings-card" aria-labelledby="appearance-heading">
+        <h1>Настройки</h1>
+        <div class="settings-layout"><section class="card settings-card" aria-labelledby="appearance-heading">
             <h2 id="appearance-heading">Оформление</h2>
             <form id="site-preferences">
-                <label for="site-theme">Тема сайта</label>
-                <select id="site-theme" name="theme">
-                    <option value="dark" selected>Тёмная</option><option value="light">Светлая</option><option value="system">Как в системе</option>
-                </select>
-                <label class="settings-checkbox" for="site-animations"><input id="site-animations" name="animations" type="checkbox" checked>Плавные анимации интерфейса</label>
-                <p class="settings-hint">Если на устройстве включено уменьшение движения, анимации отключены независимо от этого переключателя.</p>
-                <button type="button" class="secondary" id="reset-preferences" data-ui-icon="return">Сбросить настройки</button>
-                <p id="preferences-status" role="status" aria-live="polite">Изменения применяются сразу.</p>
+                <fieldset id="site-theme" class="settings-theme">
+                    <legend>Тема сайта</legend>
+                    <div class="settings-themes">
+                        <label><input type="radio" name="theme" value="light">Светлая</label>
+                        <label><input type="radio" name="theme" value="dark" checked>Тёмная</label>
+                        <label><input type="radio" name="theme" value="system">Как в системе</label>
+                    </div>
+                </fieldset>
+                <label class="settings-checkbox" for="site-animations"><input id="site-animations" name="animations" type="checkbox" aria-describedby="animations-hint" checked>Плавные анимации</label>
+                <p class="settings-hint" id="animations-hint">Учитываем настройку уменьшения движения на устройстве.</p>
+                <button type="button" class="secondary" id="reset-preferences" data-ui-icon="return">Сбросить оформление</button>
+                <p id="preferences-status" role="status" aria-live="polite"></p>
                 <noscript><p class="error">Для изменения и сохранения оформления включите JavaScript в браузере.</p></noscript>
             </form>
-        </section></main></div>''')
+        </section>{account}</div></main></div>''')
 
 
 def collaboration_token():
@@ -2764,7 +2773,7 @@ def learning_groups_page():
         except (ValueError, PermissionError) as exc:
             conn.rollback()
             error, status = str(exc), 403 if isinstance(exc, PermissionError) else 400
-        body = render_groups(own_groups(conn, user), user, csrf_token(), preview)
+        body = render_groups(own_groups(conn, user), user, csrf_token(), preview, form_open=bool(error or preview))
     return render_collaboration_page(user, 'Учебные группы', body, error=error, status=status)
 
 
@@ -3531,6 +3540,93 @@ def render_teacher_project(project):
     """
 
 
+@app.route('/teacher/review', methods=['GET', 'POST'])
+@login_required
+def teacher_review_center():
+    user = get_current_user()
+    if user['role'] != 'teacher':
+        return render_error_page('Нет доступа', 'Центр проверки доступен только учителю.', 403)
+    projects = build_teacher_overview(user)
+    accessible = {p['id'] for p in projects}
+    params = dict(q=request.args.get('q', '').strip()[:100],
+                  kind=request.args.get('kind', 'all'), sort=request.args.get('sort', 'oldest'))
+    if params['kind'] not in review_center.KINDS:
+        params['kind'] = 'all'
+    if params['sort'] not in review_center.SORTS:
+        params['sort'] = 'oldest'
+    raw_project = request.args.get('project', '')
+    project_id = None
+    if raw_project:
+        try:
+            project_id = int(raw_project)
+        except ValueError:
+            project_id = None
+        if not valid_database_id(project_id):
+            return render_error_page('Некорректный фильтр', 'Выберите проект из списка.', 400)
+        if project_id not in accessible:
+            return render_error_page('Нет доступа', 'Проект недоступен вашему аккаунту.', 403)
+        params['project'] = project_id
+    try:
+        page = max(1, int(request.args.get('page', '1')))
+    except ValueError:
+        page = 1
+    key = request.args.get('work', '')
+    if key:
+        try:
+            selected_pid = review_center.work_project(key)
+        except ValueError as exc:
+            return render_error_page('Некорректная ссылка', str(exc), 400)
+        if selected_pid not in accessible:
+            return render_error_page('Нет доступа', 'Работа недоступна вашему аккаунту.', 403)
+    error, status, submitted = '', 200, None
+    with closing(get_db()) as conn:
+        metadata = review_center.submission_index(conn, user['id'])
+        queue = review_center.inbox(projects, metadata, params['kind'], params['sort'], page,
+                                    params['q'].casefold(), project_id)
+        params['page'] = queue['page']
+        # Explicit deep links stay stable even when filters or pagination change.
+        all_items = [item for p in projects for item in review_center.entries(p)]
+        selected = next((i for i in all_items if i['key'] == key), None) if key else next(iter(queue['items']), None)
+        record, context = {}, {}
+        if request.method == 'POST':
+            submitted = request.form
+            if not key or selected is None or selected['kind'] == 'report':
+                error, status = 'Работа больше не ожидает решения. Обновите очередь; комментарий не сохранён.', 400
+            else:
+                try:
+                    if selected['kind'] == 'stage':
+                        # Do not let a forged number apply a decision to another stage.
+                        if request.form.get('number') != key.rsplit('-', 1)[-1]:
+                            raise ValueError('Ссылка и номер этапа не совпадают. Обновите очередь.')
+                        message = change_stage(conn, selected['project_id'], user, request.form)
+                    else:
+                        message = change_defense(conn, selected['project_id'], user, request.form)
+                    flash(message)
+                    return redirect(review_center.center_url(params) + '#review-inbox')
+                except ValueError as exc:
+                    error, status = str(exc), 400
+        if selected:
+            if not participant(conn, selected['project_id'], user['id']):
+                return render_error_page('Нет доступа', 'Доступ к проекту изменился. Работа недоступна вашему аккаунту.', 403)
+            selected['submission'] = metadata.get(selected['key'])
+            if selected['kind'] == 'stage':
+                record = next(s for s in get_stages(conn, selected['project_id']) if s['number'] == int(selected['key'].rsplit('-', 1)[-1]))
+            elif selected['kind'] == 'defense':
+                record = defense_for(conn, selected['project_id'])
+            if selected['kind'] != 'report':
+                context = review_center.context_for(conn, selected, record)
+        connections = review_center.connections_for(conn, user['id'])
+        body = review_center.render_center(projects, queue, selected, record, context, params,
+                                            csrf_token(), connections, bool(key), error, submitted)
+    # If the item left the queue, keep a stale comment visible without a new form.
+    if error and not selected:
+        body = f'<p class="error" role="alert">{escape(error)}</p><aside class="rc-comment"><h2>Ваш комментарий не сохранён</h2><p class="rc-result">{escape(request.form.get("teacher_comment", ""))}</p></aside>' + body
+    messages = ''.join(f'<div class="{escape(category, quote=True)}" role="status">{escape(text)}</div>' for category, text in get_flashed_messages(with_categories=True))
+    return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/review-center.css?v=20261115-cabinet">'
+                       + f'<div class="container workspace">{render_header(user)}<main class="review-center">{messages}{body}</main></div>',
+                       title='Центр проверки · M-Flow'), status
+
+
 @app.route("/teacher")
 @login_required
 def teacher_cabinet():
@@ -3648,19 +3744,15 @@ def teacher_cabinet():
         + f"""
         <div class="container workspace teacher-workspace">
             {render_header(user)}
-            <main data-work-screens="teacher" class="{'work-teacher-empty' if not overview else ''}">
-                <div class="workspace-intro"><span>РАБОЧЕЕ ПРОСТРАНСТВО УЧИТЕЛЯ</span><span>M-Flow / проверка</span></div>
+            <main>
                 <section class="teacher-hero workspace-hero">
-                    <div class="hero-copy"><span class="hero-kicker">РАБОЧЕЕ ПРОСТРАНСТВО УЧИТЕЛЯ</span>
-                        <h1>Кабинет учителя</h1>
-                        <p class="work-section-copy">{'Результаты для проверки и проекты ваших учеников.' if overview else 'Подключите первый проект, чтобы сопровождать работу учеников.'}</p>
-                    </div>
-                    <a class="btn {'secondary' if overview else ''}" href="/supervision">{icon('link')} Подключить проект</a>
+                    <h1>Кабинет учителя</h1>
+                    <a class="btn" href="/supervision">{icon('link')} Подключить проект</a>
                 </section>
                 {messages}
-                <div class="t-stats" role="group" aria-label="Сводка по всем вашим проектам">
-                    <a class="t-stat" href="/teacher?focus=review#review-queue"><strong data-review-count="{review_count}">{review_count:02d}</strong><span>На проверке</span></a>
-                    <a class="t-stat" href="/teacher#teacher-projects"><strong>{len(overview)}</strong><span>Проектов</span></a>
+                <div class="t-stats">
+                    <div class="t-stat"><strong data-review-count="{review_count}">{review_count}</strong><span>На проверке</span></div>
+                    <div class="t-stat"><strong>{len(overview)}</strong><span>Проектов</span></div>
                     <div class="t-stat"><strong>{len(student_ids)}</strong><span>Учеников</span></div>
                     <a class="t-stat {overdue_class}" href="/teacher?focus=overdue#task-attention"><strong>{overdue_tasks}</strong><span>Задач просрочено</span></a>
                 </div>
@@ -3685,11 +3777,11 @@ def teacher_cabinet():
                     <section class="teacher-panel review-panel" id="review-queue"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>Очередь работ</h2>{queue_html}</section>
                     <section class="teacher-panel" id="task-attention"><h2>{attention_title}</h2><p class="t-muted">Дедлайны учеников отдельно от ожидания проверки учителем.</p>{attention_html}</section>
                 </div>
+                {cabinet_shortcuts(teacher=True)}
                 <details class="ds-teacher-projects" id="teacher-projects"><summary>Проекты учеников</summary><div class="section-title"><h2>Проекты</h2>
                     <span class="t-muted">Показано {len(visible_projects)} из {len(overview)}</span></div>
                 {projects_html}</details>
                 <details class="teacher-panel ds-guide"><summary>Как подключиться к проекту</summary><h2>Как подключиться к проекту</h2><p>Создайте одноразовый код, передайте его ученику. Владелец подтверждает конкретный проект, затем вы берёте его на сопровождение. Другие проекты не открываются автоматически.</p><a class="teacher-primary-link" href="/supervision">Руководитель проекта {icon('arrow')}</a></details>
-                <footer class="workspace-footer"><span>M-Flow <small>by Minich</small></span><a href="/settings">{icon('settings')} Настройки оформления</a></footer>
             </main>
         </div>
         """
