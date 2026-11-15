@@ -3751,7 +3751,7 @@ def teacher_cabinet():
                 </section>
                 {messages}
                 <div class="t-stats">
-                    <div class="t-stat"><strong data-review-count="{review_count}">{review_count}</strong><span>На проверке</span></div>
+                    <a class="t-stat" href="/teacher#review-queue"><strong data-review-count="{review_count}">{review_count}</strong><span>На проверке</span></a>
                     <div class="t-stat"><strong>{len(overview)}</strong><span>Проектов</span></div>
                     <div class="t-stat"><strong>{len(student_ids)}</strong><span>Учеников</span></div>
                     <a class="t-stat {overdue_class}" href="/teacher?focus=overdue#task-attention"><strong>{overdue_tasks}</strong><span>Задач просрочено</span></a>
