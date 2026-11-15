@@ -77,7 +77,7 @@ def icon(name, navigation=False):
             + _ICONS[name] + '</svg>')
 
 
-APPEARANCE_VERSION = '20261111-linear'
+APPEARANCE_VERSION = '20261115-cabinet'
 
 
 def appearance_assets():
@@ -115,8 +115,8 @@ def project_art():
 def shell_header(user, path, bell, logout, query=None):
     teacher = user['role'] == 'teacher'
     home = '/teacher' if teacher else '/'
-    current = ('groups' if path.startswith('/groups') else 'team' if path.startswith(('/teams', '/skills'))
-               else 'settings' if path == '/settings' else 'profile' if path == '/profile'
+    current = ('review' if path == '/teacher/review' else 'groups' if path.startswith('/groups') else 'team' if path.startswith(('/teams', '/skills'))
+               else 'settings' if path == '/settings' else 'profile' if path.startswith('/profile')
                else 'projects' if path.startswith('/project/') else 'home' if path in ('/', '/teacher') else '')
     query = query or {}
     selected = (query.get('project') or query.get('result_project', '')) if path == '/' else ''
@@ -124,7 +124,7 @@ def shell_header(user, path, bell, logout, query=None):
         selected = path.split('/')[2]
     project_home = (f'/?project={selected}' if isinstance(selected, str) and selected.isascii()
                     and selected.isdigit() and len(selected) <= 18 and int(selected) > 0 else '/')
-    items = ([('home', 'home', 'Кабинет', home), ('review', 'review', 'Проверка работ', '/teacher#review-queue'), ('projects', 'folder', 'Проекты учеников', '/teacher#teacher-projects'),
+    items = ([('home', 'home', 'Кабинет', home), ('review', 'review', 'Проверка работ', '/teacher/review'), ('projects', 'folder', 'Проекты учеников', '/teacher#teacher-projects'),
               ('groups', 'groups', 'Учебные группы', '/groups')]
              if teacher else [('home', 'home', 'Главная', '/'), ('projects', 'folder', 'Мои проекты', project_home + '#my-projects'),
                               ('groups', 'groups', 'Учебные группы', '/groups'),
@@ -137,21 +137,23 @@ def shell_header(user, path, bell, logout, query=None):
     logo = f'<a href="{home}" class="brand" aria-label="M-Flow — на главную">M-Flow<span class="ui-brand-dot">.</span></a>'
     secondary = ''.join(f'<a class="ui-nav-link" href="/{key}"'
                         + (' aria-current="page"' if current == key else '')
-                        + f'>{icon('overview' if key == 'next' else key, navigation=True)}<span>{label}</span></a>' for key, label in [('next', 'Обзор проектов'), ('profile', 'Мой профиль'), ('settings', 'Настройки')])
-    title = {'/teams':'Участники и приглашения', '/skills':'Мои навыки'}.get(path) or next((label for key, _, label, _ in items if key == current),
-                 {'/profile':'Мой профиль', '/settings':'Настройки', '/notifications':'Уведомления',
-                  '/supervision':'Руководитель проекта'}.get(path, 'Рабочее пространство'))
-    return f'''<aside class="ui-sidebar" aria-label="Боковая навигация">
-        <div class="ui-sidebar-brand">{logo}</div><p class="ui-workspace-label">{role}</p>
-        <nav class="ui-primary-nav" aria-label="Основные разделы">{links()}</nav>
-        <div class="ui-sidebar-bottom">{secondary}</div></aside>
-    <header class="main-header simple-header" data-interface-shell="{user['role']}">
+                        + f'>{icon("overview" if key == "next" else key, navigation=True)}<span>{label}</span></a>' for key, label in [('next', 'Обзор проектов'), ('profile', 'Мой профиль'), ('settings', 'Настройки')])
+    new_project = (f'<a class="ui-nav-link ui-nav-action" href="{project_home}#project-create">'
+                   f'{icon("plus", navigation=True)}<span>Новый проект</span></a>' if not teacher else '')
+    name = escape(user['username'])
+    return f'''<header class="main-header simple-header ui-sidebar" data-interface-shell="{user['role']}">
         <div class="ui-header-start"><details class="ui-mobile-menu">
             <summary aria-controls="ui-mobile-panel">{icon('menu')}<span>Меню</span></summary>
             <div class="ui-mobile-panel" id="ui-mobile-panel" aria-label="Навигация"><div class="ui-mobile-panel-top"><span class="ui-mobile-wordmark">M-Flow<span>.</span></span><button type="button" class="ui-icon-button" data-close-navigation aria-label="Закрыть меню">{icon('close')}</button></div>
-            <p class="ui-workspace-label">{role}</p><nav aria-label="Мобильные разделы">{links()}{secondary}</nav></div>
+            <nav aria-label="Мобильные разделы">{links()}{new_project}{secondary}</nav></div>
             <button class="ui-mobile-backdrop" type="button" data-close-navigation aria-label="Закрыть навигацию"></button>
-        </details>{logo}<span class="ui-header-context"><span data-shell-location>{title}</span></span></div>
-        <div class="header-actions">{theme_button()}{bell}<details class="account-menu"><summary aria-controls="account-panel" aria-label="Мой аккаунт">{icon('profile')}<span class="ui-account-label">Аккаунт</span></summary>
-            <div class="account-panel" id="account-panel"><div class="account-identity"><strong>{escape(user['username'])}</strong><small>{role}</small></div>
-            <a href="/profile">{icon('profile')}Мой профиль</a><a href="/settings">{icon('settings')}Настройки</a>{logout}</div></details></div></header>'''
+        </details>{logo}</div>
+        <div class="header-actions"><details class="account-menu">
+            <summary aria-controls="account-panel" aria-label="Мой аккаунт">{icon('profile')}
+                <span class="ui-account-name"><strong>{name}</strong><small>{role}</small></span></summary>
+            <div class="account-panel" id="account-panel"><div class="account-identity"><strong>{name}</strong><small>{role}</small></div>
+            <a href="/profile">{icon('profile')}Мой профиль</a><a href="/settings">{icon('settings')}Настройки</a>{logout}</div></details>{bell}{theme_button()}</div>
+        <nav class="ui-primary-nav" aria-label="Основные разделы">{links()}</nav>
+        <nav class="ui-sidebar-bottom" aria-label="Аккаунт">{new_project}{secondary}</nav>
+        <div class="ui-sidebar-brand">{logo}</div>
+    </header>'''

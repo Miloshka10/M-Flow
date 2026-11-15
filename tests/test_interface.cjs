@@ -34,7 +34,7 @@ function setup({hash='', board={}, withDrawer=false, withWorkspace=true, overflo
   nav[0].setAttribute('aria-current','page');
   document={body,documentElement:{classList:{add() {}}},activeElement:summary,
     addEventListener(key,fn) {handlers[key]=fn;},
-    querySelector(s) {return s==='.ui-sidebar [aria-current]'?desktopLink:s==='.ui-mobile-menu'?(withDrawer?drawer:null):s==='[data-project-views]'?(withWorkspace?main:null):null;},
+    querySelector(s) {return s==='.ui-sidebar :is(.ui-primary-nav,.ui-sidebar-bottom) [aria-current]'?desktopLink:s==='.ui-mobile-menu'?(withDrawer?drawer:null):s==='[data-project-views]'?(withWorkspace?main:null):null;},
     querySelectorAll:()=>nav,getElementById:()=>location.hash?target:null};
   const media={matches:true,addEventListener:(name,fn)=>{mediaHandlers[name]=fn;}};
   const window={matchMedia:()=>media,addEventListener:(key,fn)=>{handlers['window:'+key]=fn;}};

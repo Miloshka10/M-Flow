@@ -199,11 +199,13 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
             if return_to:
                 prefix += f'<input type="hidden" name="return_to" value="{escape(return_to, quote=True)}">'
             if user["role"] == "student" and stage["state"] in ("todo", "progress"):
-                html += '<p>Исправьте результат по замечанию и отправьте его снова. Сохранение черновика не отправляет работу учителю.</p>' if stage_needs_revision(stage) else '<p>Ещё не отправлено. Сохраните черновик или отправьте готовый результат учителю.</p>'
+                instructions = ('Сохраните черновик или отправьте готовый результат учителю.' if not stage_needs_revision(stage)
+                                else 'Учитель получит исправленный результат после повторной отправки.')
                 if compact:
                     html += f'<details class="pw-editor" {"open" if submitted is not None else ""}><summary data-ui-icon="edit">{"Доработать результат" if stage_needs_revision(stage) else "Редактировать черновик" if stage["result"] else "Добавить результат"}</summary><div class="pw-editor-content"><h2>Результат этапа {number}</h2>'
                     if stage_needs_revision(stage) and stage['teacher_comment']:
                         html += f'<p class="stage-comment">Что исправить: {escape(stage["teacher_comment"])}</p>'
+                html += f'<p class="pw-form-hint">{instructions}</p>'
                 result_label = "Выбранная тема" if number == 1 else "Описание проекта" if number == 5 else "Что сделано на этом этапе"
                 html += prefix + f'<label>{result_label}<textarea name="result" rows="5" maxlength="5000">{escape(values.get("result", ""))}</textarea></label>'
                 if number == 5:

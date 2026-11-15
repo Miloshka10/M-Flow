@@ -52,8 +52,7 @@ class NavigationCases:
                 self.assertIn(f'href="/?project=1#{anchor}"', page)
         for path, title in (('/notifications','Уведомления'), ('/supervision','Руководитель проекта')):
             page = self.client.get(path).text
-            header = page.split('<header class="main-header')[1].split('</header>')[0]
-            self.assertIn(f'<span data-shell-location>{title}</span>', header)
+            self.assertIn(f'<h1>{title}</h1>', page)
             self.assertNotRegex(page, r'data-nav-key="home"[^>]*aria-current=')
 
     def test_shared_workspace_covers_all_existing_sections_without_get_writes(self):
