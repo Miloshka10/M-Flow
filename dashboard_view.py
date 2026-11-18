@@ -212,9 +212,11 @@ def student_dashboard(projects, token, header, messages, results='', focus=None,
         hero = '''<section class="home-focus student-home-focus ds-home-only" aria-labelledby="empty-home-title">
             <div class="student-home-current"><h2 id="empty-home-title">У тебя пока нет проектов</h2>
             <div class="student-home-actions"><a class="btn" href="#project-create" data-open-project>Создать проект</a>
-            <a class="action-link" href="/groups#group-code">Ввести код группы</a>
-            <a class="action-link" href="/teams#team-invitations">Приглашения в команды</a></div></div></section>'''
+            <a class="action-link" href="/groups#group-code">Ввести код группы</a></div></div></section>'''
     projects_html = f'''<section class="workspace-projects" id="my-projects" aria-label="Мои проекты"><div class="ds-project-head"><h2>Мои проекты</h2>{create}</div>
+        <nav class="project-people-links" aria-label="Участники и приглашения">
+        <a class="action-link" href="/teams#people">Найти участников</a>
+        <a class="action-link" href="/teams#team-invitations">Приглашения в команды</a></nav>
         <div class="ds-project-tools" hidden><label>Поиск проектов<input type="search" data-project-search placeholder="Найти проект…"></label>
         <label>Состояние<select data-project-filter><option value="all">Все</option><option value="work">В работе</option>
         <option value="review">На проверке</option><option value="revision">Нужна доработка</option><option value="accepted">Защита принята</option></select></label></div>
