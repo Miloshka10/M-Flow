@@ -11,7 +11,7 @@
   --mf-radius: 16px;
   --mf-shadow: 0 3px 12px rgba(26, 55, 49, .025);
   --mf-danger: #a44337;
-  --mf-warning: #896226;
+  --mf-warning: var(--mf-danger);
 }
 *, *::before, *::after { box-sizing: border-box; }
 body { margin: 0; background: var(--mf-bg); color: var(--mf-text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; font-size: 14px; line-height: 1.55; }
@@ -112,7 +112,7 @@ main { padding-bottom: 48px; }
 .task-title { margin-bottom: 12px; font-size: 14px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
 .done-card .task-title { color: #6b8077; }
 .task-priority, .task-deadline { display: inline-flex; padding: 4px 8px; margin-bottom: 8px; background: #f0f4f1; color: #5a7267; border-radius: 6px; font-size: 11px; }
-.priority-high { color: #8a622c; background: #fcf0db; } .priority-urgent { color: #a44337; background: #fae9e5; }
+.priority-high { color: var(--mf-warning); background: var(--ui-warning-bg, #fae9e5); } .priority-urgent { color: #a44337; background: #fae9e5; }
 .task-card .task-priority:has(+ .task-priority-select) { display: none; }
 .task-priority-select { margin-bottom: 12px; font-size: 12px; }
 .task-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }

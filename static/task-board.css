@@ -76,7 +76,7 @@ html.board-dialog-open { overflow: hidden; }
   .board-advanced > div { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .board-columns { display: flex; gap: 6px; margin: 20px 0 14px; flex-wrap: wrap; }
   .board-columns a { flex: 1; text-align: center; white-space: nowrap; padding: 10px 6px; min-height: 44px; background: var(--mf-panel); color: var(--mf-muted); border-radius: 12px; font-size: 12px; }
-  .board-columns a[aria-current="true"] { background: var(--mf-action); color: #222226; }
+  .board-columns a[aria-current="true"] { background: var(--mf-action); color: var(--ui-on-action); }
   #task-board .kanban { grid-template-columns: minmax(0,1fr); }
   .board-enhanced .kanban-column[hidden] { display: none; }
   #task-board .section-title h2 { font-size: 24px; }

@@ -77,7 +77,7 @@ def icon(name, navigation=False):
             + _ICONS[name] + '</svg>')
 
 
-APPEARANCE_VERSION = '20261115-cabinet'
+APPEARANCE_VERSION = '20261118-home-settings'
 
 
 def appearance_assets():

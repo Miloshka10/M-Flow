@@ -52,25 +52,31 @@ def load_focus(conn, user, project):
     """Read one project after rechecking membership, including personal grade visibility."""
     row = conn.execute('''SELECT p.owner_id,
         EXISTS (SELECT 1 FROM users u WHERE u.role='teacher' AND (u.id=p.owner_id OR EXISTS
-            (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=u.id))) AS has_teacher,
-        EXISTS (SELECT 1 FROM project_assessments a WHERE a.project_id=p.id AND a.student_id=? AND a.state='published') AS published
+            (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=u.id))) AS has_teacher
         FROM projects p WHERE p.id=? AND
         (p.owner_id=? OR EXISTS (SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?))''',
-        (user['id'], project['id'], user['id'], user['id'])).fetchone()
+        (project['id'], user['id'], user['id'])).fetchone()
     if row is None:
         raise PermissionError('Доступ к выбранному проекту изменился. Обновите страницу.')
     stages = get_stages(conn, project['id'])
     defense = defense_for(conn, project['id'])
-    step = next_step(stages, 'student', row['owner_id'] == user['id'],
-                     bool(row['has_teacher']), defense, bool(row['published']))
     _, current = stage_summary(stages)
+    assessments = []
+    if current is None and defense['state'] == 'accepted':
+        assessments = conn.execute('''SELECT a.scores_json, u.username AS teacher_name
+            FROM project_assessments a JOIN users u ON u.id=a.teacher_id
+            WHERE a.project_id=? AND a.student_id=? AND a.state='published'
+            ORDER BY a.updated_at DESC, a.teacher_id''', (project['id'], user['id'])).fetchall()
+    step = next_step(stages, 'student', row['owner_id'] == user['id'],
+                     bool(row['has_teacher']), defense, bool(assessments))
     needs_revision = bool(current and stage_needs_revision(current))
     defense_returned = step['key'] == 'defense-prepare' and defense['state'] == 'returned'
     comment = current['teacher_comment'] if needs_revision else defense['teacher_comment'] if defense_returned else ''
     if (needs_revision or defense_returned) and not (comment or '').strip():
         comment = 'Комментарий не указан. Уточни у учителя, что нужно исправить.'
-    return dict(project=project, step=step, comment=comment, stages=stages,
-                reviewer=(current.get('reviewer_name') if needs_revision else defense.get('reviewer_name') if defense_returned else '') or '')
+    reviewer = current.get('reviewer_name') if needs_revision else defense.get('reviewer_name') if defense_returned else ''
+    return dict(project=project, step=step, comment=comment, stages=stages, current=current,
+                assessments=assessments, reviewer=reviewer or '')
 
 # Access is checked here, not inferred from a filter or a notification. There is
 # one current row per stage/defense; old notifications never manufacture results.

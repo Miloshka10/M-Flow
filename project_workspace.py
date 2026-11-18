@@ -1,12 +1,13 @@
 """Read-only project overview. Presentation never grants mutation permissions."""
 from interface import icon
-from deadlines import business_today, deadline_info, deadline_text, format_timestamp
+from deadlines import business_today, deadline_info, deadline_text, format_timestamp, task_sort_key
 from html import escape
 
 from grading import MAX_SCORE, load_scores, summarize
 from project_stages import stage_summary, stage_label, stage_needs_revision, STAGE_DESCRIPTIONS
 from video_defense import DEFENSE_STATES
 from navigation import project_navigation, stage_result_target
+from design_suite import initials
 
 
 def task_deadline(tasks, today=None):
@@ -73,6 +74,36 @@ def next_step(stages, role, owner, has_teacher, defense, has_published=False):
                 'Опубликованной оценки пока нет. Дождись решения учителя; баллы не выставляются автоматически.', 'assessment', 'Посмотреть свои оценки')
 
 
+def render_team_map(project_id, name, members, tasks, today):
+    students = [member for member in members if member['role'] == 'student']
+    if len(students) < 2:
+        return ''
+    active = sorted((task for task in tasks if task['status'] != 'done' and task['assignee_id'] is not None),
+                    key=lambda task: (task_sort_key(task, 'deadline')[:2], task['status'] != 'progress',
+                                      task_sort_key(task)))
+    next_task = {}
+    for task in active:
+        next_task.setdefault(task['assignee_id'], task)
+    nodes = []
+    for student in students:
+        task = next_task.get(student['id'])
+        content = '<p>Нет открытых задач</p>'
+        if task:
+            deadline = deadline_info(task['deadline'], task['status'], today)
+            when = (f'<small class="{deadline["css"]}">{escape(deadline_text(deadline))}</small>'
+                    if deadline['active'] else '')
+            content = f'''<a href="/project/{project_id}#task-{task['id']}">{escape(task['title'])} {icon('arrow')}</a>{when}'''
+        username = student['username']
+        nodes.append(f'''<li><details name="project-team-member"><summary>
+            <span class="project-team-initials" aria-hidden="true">{escape(initials(username))}</span>
+            <strong>{escape(username)}</strong></summary>
+            <div class="project-team-task">{content}</div></details></li>''')
+    return f'''<section class="project-team-map" aria-labelledby="project-team-map-title">
+        <h2 id="project-team-map-title">Команда проекта</h2>
+        <div class="project-team-hub">{icon('folder')} <strong>{escape(name)}</strong></div>
+        <ul class="project-team-nodes">{''.join(nodes)}</ul></section>'''
+
+
 def render_workspace(project_id, name, user, owner, members, stages, defense, assessments, tasks, completed_tasks, progress, overdue, today=None, active='overview'):
     done, current = stage_summary(stages)
     has_teacher = any(member['role'] == 'teacher' for member in members)
@@ -131,6 +162,7 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
             except (ValueError, TypeError):
                 grades.append('Оценка опубликована · подробности в разделе оценивания')
         grading = '<br>'.join(grades) or 'Ваша оценка ещё не опубликована'
+    team_map = render_team_map(project_id, name, members, tasks, today or business_today())
     defense_label = DEFENSE_STATES[defense['state']] if defense['revision'] else 'Запись ещё не добавлена'
     return f'''<div class="journey-heading"><div><h1>{escape(name)}</h1>
             <details class="journey-members"><summary>Участники: {len(members)} · {escape(names) or 'Команда пока не сформирована'}</summary><ul>{member_list}</ul></details></div>
@@ -150,7 +182,7 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
         <section class="project-supervisor" aria-labelledby="supervisor-title"><h2 id="supervisor-title">Руководитель проекта</h2>
             <p>{escape(', '.join(m['username'] for m in members if m['role'] == 'teacher')) if has_teacher else 'Учитель пока не подключён. Черновики можно готовить уже сейчас.'}</p>
             <a class="action-link" href="/supervision?project={project_id}">Подключение и согласования {icon('arrow')}</a></section></aside></div>
-        <details class="journey-route"><summary data-ui-icon="stages">Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
+        {team_map}<details class="journey-route"><summary data-ui-icon="stages">Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
             <p class="journey-explanation">Задачи помогают выполнять работу. Этап принимается только после решения учителя; защита и оценки проверяются отдельно.</p><ol>{route}</ol></details>
         <section class="project-finish" aria-labelledby="finish-title"><h2 id="finish-title">Завершение проекта</h2>
             <p>Подготовьте выступление, отправьте видеозащиту и посмотрите итоговую оценку. Открыть эти разделы можно в любое время.</p>

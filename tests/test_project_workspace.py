@@ -170,6 +170,26 @@ class ProjectWorkspaceTests(unittest.TestCase):
         self.assertNotIn('data-next-step="teacher-missing"', page)
         self.assertIn('Добавить', self.page(3, '/project/2'))
 
+    def test_team_map_links_to_next_open_assigned_task_only(self):
+        self.assertNotIn('id="project-team-map-title"', self.page())
+        conn = self.module.get_db()
+        conn.execute("INSERT INTO users(id,username,password,role) VALUES(4,'student-member',?,'student')", (self.fixture.password,))
+        conn.execute('INSERT INTO project_members VALUES(2,4)')
+        conn.executemany('INSERT INTO tasks(id,project_id,title,deadline,status,assignee_id) VALUES(?,2,?,?,?,4)', [
+            (71, 'Done sooner', '2026-10-10', 'done'),
+            (72, 'Next assigned task', '2026-10-11', 'todo'),
+            (73, 'Later assigned task', '2026-10-12', 'progress'),
+        ])
+        conn.commit()
+        conn.close()
+        before = self.fixture.database_snapshot()
+        team = self.page().split('id="project-team-map-title"')[1].split('</section>')[0]
+        self.assertIn('student-member', team)
+        self.assertIn('href="/project/2#task-72">Next assigned task', team)
+        self.assertNotIn('Done sooner', team)
+        self.assertNotIn('Later assigned task', team)
+        self.assertEqual(self.fixture.database_snapshot(), before)
+
     def test_published_grades_are_isolated_and_drafts_are_never_in_overview(self):
         conn = self.module.get_db()
         scores = json.dumps({key: maximum for key, _, maximum in CRITERIA})
