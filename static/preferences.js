@@ -42,9 +42,9 @@
     apply();
     syncForm();
     const status = document.getElementById('preferences-status');
-    let message = 'Настройки сохранены в этом браузере.';
+    let message = status?.dataset?.savedLabel || 'Настройки сохранены в этом браузере.';
     try { localStorage.setItem(key, JSON.stringify(preferences)); }
-    catch (_) { message = 'Настройки применены, но браузер не разрешает их сохранить.'; }
+    catch (_) { message = status?.dataset?.storageError || 'Настройки применены, но браузер не разрешает их сохранить.'; }
     if (status) status.textContent = message;
   }
 

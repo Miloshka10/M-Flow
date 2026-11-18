@@ -7,7 +7,10 @@ function element(props = {}) {
   return Object.assign({
     dataset: {}, handlers: {}, children: [], hidden: false,
     addEventListener(name, callback) { this.handlers[name] = callback; },
+    getAttribute(name) { return this[name] ?? null; },
+    hasAttribute(name) { return this.getAttribute(name) !== null; },
     setAttribute(name, value) { this[name] = value; },
+    removeAttribute(name) { delete this[name]; },
     append(child) { this.children.push(child); },
     before() {}, querySelectorAll() { return []; }
   }, props);
@@ -30,13 +33,14 @@ const search = element({value: ''}), filter = element({value: 'all'});
 const cards = [element({dataset: {projectName: 'Умная теплица', projectTone: 'revision'}}),
   element({dataset: {projectName: 'Карта школы', projectTone: 'review'}})];
 const empty = element(), results = element({open: false});
+const projectLink = element({href: '/?project=2#home-project', 'aria-current': 'true', dataset: {projectUrl: '/project/2'}});
 const tools = element({hidden: true, querySelector: selector => selector.includes('search') ? search : filter});
 const heading = element({dataset:{homeTitle:'Привет, ученик.'},focus(){this.focused=true;}});
 const context = element();
 const createLink=element(),createPanel=element({open:false,scrollIntoView(){}}),createName=element({focus(){this.focused=true;}});
 const main = element({dataset: {suiteView: 'home'},
   querySelector: selector => ({'#dashboard-title':heading,'.ds-project-tools': tools, '.home-details': results, '[data-project-empty]': empty})[selector],
-  querySelectorAll: () => cards});
+  querySelectorAll: selector => selector === '[data-project-url]' ? [projectLink] : cards});
 const location = {hash: '#my-projects'};
 const document = {title:'Привет, ученик. — M-Flow',body: {hasAttribute: () => true, dataset: {}},
   querySelector: selector => selector === '[data-suite-dashboard]' ? main : selector==='[data-shell-location]'?context:null,
@@ -44,6 +48,7 @@ const document = {title:'Привет, ученик. — M-Flow',body: {hasAttri
   querySelectorAll: selector => selector==='[data-open-project]'?[createLink]:[]};
 const window = run(document, location);
 assert.equal(main.dataset.suiteView, 'projects');
+assert.equal(projectLink.href, '/project/2');
 assert.equal(heading.textContent,'Мои проекты');
 assert.equal(document.title,'Мои проекты — M-Flow');
 assert.equal(context.textContent,'Мои проекты');
@@ -60,6 +65,7 @@ assert.equal(heading.textContent,'Мои результаты');assert.equal(hea
 assert.equal(context.textContent,'Мои результаты');
 location.hash = ''; window.handlers.popstate();
 assert.equal(main.dataset.suiteView, 'home');
+assert.equal(projectLink.href, '/?project=2#home-project');
 assert.equal(heading.textContent,'Привет, ученик.');
 assert.equal(document.title,'Привет, ученик. — M-Flow');
 heading.focused=false;

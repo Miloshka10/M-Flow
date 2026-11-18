@@ -7,12 +7,20 @@ document.addEventListener('DOMContentLoaded', () => {
   if (main) {
     const initial = main.dataset.suiteView;
     const heading = main.querySelector('#dashboard-title');
+    const projectLinks = [...main.querySelectorAll('[data-project-url]')].map(link => ({
+      link, selectUrl: link.getAttribute('href'), selected: link.hasAttribute('aria-current')
+    }));
     const initialTitle = document.title;
     function view(focus = false) {
       const hash = location.hash.slice(1);
       const next = hash === 'my-projects' || hash === 'project-create' ? 'projects'
         : hash === 'student-results' ? 'results' : initial;
       main.dataset.suiteView = next;
+      projectLinks.forEach(({link, selectUrl, selected}) => {
+        link.setAttribute('href', next === 'projects' ? link.dataset.projectUrl : selectUrl);
+        if (selected && next === 'home') link.setAttribute('aria-current', 'true');
+        else link.removeAttribute('aria-current');
+      });
       if (next === 'results') main.querySelector('.home-details').open = true;
       const label = next === 'projects' ? 'Мои проекты' : next === 'results' ? 'Мои результаты' : 'Главная';
       document.querySelectorAll('[data-nav-key]').forEach(link => {

@@ -12,10 +12,9 @@
 html body.mf-v2 {
   --mf-bg:#eeece7; --mf-surface:#faf9f6; --mf-card:#fffefa; --mf-panel:#f0ede7;
   --mf-line:#ded9cf; --mf-control-line:#9a9083;
-  --mf-text:#211f1c; --mf-muted:#66615b; --mf-action:#a04417; --mf-action-hover:#863710;
-  --mf-accent:#994316; --mf-accent-hover:#783511; --mf-accent-soft:#f9ede2;
-  --mf-danger:#a62b32; --mf-warning:#884b1c; --mf-radius:12px; --mf-shadow:none;
-  --ui-on-action:#fff; --ui-warning-bg:#faefe1; --ui-danger-bg:#f9eaeb;
+  --mf-text:#211f1c; --mf-muted:#66615b;
+  --mf-danger:#a62b32; --mf-warning:var(--mf-danger); --mf-radius:12px; --mf-shadow:none;
+  --ui-warning-bg:var(--ui-danger-bg); --ui-danger-bg:#f9eaeb;
   --ui-success:#2f6647; --ui-success-bg:#e9f1e9; --ui-review:#345b80; --ui-review-bg:#e9eff4;
   --ui-sidebar:248px; --ui-gutter:22px; --ui-content-pad:clamp(22px,3.4vw,64px);
   --ui-page-title:clamp(36px,4.3vw,64px);
@@ -26,10 +25,9 @@ html body.mf-v2 {
 html[data-theme="dark"] body.mf-v2 {
   --mf-bg:#030303; --mf-surface:#141414; --mf-card:#1f1f1f; --mf-panel:#272727;
   --mf-line:#383633; --mf-control-line:#76706a;
-  --mf-text:#f5f3ef; --mf-muted:#b1ada6; --mf-action:#ff8200; --mf-action-hover:#ffa033;
-  --mf-accent:#ffad66; --mf-accent-hover:#ffc99e; --mf-accent-soft:#30241b;
-  --mf-danger:#ffafb1; --mf-warning:#f3bc8a; --ui-on-action:#231409;
-  --ui-warning-bg:#31251a; --ui-danger-bg:#362326;
+  --mf-text:#f5f3ef; --mf-muted:#b1ada6;
+  --mf-danger:#ffafb1;
+  --ui-danger-bg:#362326;
   --ui-success:#a9d4b2; --ui-success-bg:#243228; --ui-review:#aecde6; --ui-review-bg:#25313b;
   --ui-overlay:#0009;
 }

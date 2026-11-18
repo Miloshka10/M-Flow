@@ -13,7 +13,7 @@
 .journey-next { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.6fr); border-radius: 24px; overflow: hidden; background: var(--mf-card); }
 .journey-context { display: flex; flex-direction: column; padding: 24px 28px; background: #242427; color: #fff; }
 .journey-context > span { font-size: 13px; overflow-wrap: anywhere; }
-.journey-context > strong { font-size: 24px; color: #ffdd2d; margin: 10px 0 16px; letter-spacing: -.03em; }
+.journey-context > strong { font-size: 24px; color: var(--mf-accent); margin: 10px 0 16px; letter-spacing: -.03em; }
 .journey-context > small { font-size: 12px; color: #ceced6; }
 .journey-context > small:last-child { font-size: 10px; margin-top: 4px; }
 .journey-action { padding: 24px 28px; min-width: 0; }
@@ -38,7 +38,7 @@
 .route-state { display: block; font-size: 11px; margin: 6px 0; font-weight: 600; }
 .route-stage p { font-size: 11px; line-height: 1.5; margin: 0; color: var(--mf-muted); }
 .route-marker { flex-shrink: 0; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--mf-panel); color: var(--mf-text); font-size: 12px; font-weight: 700; }
-.route-stage.current .route-marker { background: #ffdd2d; color: #222226; }
+.route-stage.current .route-marker { background: var(--mf-action); color: var(--ui-on-action); }
 .route-stage.accepted .route-marker { border: 1px solid var(--mf-accent); }
 .route-stage.locked strong { color: var(--mf-muted); }
 .journey-links { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-top: 16px; }
@@ -80,4 +80,75 @@
 }
 @media (forced-colors: active) {
   .journey-next, .journey-progress > div, .journey-links a, .route-marker { border: 1px solid CanvasText; }
+}
+.project-team-map {
+  margin-block: 24px;
+  padding: clamp(16px, 3vw, 24px);
+  border: 1px solid var(--mf-line);
+  border-radius: var(--mf-radius);
+  background: var(--mf-card);
+}
+.project-team-hub {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--mf-panel);
+}
+.project-team-hub .ui-icon { color: var(--mf-accent); }
+.project-team-nodes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: center;
+  position: relative;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 12px 0 0;
+}
+.project-team-nodes::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 50%;
+  height: 12px;
+  border-inline-start: 1px solid var(--mf-control-line);
+}
+.project-team-nodes > li {
+  min-width: min(100%, 180px);
+  max-width: min(100%, 270px);
+  border-top: 1px solid var(--mf-control-line);
+}
+.project-team-nodes summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 7px;
+  list-style: none;
+  cursor: pointer;
+}
+.project-team-nodes summary::-webkit-details-marker { display: none; }
+.project-team-nodes summary::after { content: "+"; margin-inline-start: auto; color: var(--mf-accent); }
+.project-team-nodes details[open] summary::after { content: "−"; }
+.project-team-initials {
+  display: grid;
+  place-items: center;
+  flex: 0 0 27px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: var(--mf-accent-soft);
+  color: var(--mf-accent);
+  font-size: 12px;
+}
+.project-team-task { padding: 0 7px 10px; }
+.project-team-task :is(p, small) { display: block; margin: 0; }
+@media (max-width: 480px) {
+  .project-team-nodes > li { flex: 1 1 100%; max-width: 100%; }
 }

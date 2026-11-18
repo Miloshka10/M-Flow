@@ -515,6 +515,12 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
     def test_deadline_home_scope_order_no_synthetic_dates_and_no_get_writes(self):
         self.seed_deadline_cases()
         self.sign_in(3)
+        conn = self.module.get_db()
+        conn.executemany('INSERT INTO tasks(id,project_id,title,deadline,assignee_id) VALUES(?,2,?,?,3)', [
+            (27, 'Also due tomorrow', '2026-10-14'), (28, 'After the week', '2026-10-20'),
+        ])
+        conn.commit()
+        conn.close()
         before = self.database_snapshot()
         with patch.object(self.module, 'business_today', return_value=date(2026, 10, 13)):
             page = self.client.get('/').text
@@ -530,6 +536,12 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertLess(section.index('Overdue task'), section.index('Due today'))
         self.assertLess(section.index('Due tomorrow'), section.index('Future task'))
         self.assertIn('/project/2#task-21', section)
+        self.assertEqual(section.count('name="home-week-day"'), 7)
+        self.assertIn('Ср, 14.10 · задач: 2', section)
+        tomorrow = section.split('id="student-week-1-tasks"')[1].split('class="student-week-choice"')[0]
+        self.assertIn('Due tomorrow', tomorrow)
+        self.assertIn('Also due tomorrow', tomorrow)
+        self.assertIn('After the week', section.split('class="student-week-later"')[1])
         self.assertEqual(self.database_snapshot(), before)
 
     def test_deadline_empty_home_and_bounded_queries_for_many_projects(self):
@@ -1364,7 +1376,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertIn('<details id="project-create"', page)
         self.assertIn('for="project-name"', page)
         forms = FormTokens(page).forms
-        self.assertEqual(len(forms), 5)  # Three POSTs, project switch and result filters.
+        self.assertEqual(len(forms), 4)  # Three POSTs and result filters.
         self.assertEqual(sum(form['method'] == 'post' for form in forms), 3)
         for path in ('/project/1', '/project/1/stages', '/project/1/defense', '/profile', '/settings'):
             self.assertIn('/static/product-design.css', self.client.get(path).text)
@@ -1381,7 +1393,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.add_candidate()
         self.sign_in(4)
         page = self.client.get('/').text
-        self.assertIn('Здесь начнётся ваш проект', page)
+        self.assertIn('У тебя пока нет проектов', page)
         self.assertNotIn('Прогресс задач', page)
         self.assertNotIn('project-row project-tile', page)
 
@@ -1446,7 +1458,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.add_candidate()
         self.sign_in(4)
         page = self.client.get('/').text
-        self.assertIn('Здесь начнётся ваш проект', page)
+        self.assertIn('У тебя пока нет проектов', page)
         self.assertIn('data-suite-dashboard', page)
         self.assertIn('data-open-project', page)
         for name in ('blank-study.svg', 'team-study.svg'):
@@ -1716,6 +1728,40 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for asset in ('preferences.js', 'preferences.css'):
             with self.client.get('/static/' + asset) as response:
                 self.assertEqual(response.status_code, 200)
+
+    def test_settings_language_changes_help_without_changing_project_pages(self):
+        page = self.client.get('/settings')
+        self.assertNotIn('href="/settings?section=account"', page.text)
+        self.assertEqual(self.client.post('/settings/language', data={'language': 'en'}).status_code, 400)
+        self.sign_in(3)
+        page = self.post('/settings/language', data={'language': 'en'}, follow_redirects=True)
+        self.assertIn('<main id="main-content" class="settings-page" lang="en">', page.text)
+        self.assertIn('Language for settings and help', page.text)
+        self.assertIn('How do I resubmit a stage?', self.client.get('/settings?section=help').text)
+        self.assertIn('Главная', self.client.get('/').text)
+        self.sign_in(1)
+        self.assertIn('Where are new submissions and resubmissions?', self.client.get('/settings?section=help').text)
+
+    def test_notification_settings_filter_bell_only_and_are_scoped_to_account(self):
+        self.stage_post(3)
+        self.stage_post(1, revision=1, action='return', teacher_comment='Уточни результат')
+        self.sign_in(3)
+        bell = lambda: self.client.get('/').text.split('<details class="notification-bell">')[1].split('</details>')[0]
+        self.assertIn('Уточни результат', bell())
+        self.assertEqual(self.client.post('/settings/notifications').status_code, 400)
+        self.assertEqual(self.post('/settings/notifications', data={'notification': 'report'}).status_code, 400)
+        response = self.post('/settings/notifications', data={'notification': ['assessment', 'supervision']})
+        self.assertEqual(response.location, '/settings?section=notifications')
+        page = self.client.get(response.location).text
+        self.assertIn('value="work">', page)
+        self.assertIn('value="assessment" checked', page)
+        self.assertNotIn('Уточни результат', bell())
+        self.assertIn('Уточни результат', self.client.get('/notifications').text)
+        self.sign_in(1)
+        self.assertIn('Этап 1 отправлен на проверку', self.client.get('/teacher').text)
+        self.sign_in(3)
+        self.post('/settings/notifications', data={'notification': ['work', 'assessment', 'supervision']})
+        self.assertIn('Уточни результат', bell())
 
     def test_outlined_actions_loaded_on_all_major_pages(self):
         for path in ('/login', '/register', '/settings'):

@@ -50,8 +50,8 @@ class InterfaceV3Tests(unittest.TestCase):
         comment = '<img src=x onerror=alert(1)>'
         step = dict(key='revise', target='stages#stage-1', title='Доработайте результат',
                     text='Исправьте замечание.', action='Перейти к доработке')
-        html = student_dashboard(dict(username='student'), [project], 'csrf', '', '',
-                                 focus=dict(project=project, stages=stages, step=step, comment=comment, reviewer='<teacher>'),
+        html = student_dashboard([project], 'csrf', '', '',
+                                 focus=dict(project=project, stages=stages, current=stages[0], step=step, comment=comment, reviewer='<teacher>'),
                                  project_states={1:dict(label='Нужна доработка', tone='revision', stages_done=0)})
         self.assertNotIn(comment, html)
         self.assertNotIn('<script>project</script>', html)

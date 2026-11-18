@@ -35,8 +35,10 @@ class NavigationCases:
                 conn.commit()
             self.assertEqual(state(), dict(label=label, tone=tone, stages_done=5))
         page = self.client.get('/?project=2').text
-        self.assertIn('href="/project/2" aria-current="true"', page)
-        self.assertNotIn('href="/project/1" aria-current="true"', page)
+        self.assertIn('href="/?project=2#home-project" data-project-url="/project/2" aria-current="true"', page)
+        self.assertNotIn('data-project-url="/project/1" aria-current="true"', page)
+        self.assertNotIn('Сменить проект', page)
+        self.assertNotIn('class="cabinet-shortcuts', page)
         self.assertIn('Защита принята', page)
         # An inconsistent legacy defense must not hide an unfinished stage.
         with closing(self.module.get_db()) as conn:
@@ -124,6 +126,10 @@ class NavigationCases:
 
     def test_home_switch_rejects_foreign_projects_and_never_writes(self):
         self.sign_in(3)
+        with closing(self.module.get_db()) as conn:
+            conn.execute('''INSERT INTO project_stages(project_id,number,state,reviewed_by,teacher_comment)
+                            VALUES(1,1,'progress',1,'Уточни задачу')''')
+            conn.commit()
         before = self.database_snapshot()
         for value in ('0', '-1', 'abc', '999999999999999999999'):
             self.assertEqual(self.client.get('/?project=' + value).status_code, 400)
@@ -133,26 +139,45 @@ class NavigationCases:
             self.assertNotIn('Private project', response.text)
         for pid, name in ((1, 'Owned project'), (2, 'Observed project')):
             self.assertIn(name, self.home_focus(pid))
+        first = self.client.get('/').text
+        self.assertIn('<h2 id="focus-name">Owned project</h2>', first)
+        second = self.client.get('/?project=2').text
+        attention = second.split('aria-labelledby="attention-title"')[1].split('aria-labelledby="upcoming-title"')[0]
+        self.assertIn('href="/?project=1#home-project"', attention)
+        self.assertIn('Этап 1 · Нужна доработка', attention)
         self.assertEqual(self.database_snapshot(), before)
 
     def test_home_tracks_return_resubmission_and_next_stage_without_old_feedback(self):
         self.assertIn('data-home-step="start"', self.home_focus())
         self.sign_in(3)
-        self.assertEqual(self.post('/project/2/stages', data=dict(number=1, revision=0, action='submit', result='Тема')).status_code, 302)
-        self.assertIn('data-home-step="await-review"', self.home_focus())
+        self.assertEqual(self.post('/project/2/stages', data=dict(number=1, revision=0, action='save', result='Тема')).status_code, 302)
+        draft = self.home_focus()
+        self.assertIn('data-home-step="ready"', draft)
+        self.assertIn('class="btn" href="/project/2/stages#stage-1-result">Отправить учителю', draft)
+        self.assertIn('class="student-path-step work" aria-current="step"', draft)
+        self.assertEqual(self.post('/project/2/stages', data=dict(number=1, revision=1, action='submit', result='Тема')).status_code, 302)
+        review = self.home_focus()
+        self.assertIn('data-home-step="await-review"', review)
+        self.assertIn('class="student-path-step review" aria-current="step"', review)
+        self.assertNotIn('class="btn"', review)
         self.sign_in(1)
-        self.post('/project/2/stages', data=dict(number=1, revision=1, action='return', teacher_comment='Уточни <цель>'))
+        self.post('/project/2/stages', data=dict(number=1, revision=2, action='return', teacher_comment='Уточни <цель>'))
         focus = self.home_focus()
         self.assertIn('data-home-step="revise"', focus)
         self.assertIn('Уточни &lt;цель&gt;', focus)
+        self.assertIn('class="student-path-step revision" aria-current="step"', focus)
+        self.assertIn('class="btn" href="/project/2/stages#stage-1-result">Доработать результат', focus)
+        self.assertIn('href="/project/2/stages#stage-1-result"', self.client.get('/?project=2').text)
         self.sign_in(3)
-        self.post('/project/2/stages', data=dict(number=1, revision=2, action='submit', result='Уточнение'))
+        self.post('/project/2/stages', data=dict(number=1, revision=3, action='submit', result='Уточнение'))
         focus = self.home_focus()
         self.assertIn('data-home-step="await-review"', focus)
         self.assertNotIn('Уточни &lt;цель&gt;', focus)
         self.sign_in(1)
-        self.post('/project/2/stages', data=dict(number=1, revision=3, action='accept'))
-        self.assertIn('/project/2/stages#stage-2', self.home_focus())
+        self.post('/project/2/stages', data=dict(number=1, revision=4, action='accept'))
+        focus = self.home_focus()
+        self.assertIn('/project/2/stages#stage-2', focus)
+        self.assertIn('class="student-path-step accepted"', focus)
 
     def test_home_finished_stages_and_defense_use_only_own_published_grade(self):
         self.add_candidate()
@@ -175,17 +200,24 @@ class NavigationCases:
         self.seed_result_grade(project=2, student=4, note='Чужая оценка')
         self.assertIn('Опубликованной оценки пока нет', self.home_focus())
         self.assertNotIn('Чужая оценка', self.home_focus())
+        self.assertNotIn('data-home-step="completed"', self.home_focus())
         with closing(self.module.get_db()) as conn:
             conn.execute("UPDATE project_assessments SET state='published' WHERE project_id=2 AND student_id=3")
             conn.commit()
-        self.assertIn('Твои опубликованные баллы', self.home_focus())
+        finish = self.home_focus()
+        self.assertIn('data-home-step="completed"', finish)
+        self.assertIn('45 / 45', finish)
+        self.assertIn('href="/project/2/stages#stage-5-result"', finish)
+        self.assertIn('href="/project/2/defense"', finish)
+        self.assertIn('class="btn" href="/project/2/assessment">Посмотреть свои оценки', finish)
+        self.assertNotIn('Чужая оценка', finish)
 
     def test_home_empty_entry_and_missing_teacher_keep_workflow_available(self):
         self.add_candidate()
         self.sign_in(4)
         before = self.database_snapshot()
         page = self.client.get('/').text
-        for text in ('Здесь начнётся ваш проект', '/groups#group-code', 'Ввести код группы', 'Создать проект', '/teams'):
+        for text in ('У тебя пока нет проектов', '/groups#group-code', 'Ввести код группы', 'Создать проект', '/teams#team-invitations'):
             self.assertIn(text, page)
         self.assertIn('id="student-results"', page)  # The sidebar result link must have a target even before the first project.
         self.assertIn('id="my-projects"', page)
@@ -195,7 +227,7 @@ class NavigationCases:
             conn.commit()
         focus = self.home_focus()
         self.assertIn('data-home-step="teacher-missing"', focus)
-        self.assertIn('href="/supervision?project=2"', focus)
+        self.assertIn('class="btn" href="/supervision?project=2">Принять приглашение', focus)
         self.sign_in(3)
         page = self.client.get('/?project=1&result_state=review').text
         self.assertIn('name="project" value="1"', page)

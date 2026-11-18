@@ -34,7 +34,9 @@ from collections import defaultdict
 from deadlines import business_today, deadline_info, deadline_text, parse_deadline, urgent_tasks, TIMEZONE_LABEL, format_timestamp
 from deadlines import DEADLINE_FILTERS, TASK_SORTS, matches_deadline, task_sort_key
 from notifications import (initialize_notifications, notify, notify_project,
-                           notification_feed, mark_read, render_bell, render_items)
+                           notification_feed, mark_read, render_bell, render_items,
+                           muted_notification_groups, save_notification_groups)
+from settings_view import render_settings
 from project_rules import has_project_teacher
 from teacher_supervision import (initialize_supervision, create_invite, preview_invite, request_connection,
                                 invitation_action, request_end, respond_request, render_hub, participant)
@@ -122,7 +124,7 @@ def protect_mutations():
         return
     if request.method not in request.url_rule.methods:
         return
-    public_auth = {"login", "register", "teacher_login", "teacher_register", 'forgot_password', 'reset_password_page', 'confirm_email_page'}
+    public_auth = {"login", "register", "teacher_login", "teacher_register", 'forgot_password', 'reset_password_page', 'confirm_email_page', 'settings_language'}
     if request.endpoint not in public_auth and get_current_user() is None:
         # Expired authentication is reported before CSRF; no mutation can run.
         session.clear()
@@ -186,7 +188,7 @@ def render_page(html, title=None):
     shell_scripts = ('<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
                      '<script src="/static/interface.js?v=20261115-panel" defer></script>'
                      + guard_script
-                     + '<script src="/static/design-suite.js?v=20261115-cabinet" defer></script>') if authenticated else guard_script
+                     + '<script src="/static/design-suite.js?v=20261118-home-settings" defer></script>') if authenticated else guard_script
     return ('<!doctype html><html lang="ru" data-theme="dark"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<title>{escape(title) if title is not None else document_title(html)}</title>'
@@ -197,14 +199,14 @@ def render_page(html, title=None):
         '<link rel="stylesheet" href="/static/motion.css?v=20261005-controls">'
         '<link rel="stylesheet" href="/static/controls.css?v=20261006-csrf">'
         '<script src="/static/motion.js?v=20261005-controls" defer></script>'
-        '<link rel="stylesheet" href="/static/product-design.css?v=20261017-text-logo">'
+        '<link rel="stylesheet" href="/static/product-design.css?v=20261118-home-settings">'
         '<link rel="stylesheet" href="/static/graphics.css?v=20261015">'
         f'<link rel="stylesheet" href="/static/notifications.css?v={APPEARANCE_VERSION}">'
-        '<link rel="stylesheet" href="/static/deadlines.css?v=20261013-filters">'
+        '<link rel="stylesheet" href="/static/deadlines.css?v=20261118-home-settings">'
         '<link rel="stylesheet" href="/static/navigation.css?v=20261017-fixes">'
         f'<link rel="stylesheet" href="/static/icon-symbols.css?v={APPEARANCE_VERSION}">'
         f'<link rel="stylesheet" href="/static/components.css?v={APPEARANCE_VERSION}">'
-        '<link rel="stylesheet" href="/static/interface.css?v=20261115-panel">'
+        '<link rel="stylesheet" href="/static/interface.css?v=20261118-home-settings">'
         '<link rel="stylesheet" href="/static/design-suite.css?v=20261115-card-art">'
             + work_assets + dashboard_script + shell_scripts + auth_assets +
             f'</head><body id="page-content" class="{body_class}"{suite_attribute} data-interface-v3 data-scenery="{scenery_context}" data-scenery-layout="{scenery_layout}" data-design-page="{escape(endpoint, quote=True)}">'
@@ -578,7 +580,7 @@ def is_project_owner(project_id):
 # PROJECTS
 # =========================================================
 
-def get_projects(with_counts=False, *, connection=None):
+def get_projects(with_counts=False, *, connection=None, today=None):
 
     user = get_current_user()
 
@@ -607,7 +609,7 @@ def get_projects(with_counts=False, *, connection=None):
 
         if with_counts and projects:
             # Read deadlines in one batch. Legacy text may not be a calendar date.
-            today = business_today()
+            today = today or business_today()
             projects = [dict(row, deadlines=[]) for row in projects]
             by_id = {row['id']: row for row in projects}
             dated_tasks = conn.execute("""SELECT t.id,t.project_id,t.title,t.status,t.deadline,t.assignee_id
@@ -1448,32 +1450,37 @@ def index():
     if user['role'] == 'teacher':
         return teacher_cabinet()
     with closing(get_db()) as conn:
-        projects = get_projects(with_counts=True, connection=conn)
+        today = business_today()
+        projects = get_projects(with_counts=True, connection=conn, today=today)
         try:
             result_params = result_parameters(request.args, projects)
             selected = result_parameters({'result_project': request.args.get('project', '')}, projects)['project']
-            selected = selected or result_params['project'] or (projects[0]['id'] if projects else 0)
-            result_params['home_project'] = selected
+            selected = selected or result_params['project']
         except ValueError as error:
             return render_error_page('Некорректный фильтр', str(error), 400)
         except PermissionError as error:
             return render_error_page('Нет доступа', str(error), 403)
+        project_states = load_project_states(conn, user) if projects else {}
+        if projects and not selected:
+            selected = next((p['id'] for p in projects if project_states.get(p['id'], {}).get('tone') == 'revision'),
+                            projects[0]['id'])
+        result_params['home_project'] = selected
         result_rows = load_results(conn, user, result_params)
         groups = own_groups(conn, user)
-        project_states = load_project_states(conn, user) if projects else {}
         try:
             focus = load_focus(conn, user, next(p for p in projects if p['id'] == selected)) if selected else None
         except PermissionError as error:
             return render_error_page('Нет доступа', str(error), 403)
-        notification_data = notification_feed(conn, user['id'])
+        notification_data = notification_feed(conn, user['id'], bell=True)
     results = render_results(result_rows, result_params, projects)
     header = render_header(user, notification_data)
     messages = ''.join(f'<div class="{escape(category, quote=True)}" role="status">{escape(message)}</div>'
                        for category, message in get_flashed_messages(with_categories=True))
     return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/student-results.css?v=20261015">'
-                       + student_dashboard(user, projects, csrf_token(), header, messages, results, focus,
+                       + '<link rel="stylesheet" href="/static/student-home.css?v=20261118">'
+                       + student_dashboard(projects, csrf_token(), header, messages, results, focus,
                                            any(key.startswith("result_") for key in request.args), groups=groups,
-                                           project_states=project_states))
+                                           project_states=project_states, today=today))
 
 
 # =========================================================
@@ -1549,7 +1556,7 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
             FROM project_assessments a JOIN users u ON u.id=a.teacher_id
             WHERE a.project_id=? AND a.state='published' AND a.{assessment_column}=?
             ORDER BY a.updated_at DESC, a.teacher_id''', (project_id, current_user['id'])).fetchall()
-        notification_data = notification_feed(conn, current_user['id'])
+        notification_data = notification_feed(conn, current_user['id'], bell=True)
     project_name = details['name']
     student_counts = defaultdict(lambda: [0, 0])
     for task in all_tasks:
@@ -2050,8 +2057,8 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
     return render_page(
         PAGE_STYLE
         + f"""
-        <link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">
-        <link rel="stylesheet" href="/static/task-board.css?v=20261031"><link rel="stylesheet" href="/static/project-work.css?v=20261115-cabinet"><script src="/static/project-work.js?v=20261115-cabinet" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
+        <link rel="stylesheet" href="/static/project-workspace.css?v=20261118-home-settings">
+        <link rel="stylesheet" href="/static/task-board.css?v=20261118-home-settings"><link rel="stylesheet" href="/static/project-work.css?v=20261115-cabinet"><script src="/static/project-work.js?v=20261115-cabinet" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
         <div class="container">
             {render_header(current_user, notification_data)}
             <main class="project-workspace" data-work-screens="project" data-project-views data-work-default="{int(work_mode)}">
@@ -2658,7 +2665,7 @@ def percent(done, total):
 def render_header(user, notification_data=None):
     if notification_data is None:
         with closing(get_db()) as conn:
-            count, rows = notification_feed(conn, user['id'])
+            count, rows = notification_feed(conn, user['id'], bell=True)
     else:
         count, rows = notification_data
     bell = render_bell(count, rows, csrf_input())
@@ -2705,31 +2712,38 @@ def read_notifications(notification_id=None):
 def site_settings():
     user = get_current_user()
     header = render_header(user) if user else access_header()
-    account = (f'''<section class="card settings-card" aria-labelledby="account-settings-heading">
-            <h2 id="account-settings-heading">Аккаунт</h2>
-            <div class="settings-links"><a href="/profile">{icon('profile')}<span>Профиль и пароль</span>{icon('arrow')}</a>
-            <a href="/profile/email">{icon('link')}<span>Почта для восстановления</span>{icon('arrow')}</a></div>
-        </section>''' if user else '')
-    return render_page(f'''<div class="container">{header}<main class="settings-page">
-        <h1>Настройки</h1>
-        <div class="settings-layout"><section class="card settings-card" aria-labelledby="appearance-heading">
-            <h2 id="appearance-heading">Оформление</h2>
-            <form id="site-preferences">
-                <fieldset id="site-theme" class="settings-theme">
-                    <legend>Тема сайта</legend>
-                    <div class="settings-themes">
-                        <label><input type="radio" name="theme" value="light">Светлая</label>
-                        <label><input type="radio" name="theme" value="dark" checked>Тёмная</label>
-                        <label><input type="radio" name="theme" value="system">Как в системе</label>
-                    </div>
-                </fieldset>
-                <label class="settings-checkbox" for="site-animations"><input id="site-animations" name="animations" type="checkbox" aria-describedby="animations-hint" checked>Плавные анимации</label>
-                <p class="settings-hint" id="animations-hint">Учитываем настройку уменьшения движения на устройстве.</p>
-                <button type="button" class="secondary" id="reset-preferences" data-ui-icon="return">Сбросить оформление</button>
-                <p id="preferences-status" role="status" aria-live="polite"></p>
-                <noscript><p class="error">Для изменения и сохранения оформления включите JavaScript в браузере.</p></noscript>
-            </form>
-        </section>{account}</div></main></div>''')
+    section = request.args.get('section', 'appearance')
+    lang = 'en' if request.cookies.get('mflow_settings_language') == 'en' else 'ru'
+    muted, saved = set(), False
+    if user and section == 'notifications':
+        with closing(get_db()) as conn:
+            muted = muted_notification_groups(conn, user['id'])
+        saved = bool(session.pop('notification_settings_saved', False))
+    return render_page(render_settings(header, user, section, lang, muted, csrf_input(), saved))
+
+
+@app.post('/settings/language')
+def settings_language():
+    lang = request.form.get('language')
+    if lang not in ('ru', 'en'):
+        return render_error_page('Язык недоступен', 'Выбери русский или английский.', 400)
+    response = redirect('/settings')
+    response.set_cookie('mflow_settings_language', lang, path='/settings', max_age=365 * 86400,
+                        secure=app.config['SESSION_COOKIE_SECURE'], httponly=True, samesite='Lax')
+    return response
+
+
+@app.post('/settings/notifications')
+@login_required
+def settings_notifications():
+    user = get_current_user()
+    try:
+        with closing(get_db()) as conn:
+            save_notification_groups(conn, user, request.form.getlist('notification'))
+    except ValueError as error:
+        return render_error_page('Настройки не сохранены', str(error), 400)
+    session['notification_settings_saved'] = True
+    return redirect('/settings?section=notifications')
 
 
 def collaboration_token():
@@ -3095,7 +3109,7 @@ def project_video_defense(project_id):
         body = render_defense(record,user,token,submitted,has_teacher=has_project_teacher(conn, project_id))
         if error and submitted is None:
             body = render_unsaved_result(request.form, user, f'/project/{project_id}/defense', defense=True) + body
-        body = '<link rel="stylesheet" href="/static/project-workspace.css?v=20261014-feedback">' + body
+        body = '<link rel="stylesheet" href="/static/project-workspace.css?v=20261118-home-settings">' + body
     finally:
         conn.close()
     return render_collaboration_page(user,f'Видеозащита · {name}',body,project_id,error,status)

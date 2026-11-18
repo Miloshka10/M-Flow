@@ -5,6 +5,24 @@ from database import execute_schema
 from interface import icon
 from navigation import stage_result_target
 
+# Groups refer to notification types the application actually emits.
+NOTIFICATION_GROUPS = {
+    'work': (1, ('stage', 'defense')),
+    'assessment': (2, ('assessment',)),
+    'supervision': (4, ('supervision',)),
+    'report': (8, ('report',)),
+}
+ROLE_NOTIFICATION_GROUPS = {
+    'student': ('work', 'assessment', 'supervision'),
+    'teacher': ('work', 'report', 'supervision'),
+}
+UNMUTED = '''AND NOT EXISTS (
+    SELECT 1 FROM notification_preferences np WHERE np.user_id=n.recipient_id AND (''' + ' OR '.join(
+        f'(np.muted & {bit}) != 0 AND (' + ' OR '.join(
+            f"n.event_key LIKE '{prefix}:%'" for prefix in prefixes
+        ) + ')' for bit, prefixes in NOTIFICATION_GROUPS.values()
+    ) + '))'
+
 
 def initialize_notifications(conn):
     execute_schema(conn, """CREATE TABLE IF NOT EXISTS notifications (
@@ -20,6 +38,27 @@ def initialize_notifications(conn):
         UNIQUE(recipient_id, event_key)
     )""")
     conn.execute('CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient_id, id DESC)')
+    execute_schema(conn, """CREATE TABLE IF NOT EXISTS notification_preferences (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        muted INTEGER NOT NULL DEFAULT 0
+    )""")
+
+
+def muted_notification_groups(conn, user_id):
+    row = conn.execute('SELECT muted FROM notification_preferences WHERE user_id=?', (user_id,)).fetchone()
+    mask = row['muted'] if row else 0
+    return {name for name, (bit, _) in NOTIFICATION_GROUPS.items() if mask & bit}
+
+
+def save_notification_groups(conn, user, enabled):
+    allowed = set(ROLE_NOTIFICATION_GROUPS[user['role']])
+    enabled = set(enabled)
+    if not enabled <= allowed:
+        raise ValueError('Неизвестная категория уведомлений.')
+    mask = sum(NOTIFICATION_GROUPS[name][0] for name in allowed - enabled)
+    conn.execute('''INSERT INTO notification_preferences(user_id, muted) VALUES (?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET muted=excluded.muted''', (user['id'], mask))
+    conn.commit()
 
 
 def project_recipients(conn, project_id, role):
@@ -50,12 +89,13 @@ VISIBLE = """n.recipient_id=? AND EXISTS (SELECT 1 FROM projects p WHERE p.id=n.
         WHERE m.project_id=p.id AND m.user_id=n.recipient_id)))"""
 
 
-def notification_feed(conn, user_id, before=None, limit=12):
-    count = conn.execute(f'SELECT COUNT(*) FROM notifications n WHERE {VISIBLE} AND n.read_at IS NULL',
+def notification_feed(conn, user_id, before=None, limit=12, *, bell=False):
+    visibility = f'{VISIBLE} {UNMUTED}' if bell else VISIBLE
+    count = conn.execute(f'SELECT COUNT(*) FROM notifications n WHERE {visibility} AND n.read_at IS NULL',
                          (user_id,)).fetchone()[0]
     extra = ' AND n.id<?' if before is not None else ''
     rows = conn.execute(f'''SELECT n.*, p.name AS project_name FROM notifications n
-        JOIN projects p ON p.id=n.project_id WHERE {VISIBLE}{extra}
+        JOIN projects p ON p.id=n.project_id WHERE {visibility}{extra}
         ORDER BY n.id DESC LIMIT ?''',
         (user_id, before, limit) if before is not None else (user_id, limit)).fetchall()
     return count, rows
