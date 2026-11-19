@@ -56,11 +56,13 @@ class ProjectWorkCases:
         self.assertIn('Новая версия ещё не проверена', old)
         self.assertRegex(page, r'<textarea\b[^>]*name="teacher_comment"[^>]*></textarea>')
         self.assertIn('aria-describedby="review-comment-hint-1"', page)
-        queue = self.queue_html(self.client.get('/teacher').text)
-        self.assertIn('Есть предыдущее решение', queue)
+        queue = self.client.get('/teacher/review?work=stage-2-1').text
+        self.assertIn('Замечание к предыдущей сдаче', queue)
+        self.assertIn('Старое замечание &lt;b&gt;', queue)
+        self.assertIn('Исправленный результат &lt;script&gt;', queue)
         self.assertIn('/project/2/history?work=stage-1', queue)
         self.assertNotIn('Private project', queue)
-        self.assertIn('href="/teacher#review-queue">К очереди проверки', page)
+        self.assertIn('href="/teacher/review">К очереди проверки', page)
         self.assertEqual(self.database_snapshot(), before)
 
     def test_work_unifies_old_stage_and_task_entries_without_get_writes(self):

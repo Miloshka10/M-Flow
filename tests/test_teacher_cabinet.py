@@ -1347,7 +1347,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.sign_in(1)
         page = self.client.get('/teacher').text
         self.assertIn('data-review-count="2"', page)
-        self.assertIn('href="/teacher#review-queue"', page)
+        self.assertIn('href="/teacher/review"', page)
+        self.assertIn('id="review-queue"', page)
         self.assertNotIn('project-create', page)
         self.assertNotIn('data-work-key=', page)
         center = self.client.get('/teacher/review').text

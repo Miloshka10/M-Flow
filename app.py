@@ -57,7 +57,7 @@ from ui_components import notice
 from interface import APPEARANCE_VERSION, access_header, appearance_assets, document_title, icon, shell_header
 from student_results import parameters as result_parameters, load_results, render_results, load_focus, load_project_states
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores, assessment_version
-from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, stage_label, change_stage, render_stages, STATE_LABELS
+from project_stages import initialize_stages, get_stages, stage_summary, stage_label, change_stage, render_stages
 from teamwork import (initialize_teamwork, profile_for, save_profile, directory, invite_student,
                       respond_to_invitation, change_team, render_profile as render_skill_profile,
                       render_directory, render_team)
@@ -2010,7 +2010,7 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
             {render_header(current_user, notification_data)}
             <main class="project-workspace" data-work-screens="project" data-project-views data-work-default="{int(work_mode)}">
                 <div class="work-project-returns"><a href="{project_list_url(current_user['role'], project_id)}" class="back">{icon('arrow-left')} Все проекты</a>
-                {'<a class="action-link" href="/teacher#review-queue">К очереди проверки</a>' if current_user['role'] == 'teacher' else ''}</div>
+                {'<a class="action-link" href="/teacher/review">К очереди проверки</a>' if current_user['role'] == 'teacher' else ''}</div>
                 {messages}
                 {workspace_html}
 
@@ -3316,7 +3316,7 @@ def render_teacher_project(project):
                      "done": "Задачи завершены", "normal": "Всё по плану", "empty": "Нет задач"}
     health = project["health"]
     stage = project["current_stage"]
-    stage_note = (f'Текущий этап {stage["number"]}: {escape(stage["title"])} · {STATE_LABELS[stage["state"]]}'
+    stage_note = (f'Текущий этап {stage["number"]}: {escape(stage["title"])} · {stage_label(stage)}'
                   if stage else 'Все пять этапов приняты учителем')
     access_note = '<span class="t-muted">Проверка результатов · задачами и командой управляет ученик-владелец</span>'
     if project['legacy_owner']:
