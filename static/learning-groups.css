@@ -5,6 +5,8 @@
 .group-form label, .group-code { display: grid; gap: 8px; font-weight: 600; }
 .group-form input, .group-form textarea, .group-form select, .group-code input { width: 100%; min-width: 0; box-sizing: border-box; }
 .group-form button { justify-self: start; }
+.group-panel > .group-form + .group-form { margin-top: 24px; }
+.group-actions a[aria-current="page"] { color: var(--mf-text); font-weight: 700; }
 .group-code { margin: 20px 0; max-width: 560px; }
 .group-code input { font-family: ui-monospace, monospace; font-size: 16px; }
 .group-text { white-space: pre-wrap; overflow-wrap: anywhere; }

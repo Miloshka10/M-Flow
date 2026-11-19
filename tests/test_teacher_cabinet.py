@@ -8,6 +8,7 @@ import sys
 import sqlite3
 import re
 from datetime import date, timedelta
+from contextlib import closing
 from werkzeug.security import generate_password_hash
 from unittest.mock import patch
 from html.parser import HTMLParser
@@ -255,118 +256,57 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
     def queue_html(page):
         return page.split('id="review-queue"')[1].split('</section>')[0]
 
-    def test_review_queue_composition_access_dates_and_read_only_information(self):
+    def test_cabinet_summarizes_review_and_redirects_legacy_queue_filters(self):
         self.seed_review_queue()
         self.sign_in(1)
         before = self.database_snapshot()
-        queue = self.queue_html(self.client.get('/teacher').text)
-        self.assertEqual(re.findall(r'data-work-kind="(\w+)"', queue), ['defense','stage','report','report'])
-        for text in ('Автор: student-one', 'Команда: student-one', '01.03.2026 15:00 МСК',
-                     '/project/2/stages#stage-1', '/project/1/defense', '/project/1#task-1',
-                     'Информационный отчёт · решение не требуется', '&lt;script&gt;Отчёт команды&lt;/script&gt;'):
-            self.assertIn(text, queue)
-        self.assertNotIn('Private', queue)
-        self.assertNotIn('<script>Отчёт', queue)
-        self.assertNotIn('<form', queue)
-        self.assertNotIn('Просрочено', queue)
+        cabinet = self.client.get('/teacher').text
+        summary = self.queue_html(cabinet)
+        self.assertIn('Работ ждут решения: 2', summary)
+        self.assertIn('/teacher/review', summary)
+        self.assertNotIn('data-work-key=', cabinet)
+        self.assertNotIn('Отчёт команды', cabinet)
+        legacy = self.client.get('/teacher?kind=stage&project=2&q=STUDENT&sort=newest')
+        self.assertEqual(legacy.status_code, 302)
+        center = self.client.get(legacy.headers['Location']).text
+        self.assertIn('data-work-key="stage-2-1"', center)
+        self.assertNotIn('data-work-key="defense-1"', center)
+        for value in ('stage', '2', 'newest'):
+            self.assertIn(f'value="{value}" selected', center)
         self.assertEqual(self.database_snapshot(), before)
-        self.sign_in(2)
-        other = self.queue_html(self.client.get('/teacher').text)
-        self.assertIn('Private project', other)
-        self.assertNotIn('Observed project', other)
-        self.assertNotIn('Owned project', other)
+
+    def test_new_project_redirects_to_it_even_when_another_project_needs_revision(self):
         self.sign_in(3)
-        self.assertEqual(self.client.get('/teacher').status_code, 403)
-
-    def test_review_queue_filters_search_and_global_totals(self):
-        self.seed_review_queue()
+        self.assertEqual(self.post('/project/2/stages', data=dict(action='submit', number='1', revision='0', result='Тема')).status_code, 302)
         self.sign_in(1)
-        for kind, count in (('stage',1),('defense',1),('report',2)):
-            queue = self.queue_html(self.client.get('/teacher?kind=' + kind).text)
-            self.assertEqual(queue.count('data-work-kind='), count)
-            self.assertEqual(set(re.findall(r'data-work-kind="(\w+)"', queue)), {kind})
-        page = self.client.get('/teacher?kind=stage&project=2&focus=review&q=STUDENT&sort=newest').text
-        self.assertIn('data-work-key="stage-2-1"', self.queue_html(page))
-        self.assertNotIn('Owned project', self.queue_html(page))
-        for value in ('stage','2','review','newest'):
-            self.assertIn(f'value="{value}" selected', page)
-        self.assertIn('data-review-count="2"', page)
-        queue = self.queue_html(self.client.get('/teacher?kind=report&q=КОМАНДНЫЙ').text)
-        self.assertIn('report-1-11', queue)
-        self.assertNotIn('report-1-10', queue)
-        self.assertIn('Нет работ по выбранным условиям', self.queue_html(self.client.get('/teacher?kind=stage&q=missing').text))
-
-    def test_review_queue_team_author_and_missing_dates_are_explicit(self):
-        self.seed_review_queue()
-        self.add_candidate()
-        conn = self.module.get_db()
-        conn.execute('INSERT INTO project_members(project_id,user_id) VALUES(1,4)')
-        conn.execute('UPDATE task_updates SET user_id=4 WHERE id=11')
-        conn.execute("UPDATE project_stages SET updated_at='' WHERE project_id=2")
-        conn.execute("UPDATE project_defenses SET updated_at='not-a-date' WHERE project_id=1")
-        conn.commit()
-        conn.close()
-        self.sign_in(1)
-        queue = self.queue_html(self.client.get('/teacher').text)
-        self.assertEqual(queue.count('Дата отправки не указана'), 2)
-        self.assertIn('candidate-engineer', queue)
-        self.assertIn('Команда:', queue)
-        self.assertIn('student-one', queue)
-        filtered = self.queue_html(self.client.get('/teacher?kind=report&q=candidate-engineer').text)
-        self.assertIn('report-1-11', filtered)
-        self.assertIn('Автор: candidate-engineer', filtered)
-
-    def test_review_queue_return_resubmit_accept_and_notification_read_are_independent(self):
-        self.seed_review_queue()
-        self.sign_in(1)
-        self.assertEqual(self.post('/project/2/stages', data=dict(number='1', revision='1', action='return', teacher_comment='Исправить')).status_code, 302)
-        self.assertNotIn('stage-2-1', self.queue_html(self.client.get('/teacher').text))
+        self.assertEqual(self.center_decide('stage-2-1', action='return', comment='Уточните тему').status_code, 302)
         self.sign_in(3)
-        self.assertEqual(self.post('/project/2/stages', data=dict(number='1', revision='2', action='submit', result='Новая версия')).status_code, 302)
-        self.sign_in(1)
-        self.assertEqual(self.post('/notifications/read-all').status_code, 302)
-        queue = self.queue_html(self.client.get('/teacher').text)
-        self.assertEqual(queue.count('data-work-key="stage-2-1"'), 1)
-        self.assertEqual(self.post('/project/2/stages', data=dict(number='1', revision='3', action='accept', teacher_comment='Принято')).status_code, 302)
-        self.assertNotIn('stage-2-1', self.queue_html(self.client.get('/teacher').text))
-        self.assertEqual(self.post('/project/1/defense', data=dict(revision='1', action='return', teacher_comment='Звук')).status_code, 302)
-        self.assertNotIn('defense-1', self.queue_html(self.client.get('/teacher').text))
-        self.sign_in(3)
-        self.assertEqual(self.post('/project/1/defense', data=dict(revision='2', action='submit', video_url='https://example.com/video', description='Новая версия')).status_code, 302)
-        self.sign_in(1)
-        self.assertEqual(self.queue_html(self.client.get('/teacher').text).count('data-work-key="defense-1"'), 1)
-        self.assertEqual(self.post('/project/1/defense', data=dict(revision='3', action='accept')).status_code, 302)
-        self.assertNotIn('defense-1', self.queue_html(self.client.get('/teacher').text))
+        created = self.post('/add_project', data={'name': 'Новый проект ученика'})
+        self.assertEqual(created.status_code, 302)
+        self.assertRegex(created.headers['Location'], r'^/project/\d+$')
+        project = self.client.get(created.headers['Location'])
+        self.assertEqual(project.status_code, 200)
+        self.assertIn('Новый проект ученика', project.text)
 
-    def test_review_queue_pagination_preserves_filters_latest_reports_and_fixed_query_count(self):
-        self.seed_review_queue()
+    def test_cabinet_project_pages_have_bounded_cards_and_global_totals(self):
         self.sign_in(1)
         baseline = self.count_page_queries('/teacher')
         conn = self.module.get_db()
-        conn.executemany('INSERT INTO tasks(id,project_id,title,assignee_id) VALUES(?,2,?,3)', [(100+n,f'Queue task {n}') for n in range(45)])
-        conn.executemany('INSERT INTO task_updates(id,task_id,user_id,body,created_at) VALUES(?,?,3,?,?)',
-            [(100+n,100+n,f'Report {n}', '2026-01-01 12:00:00') for n in range(45)])
-        conn.execute("INSERT INTO task_updates(id,task_id,user_id,body,created_at) VALUES(1000,100,3,'Fresh replacement','2026-02-01 12:00:00')")
+        conn.executemany('INSERT INTO projects(id,name,owner_id) VALUES(?,?,1)',
+                         [(i, f'Large class project {i}') for i in range(50, 85)])
         conn.commit()
         conn.close()
+        first = self.client.get('/teacher').text
+        second = self.client.get('/teacher?page=2').text
+        self.assertEqual(first.count('class="t-project"'), 12)
+        self.assertEqual(second.count('class="t-project"'), 12)
+        self.assertIn('Large class project 84', first)
+        self.assertNotIn('Large class project 84', second)
+        self.assertIn('Large class project 72', second)
+        self.assertIn('Найдено 37 из 37', first)
+        self.assertIn('page=2', first)
+        self.assertIn('Large class project 50', self.client.get('/teacher?q=project+50').text)
         self.assertEqual(self.count_page_queries('/teacher'), baseline)
-        self.assertLessEqual(baseline, 9)
-        query = '/teacher?q=student&focus=all&kind=report&project=2&sort=newest'
-        all_keys = []
-        for page in range(1,4):
-            response = self.client.get(query + '&page=' + str(page))
-            queue = self.queue_html(response.text)
-            keys = re.findall(r'data-work-key="([^"]+)"', queue)
-            self.assertLessEqual(len(keys), 20)
-            all_keys.extend(keys)
-            if page < 3:
-                link = re.search(r'href="([^"]+)">Следующая', queue).group(1)
-                for fragment in ('q=student','focus=all','kind=report','project=2','sort=newest','page='+str(page+1),'#review-queue'):
-                    self.assertIn(fragment, link)
-        self.assertEqual(len(all_keys), 45)
-        self.assertEqual(len(set(all_keys)), 45)
-        self.assertNotIn('report-2-100', all_keys)
-        self.assertIn('report-2-1000', all_keys)
 
     def test_review_queue_bad_parameters_are_safe_and_foreign_project_does_not_leak(self):
         self.seed_review_queue()
@@ -582,7 +522,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             self.assertNotIn(title, queue)
         self.assertNotIn('<h2>Private project</h2>', overdue)
         review_queue = review.split('id="review-queue"')[1].split('</section>')[0]
-        self.assertIn('Этап ожидает проверки', review_queue)
+        self.assertIn('Работ ждут решения: 1', review_queue)
         self.assertNotIn('Someone else task', review_queue)
         self.assertNotIn('<h2>Owned project</h2>', review)
         self.assertEqual(self.database_snapshot(), before)
@@ -871,7 +811,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
 
     def setUp(self):
         conn = self.module.get_db()
-        for table in ("account_email_tokens", "account_emails", "project_defense_plans", "work_history", "work_history_sources", "learning_group_invitations", "learning_group_members", "learning_groups", "supervision_requests", "teacher_invitations", "auth_sessions", "auth_limits", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
+        for table in ("account_email_tokens", "account_emails", "project_defense_plans", "work_history", "work_history_sources", "group_assignment_projects", "group_assignments", "learning_group_invitations", "learning_group_members", "learning_groups", "supervision_requests", "teacher_invitations", "auth_sessions", "auth_limits", "notifications", "project_defenses", "team_member_roles", "team_invitations", "student_profiles", "project_stages", "project_assessments", "task_updates", "tasks", "project_members", "projects", "users"):
             conn.execute(f"DELETE FROM {table}")
         conn.executemany("INSERT INTO users(id, username, password, role) VALUES(?, ?, ?, ?)", [
             (1, "teacher-one", self.password, "teacher"),
@@ -1176,8 +1116,10 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertEqual(self.post('/project/2/defense', data=dict(defense, revision='1')).status_code, 302)
         self.sign_in(1)
         page = self.client.get('/teacher?focus=attention').text
-        self.assertIn('Этап ожидает проверки', page)
-        self.assertIn('Видеозащита ожидает проверки', page)
+        self.assertIn('Работ ждут решения: 2', page)
+        center = self.client.get('/teacher/review').text
+        self.assertIn('data-work-key="stage-2-1"', center)
+        self.assertIn('data-work-key="defense-2"', center)
         # Completing tasks is not the same as passing project review.
         self.assertIn('Observed project', self.client.get('/teacher?focus=done').text)
 
@@ -1305,20 +1247,22 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         conn.close()
         self.assertEqual(self.client.get('/teacher').status_code, 403)
 
-    def test_batched_overview_loads_only_latest_authorized_reports(self):
+    def test_only_selected_report_body_is_rendered_in_center(self):
         conn = self.module.get_db()
         conn.execute("INSERT INTO task_updates(task_id,user_id,body,created_at) VALUES(1,3,'Latest report','2000-01-01')")
         conn.execute("INSERT INTO tasks(id,project_id,title,assignee_id) VALUES(9,3,'Private task',2)")
         conn.execute("INSERT INTO task_updates(task_id,user_id,body) VALUES(9,2,'Private report')")
         conn.commit()
-        teacher = conn.execute('SELECT * FROM users WHERE id=1').fetchone()
+        report_id = conn.execute("SELECT MAX(id) FROM task_updates WHERE task_id=1").fetchone()[0]
         conn.close()
-        overview = self.module.build_teacher_overview(teacher)
-        reports = [item for project in overview for item in project['reports']]
-        self.assertEqual(len(reports), 1)
-        self.assertEqual(reports[0]['report']['body'], 'Latest report')
         self.sign_in(1)
-        # The project board still shows full history, unlike the summary cabinet.
+        cabinet = self.client.get('/teacher').text
+        self.assertNotIn('Latest report', cabinet)
+        center = self.client.get(f'/teacher/review?kind=report&work=report-1-{report_id}').text
+        self.assertIn('Latest report', center)
+        self.assertNotIn('Private report', center)
+        self.assertNotIn('alert', center)
+        # The project board still shows full history.
         board = self.client.get('/project/1').text
         self.assertIn('Latest report', board)
         self.assertIn('alert', board)
@@ -1403,10 +1347,13 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.sign_in(1)
         page = self.client.get('/teacher').text
         self.assertIn('data-review-count="2"', page)
-        self.assertIn('href="/teacher#review-queue"', page)
+        self.assertIn('href="/teacher/review"', page)
+        self.assertIn('id="review-queue"', page)
         self.assertNotIn('project-create', page)
-        self.assertIn('Этап ожидает проверки', page)
-        self.assertIn('Видеозащита ожидает проверки', page)
+        self.assertNotIn('data-work-key=', page)
+        center = self.client.get('/teacher/review').text
+        self.assertIn('data-work-key="stage-1-1"', center)
+        self.assertIn('data-work-key="defense-1"', center)
 
     def test_product_assets_remain_lightweight_local_and_accessible(self):
         with self.client.get('/static/product-design.css') as response:
@@ -1558,9 +1505,9 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertIn("Owned project", response.text)
         self.assertIn("Observed project", response.text)
         self.assertNotIn("Private project", response.text)
-        self.assertIn("&lt;script&gt;", response.text)
-        with self.module.app.test_request_context():
-            overview = self.module.build_teacher_overview({"id": 1})
+        self.assertNotIn("&lt;script&gt;", response.text)
+        with closing(self.module.get_db()) as conn:
+            overview = self.module.load_teacher_projects(conn, 1, self.module.business_today(), cabinet=True)
         projects = {p["id"]: p for p in overview}
         self.assertEqual(projects[1]["counts"]["overdue"], 1)
         self.assertEqual(projects[1]["counts"]["unassigned"], 1)
@@ -2233,7 +2180,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertEqual(response.status_code, 200)
         self.assertIn("<h2>Owned project</h2>", response.text)
         self.assertNotIn("<h2>Observed project</h2>", response.text)
-        self.assertIn("Показано 1 из 2", response.text)
+        self.assertIn("Найдено 1 из 2", response.text)
         self.assertIn("Ничего не найдено", self.client.get("/teacher?q=missing").text)
 
     def test_student_cannot_open_or_create_in_cabinet(self):

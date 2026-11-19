@@ -154,7 +154,7 @@ def change_stage(conn, project_id, user, form):
 
 
 def render_stages(stages, user, token, submitted=None, has_teacher=True, project_id=None,
-                  only_number=None, compact=False, return_to=None):
+                  only_number=None, compact=False, return_to=None, *, assignment_link=''):
     completed, current = stage_summary(stages)
     current_number = current["number"] if current else None
     html = '' if compact else f'<p class="stage-summary">Принято {completed} из 5 этапов · {completed * 20}%</p><div class="stage-timeline">'
@@ -203,6 +203,8 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
                                 else 'Учитель получит исправленный результат после повторной отправки.')
                 if compact:
                     html += f'<details class="pw-editor" {"open" if submitted is not None else ""}><summary data-ui-icon="edit">{"Доработать результат" if stage_needs_revision(stage) else "Редактировать черновик" if stage["result"] else "Добавить результат"}</summary><div class="pw-editor-content"><h2>Результат этапа {number}</h2>'
+                    if assignment_link:
+                        html += f'<p>{assignment_link}</p>'
                     if stage_needs_revision(stage) and stage['teacher_comment']:
                         html += f'<p class="stage-comment">Что исправить: {escape(stage["teacher_comment"])}</p>'
                 html += f'<p class="pw-form-hint">{instructions}</p>'

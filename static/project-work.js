@@ -140,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     dialog.addEventListener('keydown', event => {
       if (event.key !== 'Tab') return;
-      const targets = [...dialog.querySelectorAll('button:not(:disabled),input:not([type="hidden"]):not(:disabled),textarea:not(:disabled)')].filter(el => el.getClientRects().length);
+      const targets = [...dialog.querySelectorAll('a[href],button:not(:disabled),input:not([type="hidden"]):not(:disabled),textarea:not(:disabled)')].filter(el => el.getClientRects().length);
       const first = targets[0], last = targets[targets.length - 1];
       if (event.shiftKey && document.activeElement === first) {event.preventDefault(); last.focus();}
       else if (!event.shiftKey && document.activeElement === last) {event.preventDefault(); first.focus();}

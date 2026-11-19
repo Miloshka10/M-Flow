@@ -1,4 +1,7 @@
-"""Shared project links; callers must check project access before rendering."""
+"""Shared page navigation; callers check access before rendering."""
+from html import escape
+from urllib.parse import urlencode
+
 from interface import icon
 import re
 
@@ -12,6 +15,22 @@ def project_list_url(role, project_id=None):
 def stage_result_target(target):
     """Normalize a result action; ordinary stage selection keeps its own URL."""
     return target + '-result' if target and re.fullmatch(r'(?:/project/[0-9]+/)?stages#stage-[1-5]', target) else target
+
+
+def bounded_page(value):
+    return int(value) if value.isascii() and value.isdigit() and 0 < len(value) <= 6 and int(value) > 0 else 1
+
+
+def page_links(base, page, more, params=None, fragment=''):
+    def link(number, label):
+        query = escape(urlencode(dict(params or {}, page=number)), quote=True)
+        return f'<a href="{base}?{query}{fragment}">{label}</a>'
+    links = []
+    if page > 1:
+        links.append(link(page - 1, 'Предыдущая страница'))
+    if more:
+        links.append(link(page + 1, 'Следующая страница'))
+    return f'<nav class="page-links" aria-label="Страницы">{"".join(links)}</nav>' if links else ''
 
 
 def project_navigation(project_id, active='overview'):

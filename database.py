@@ -177,7 +177,7 @@ def execute_schema_script(conn, script):
 
 
 def table_columns(conn, table):
-    if table not in ("projects", "tasks"):
+    if table not in ("projects", "tasks", "group_assignments"):
         raise ValueError("Неподдерживаемая таблица схемы.")
     if isinstance(conn, PostgresConnection):
         rows = conn.execute("SELECT column_name AS name FROM information_schema.columns WHERE table_schema=current_schema() AND table_name=?", (table,))

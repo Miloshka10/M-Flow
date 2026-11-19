@@ -3,6 +3,18 @@ document.addEventListener('DOMContentLoaded', () => {
   'use strict';
   if (!document.body.hasAttribute('data-design-suite')) return;
   document.documentElement.classList.add('ds-enhanced');
+  const reviewFilters = document.querySelector('.rc-filters');
+  if (reviewFilters) {
+    const group = reviewFilters.querySelector('[name="group"]');
+    const project = reviewFilters.querySelector('[name="project"]');
+    if (group && project) {
+      const loadedGroup = group.value;
+      group.addEventListener('change', () => {
+        project.disabled = group.value !== loadedGroup;
+        if (project.disabled) project.value = '';
+      });
+    }
+  }
   const main = document.querySelector('[data-suite-dashboard]');
   if (main) {
     const initial = main.dataset.suiteView;
@@ -115,10 +127,6 @@ document.addEventListener('DOMContentLoaded', () => {
     disclose([...document.querySelectorAll('.prep-intro')], 'О подготовке');
   }
   document.querySelectorAll('.groups-intro:not(.group-identity)').forEach(node => disclose([node], 'О группе и доступе'));
-  if (document.body.dataset.designPage === 'learning_groups_page') {
-    const form = document.querySelector('form.group-form input[value="create"]')?.closest('.group-panel');
-    if (form) disclose([form], 'Новая учебная группа');
-  }
   if (document.body.dataset.designPage === 'project_team') {
     document.querySelectorAll('.team-person .team-skills').forEach(node => disclose([node], 'Навыки'));
   }

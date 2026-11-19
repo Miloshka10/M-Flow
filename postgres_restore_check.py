@@ -42,11 +42,16 @@ def manifest_tables(manifest):
 
 
 def restore_check(url, archive):
-    env = test_environment(url)
     archive = Path(archive).resolve()
     allowed = (Path.home() / 'MFlow-private-backups').resolve()
     if not archive.is_relative_to(allowed) or archive.name != 'database.dump':
         raise BackupError("Выберите закрытую копию database.dump вне проекта.")
+    restore_verified_archive(url, archive)
+
+
+def restore_verified_archive(url, archive):
+    """Verify and restore an already selected archive to the empty test DB."""
+    env = test_environment(url)
     manifest = json.loads(archive.with_name('verification.json').read_text(encoding='utf-8'))
     if manifest.get('sha256') != file_hash(archive):
         raise BackupError("Контрольная сумма копии не совпадает; восстановление отменено.")

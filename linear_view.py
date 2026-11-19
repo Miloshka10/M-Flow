@@ -5,6 +5,7 @@ from html import escape
 import json
 
 from flask import request
+from group_assignments import project_assignment_link
 from interface import APPEARANCE_VERSION, appearance_assets, icon, theme_button
 from deadlines import format_timestamp
 from material_links import safe_web_url
@@ -84,7 +85,7 @@ def orbit(stages, selected, pid):
             f'<nav class="po-stages" aria-label="Этапы структуры">{steps}</nav></figure>')
 
 
-def project_page(user, projects, project, stages, tasks, history, members, token, selected):
+def project_page(user, projects, project, stages, tasks, history, members, token, selected, classroom=None):
     pid, name = project['id'], project['name']
     model = stage_model(stages)
     initial_tab = request.args.get('tab', 'result')
@@ -114,7 +115,7 @@ def project_page(user, projects, project, stages, tasks, history, members, token
     people = ''.join(f'<p>{escape(m["username"])}<small>{"Учитель" if m["role"] == "teacher" else "Ученик"}</small></p>' for m in members)
     return document(name, f'''<div class="lx-app-shell lw-shell">{sidebar(user, projects, token, pid, model, selected, initial_tab)}
       <main class="lx-app-main lw-view" id="linear-main"><header class="lx-app-topbar lw-topbar">{icon('folder')}<span class="lw-id">MFL-{pid:03}</span><span class="lw-breadcrumb-title">{escape(name)}</span>{theme_button()}</header>
-      <div class="lw-viewbar"><nav class="lw-tabs" aria-label="Раздел проекта"><a href="?stage={selected+1}&tab=result" data-tab="result" aria-current="{'page' if initial_tab == 'result' else 'false'}">Результат</a><a href="?stage={selected+1}&tab=tasks" data-tab="tasks" aria-current="{'page' if initial_tab == 'tasks' else 'false'}">Задачи</a><a href="?stage={selected+1}&tab=history" data-tab="history" aria-current="{'page' if initial_tab == 'history' else 'false'}">История</a></nav><div class="lw-toolbar-actions">{"".join(quick_actions)}<a class="lw-button ln-team-link" href="/project/{pid}/team">Команда</a></div></div>
+      <div class="lw-viewbar"><nav class="lw-tabs" aria-label="Раздел проекта"><a href="?stage={selected+1}&tab=result" data-tab="result" aria-current="{'page' if initial_tab == 'result' else 'false'}">Результат</a><a href="?stage={selected+1}&tab=tasks" data-tab="tasks" aria-current="{'page' if initial_tab == 'tasks' else 'false'}">Задачи</a><a href="?stage={selected+1}&tab=history" data-tab="history" aria-current="{'page' if initial_tab == 'history' else 'false'}">История</a></nav><div class="lw-toolbar-actions">{project_assignment_link(classroom, "lw-button")}{"".join(quick_actions)}<a class="lw-button ln-team-link" href="/project/{pid}/team">Команда</a></div></div>
       <div class="lw-body"><section class="lw-content"><div class="lw-title-block"><h1>{escape(name)}</h1><p class="lw-stage-context" aria-live="polite" aria-atomic="true"><span data-stage-caption>{NAMES[selected]}</span><span>·</span><span data-stage-status>{status_name(model[selected]['status'])}</span></p></div>
       <section data-tab-panel="result" {"hidden" if initial_tab != "result" else ""}>{''.join(panels)}{orbit(model, selected, pid)}<a class="lw-result-link" href="/project/{pid}/preparation">Видеозащита и итоговая оценка {icon('arrow')}</a></section>
       <section data-tab-panel="tasks" {"hidden" if initial_tab != "tasks" else ""}><div class="lw-section-title"><h2>Задачи команды</h2><a href="/project/{pid}#task-board">Доска задач {icon('arrow')}</a></div>{task_rows or '<p class="lw-muted">Задач пока нет.</p>'}</section>
@@ -167,8 +168,10 @@ def register_linear_views(app, *, login_required, current_user, get_db, projects
     @login_required
     def linear_project(project_id):
         user = current_user()
+        student = user['role'] == 'student'
         with closing(get_db()) as conn:
-            project = project_details(project_id, connection=conn) if 0 < project_id < 2**63 else None
+            project = (project_details(project_id, connection=conn, with_assignment=student)
+                       if 0 < project_id < 2**63 else None)
             if project is None:
                 return document('Нет доступа', f'<main class="ln-access" id="linear-main"><header class="lx-app-topbar"><a href="/next">К проектам</a>{theme_button()}</header><h1>Нет доступа к проекту</h1></main>'), 403
             stages = get_stages(conn, project_id)
@@ -184,4 +187,5 @@ def register_linear_views(app, *, login_required, current_user, get_db, projects
         selected = max(0, min(4, selected))
         if current and selected >= current['number']:
             selected = current['number']-1
-        return project_page(user, projects, project, stages, tasks, history, members, token(), selected)
+        return project_page(user, projects, project, stages, tasks, history, members, token(), selected,
+                            project if student else None)

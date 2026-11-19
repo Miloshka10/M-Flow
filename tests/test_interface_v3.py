@@ -5,7 +5,8 @@ import unittest
 from design_suite import compact_stage_route
 from project_stages import stages_from_rows
 from dashboard_view import student_dashboard
-from teacher_queue import render_queue
+from review_center import render_detail
+from teacher_queue import entries
 
 
 class Tags(HTMLParser):
@@ -38,10 +39,10 @@ class InterfaceV3Tests(unittest.TestCase):
         self.assertNotIn('aria-current="step"', html)
 
     def test_teacher_review_link_opens_result_instead_of_mobile_tasks(self):
-        item = dict(kind='stage', requires_decision=True, date=None, author='student',
-                    team='', body='Result', key='stage-42-1', project_name='Project',
-                    title='Stage 1', href='/project/42/stages#stage-1', action='Проверить этап')
-        html = render_queue(dict(total=1, decisions=1, items=[item], pages=1), {})
+        stage = dict(number=1, title='Topic', state='review', revision=1)
+        project = dict(id=42, name='Project', students=[], current_stage=stage, defense={}, reports=[])
+        item = next(entries(project))
+        html = render_detail(item, stage, {}, {}, 'csrf', explicit=True)
         self.assertIn('href="/project/42/stages#stage-1-result"', html)
 
     def test_dashboard_keeps_feedback_private_escaped_and_not_duplicated(self):
