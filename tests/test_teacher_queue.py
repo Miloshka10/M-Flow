@@ -1,24 +1,20 @@
 from datetime import datetime, timezone
 import unittest
 
-from teacher_queue import sent_date, queue_page, render_queue
+from review_center import render_detail
+from teacher_queue import sent_date, queue_page
 
 
 class QueueDateTests(unittest.TestCase):
-    def test_empty_material_is_omitted_and_only_a_decision_gets_the_primary_action(self):
-        project = dict(id=2, name='Project', students=[], current_stage=dict(number=1, title='Topic',
-                       state='review', revision=1, updated_at='2026-11-06 09:00:00'), defense={}, reports=[])
-        html = render_queue(queue_page([project]), {})
-        self.assertNotIn('ds-queue-material', html)
-        self.assertIn('class="btn" href="/project/2/stages#stage-1-result"', html)
-        project['current_stage'] = None
-        project['reports'] = [dict(task_title='Task', task_id=10, report=dict(id=20, username='Student',
-                              created_at='2026-11-06 09:00:00', body='Report <script>'))]
-        html = render_queue(queue_page([project]), {})
-        self.assertNotIn('class="btn"', html)
-        self.assertIn('Отчёт и команда', html)
+    def test_report_detail_escapes_text_and_offers_no_decision(self):
+        project = dict(id=2, name='Project', students=[], current_stage=None, defense={},
+                       reports=[dict(task_title='Task', task_id=10, report=dict(id=20, username='Student',
+                                     created_at='2026-11-06 09:00:00', body='Report <script>'))])
+        item = queue_page([project])['items'][0]
+        html = render_detail(item, {}, {}, {}, 'csrf', explicit=True)
+        self.assertNotIn('<form', html)
         self.assertIn('Report &lt;script&gt;', html)
-        self.assertIn('решение не требуется', html)
+        self.assertIn('Его прочтение не принимает этап', html)
 
     def test_utc_and_offset_dates_sort_as_same_instant(self):
         self.assertEqual(sent_date('2026-01-01 12:00:00'), sent_date('2026-01-01T15:00:00+03:00'))
