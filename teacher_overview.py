@@ -7,25 +7,43 @@ from project_stages import stages_from_rows, stage_summary
 from video_defense import DEFENSE_STATES
 
 SCOPE = """WITH visible_projects AS (
-    SELECT id FROM projects WHERE owner_id=? OR EXISTS (
-        SELECT 1 FROM project_members m WHERE m.project_id=projects.id AND m.user_id=?)
+    SELECT p.id FROM projects p WHERE (p.owner_id=? OR EXISTS (
+        SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?)){class_filter}
 ) """
+CLASS_FILTER = """ AND EXISTS (
+    SELECT 1 FROM learning_group_members gm JOIN learning_groups g ON g.id=gm.group_id
+    WHERE gm.group_id=? AND g.teacher_id=? AND gm.student_id=p.owner_id AND (
+        gm.project_id=p.id OR EXISTS (
+            SELECT 1 FROM group_assignment_projects ap JOIN group_assignments a ON a.id=ap.assignment_id
+            WHERE ap.project_id=p.id AND ap.student_id=gm.student_id AND a.group_id=g.id)))"""
 STUDENTS = """SELECT m.project_id,u.id,u.username FROM project_members m
     JOIN visible_projects v ON v.id=m.project_id JOIN users u ON u.id=m.user_id
     WHERE u.role='student' ORDER BY u.username,u.id"""
 ATTENTION_LIMIT = 6
 
 
-def load_teacher_projects(conn, teacher_id, today, *, cabinet=False, reports=False, report_project=None):
-    params = (teacher_id, teacher_id)
+def review_groups(conn, teacher_id, group_id=None):
+    return conn.execute("""SELECT id,name,archived FROM learning_groups
+        WHERE teacher_id=? AND (archived=0 OR id=?) ORDER BY archived,name,id""",
+        (teacher_id, group_id)).fetchall()
+
+
+def project_scope(teacher_id, group_id=None):
+    if group_id is None:
+        return SCOPE.format(class_filter=''), (teacher_id, teacher_id)
+    return SCOPE.format(class_filter=CLASS_FILTER), (teacher_id, teacher_id, group_id, teacher_id)
+
+
+def load_teacher_projects(conn, teacher_id, today, *, cabinet=False, reports=False, report_project=None, group_id=None):
+    scope, params = project_scope(teacher_id, group_id)
 
     def grouped(query, extra=()):
         result = defaultdict(list)
-        for row in conn.execute(SCOPE + query, (*params, *extra)):
+        for row in conn.execute(scope + query, (*params, *extra)):
             result[row['project_id']].append(dict(row))
         return result
 
-    projects = conn.execute(SCOPE + """SELECT p.id,p.name,p.owner_id FROM projects p
+    projects = conn.execute(scope + """SELECT p.id,p.name,p.owner_id FROM projects p
         JOIN visible_projects v ON v.id=p.id ORDER BY p.id DESC""", params).fetchall()
     students = grouped(STUDENTS)
     stages = grouped("""SELECT s.project_id,s.number,s.state,s.revision,s.updated_at,s.reviewed_by,u.username AS author_name
@@ -103,14 +121,15 @@ def load_attention(conn, teacher_id, projects, today):
     by_id = {p['id']: p for p in projects if p['has_attention']}
     if not by_id:
         return
-    rows = conn.execute(SCOPE + """SELECT t.project_id,t.id,t.status,t.title,t.deadline,t.priority,u.username AS assignee_name
+    scope, params = project_scope(teacher_id)
+    rows = conn.execute(scope + """SELECT t.project_id,t.id,t.status,t.title,t.deadline,t.priority,u.username AS assignee_name
         FROM tasks t JOIN visible_projects v ON v.id=t.project_id
         LEFT JOIN project_members m ON m.project_id=t.project_id AND m.user_id=t.assignee_id
         LEFT JOIN users u ON u.id=m.user_id AND u.role='student'
         WHERE t.status<>'done' AND (u.id IS NULL OR (t.deadline<>'' AND t.deadline<=?))
         ORDER BY t.project_id,CASE t.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2
             WHEN 'normal' THEN 3 WHEN 'low' THEN 4 ELSE 5 END,t.id""",
-        (teacher_id, teacher_id, (today + timedelta(days=3)).isoformat()))
+        (*params, (today + timedelta(days=3)).isoformat()))
     for task in rows:
         project = by_id.get(task['project_id'])
         if project is None:

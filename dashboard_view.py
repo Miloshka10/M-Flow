@@ -1,5 +1,8 @@
 """Presentation only: no database, roles or request mutations."""
 from html import escape
+
+from group_assignments import assignment_url
+from deadlines import parse_deadline
 from datetime import timedelta
 from deadlines import business_today, deadline_text
 from interface import icon
@@ -169,7 +172,20 @@ def render_home_focus(focus):
         </section>'''
 
 
-def student_dashboard(projects, token, header, messages, results='', focus=None, results_open=False, groups=(), project_states=None, today=None):
+def render_home_assignments(assignments):
+    if not assignments:
+        return ''
+    cards = []
+    for item in assignments:
+        due = parse_deadline(item['due_on'])
+        date = f'<time datetime="{due.isoformat()}">{due:%d.%m.%Y}</time>' if due else ''
+        label = 'Проект связан' if item['project_id'] else 'Нужно начать'
+        cards.append(f'<li><a href="{assignment_url(item)}"><strong>{escape(item["title"])}</strong>'
+                     f'<span>{escape(item["group_name"])} · {label}</span>{date}</a></li>')
+    return '<section class="home-assignments ds-home-only" aria-labelledby="home-assignments-title"><h2 id="home-assignments-title">Задания групп</h2><ul>' + ''.join(cards) + '</ul></section>'
+
+
+def student_dashboard(projects, token, header, messages, results='', focus=None, results_open=False, groups=(), project_states=None, today=None, assignments=()):
     project_states = project_states or {}
     selected_id = focus['project']['id'] if focus else None
     cards = []
@@ -229,4 +245,4 @@ def student_dashboard(projects, token, header, messages, results='', focus=None,
     secondary = f'<details class="home-details" {"open" if results_open else ""}><summary data-ui-icon="results">Мои результаты</summary>{results}</details>'
     return f'''<div class="container workspace student-workspace">{header}<main id="main-content" class="simple-home" data-suite-dashboard data-suite-view="{'results' if results_open else 'home'}">
         <h1 id="dashboard-title" tabindex="-1" data-home-title="Главная">{'Мои результаты' if results_open else 'Главная'}</h1>{messages}
-        {hero}{agenda}{projects_html}{groups_html}{secondary}</main></div>'''
+        {render_home_assignments(assignments)}{hero}{agenda}{projects_html}{groups_html}{secondary}</main></div>'''

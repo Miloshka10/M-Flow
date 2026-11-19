@@ -7,7 +7,7 @@ import sys
 import tempfile
 from threading import Thread
 from unittest.mock import patch
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import expect, sync_playwright
 from werkzeug.serving import make_server
@@ -81,6 +81,7 @@ def exercise(browser, base):
     teacher.get_by_label('Название задания').fill('Метеостанция')
     teacher.get_by_label('Цель', exact=True).fill('Сравнить показания двух датчиков')
     teacher.get_by_label('Срок сдачи').fill((date.today() + timedelta(days=14)).isoformat())
+    teacher.get_by_label('Что будет проверяться').fill('Единицы измерения в таблице')
     teacher.get_by_label('Материалы и инструкции').fill('Три измерения на каждом датчике')
     teacher.get_by_role('button', name='Выдать задание').click()
     assignment_url = teacher.url
@@ -92,11 +93,16 @@ def exercise(browser, base):
     student.get_by_role('button', name='Проверить код группы').click()
     student.get_by_role('button', name='Подтвердить вступление').click()
     expect(student).to_have_url(group_url)
-    student.get_by_role('link', name='Метеостанция').click()
+    student.goto(base + '/')
+    student.get_by_role('region', name='Задания групп').get_by_role('link', name='Метеостанция').click()
+    expect(student.get_by_text('Единицы измерения в таблице')).to_be_visible()
     expect(student.get_by_text('Три измерения на каждом датчике')).to_be_visible()
     student.get_by_role('button', name='Создать проект по заданию').click()
     expect(student.get_by_text('Проект связан с заданием.')).to_be_visible()
     project_path = student.get_by_role('link', name='Обзор проекта', exact=True).get_attribute('href')
+    student.get_by_role('link', name='Обзор проекта', exact=True).click()
+    student.get_by_role('link', name='Условия задания').click()
+    expect(student).to_have_url(assignment_url)
     assert teacher.goto(base + project_path).status == 403
     student.get_by_role('button', name='Предложить сопровождение учителю группы').click()
 
@@ -106,14 +112,35 @@ def exercise(browser, base):
     teacher.get_by_role('button', name='Подтвердить', exact=True).click()
     student.reload()
     student.get_by_role('link', name='Подготовить результат').click()
+    result_editor = student.get_by_role('dialog', name='Результат этапа 1')
+    result_editor.get_by_label('Выбранная тема').fill('Первый результат замеров')
+    with student.expect_popup() as instructions:
+        result_editor.get_by_role('link', name='Условия задания (в новой вкладке)').click()
+    expect(instructions.value).to_have_url(assignment_url)
+    instructions.value.close()
+    expect(result_editor.get_by_label('Выбранная тема')).to_have_value('Первый результат замеров')
     submit_stage(student, 'Первый результат замеров')
+    teacher.goto(base + '/notifications')
+    teacher.locator('main').get_by_role('link', name='Этап 1 отправлен на проверку').click()
+    expect(teacher.get_by_text('Отправка №1', exact=True)).to_be_visible()
 
     teacher.goto(assignment_url)
     expect(teacher.get_by_role('link', name='Ждёт проверки: 1')).to_be_visible()
-    teacher.get_by_role('link', name='Открыть сдачу').click()
+    teacher.goto(base + '/teacher/review')
+    teacher.get_by_text('Поиск и фильтры', exact=True).click()
+    group_id = urlsplit(group_url).path.rsplit('/', 1)[-1]
+    teacher.get_by_label('Проект', exact=True).select_option(project_path.rsplit('/', 1)[-1])
+    teacher.get_by_label('Класс', exact=True).select_option(group_id)
+    expect(teacher.get_by_label('Проект', exact=True)).to_be_disabled()
+    teacher.get_by_label('Поиск', exact=True).fill('Метеостанция')
+    teacher.get_by_role('button', name='Показать', exact=True).click()
+    teacher.locator('[data-work-key]').get_by_text('Метеостанция', exact=True).click()
     expect(teacher.get_by_text('Первый результат замеров', exact=True)).to_be_visible()
     teacher.get_by_label('Комментарий ученикам').fill('Добавьте единицы измерения.')
     teacher.get_by_role('button', name='На доработку', exact=True).click()
+    review_filters = parse_qs(urlsplit(teacher.url).query)
+    assert review_filters.get('group') == [group_id]
+    assert review_filters.get('q') == ['Метеостанция']
     teacher.goto(assignment_url)
     expect(teacher.get_by_role('link', name='На доработке: 1')).to_be_visible()
 
@@ -124,8 +151,11 @@ def exercise(browser, base):
     teacher.goto(assignment_url)
     teacher.get_by_role('link', name='Открыть сдачу').click()
     expect(teacher.get_by_text('Средняя температура 20 градусов Цельсия')).to_be_visible()
+    expect(teacher.get_by_text('Отправка №2', exact=True)).to_be_visible()
+    expect(teacher.get_by_text('Первый результат замеров', exact=True)).to_be_visible()
     teacher.get_by_role('button', name='Принять этап').click()
     expect(teacher.get_by_text('Этап принят. Следующий этап открыт.')).to_be_visible()
+    assert parse_qs(urlsplit(teacher.url).query).get('group') == [group_id]
 
     for stage in range(2, 6):
         student.goto(assignment_url)
@@ -142,6 +172,9 @@ def exercise(browser, base):
     student.get_by_label('Описание выступления').fill('Методика и результаты замеров')
     student.get_by_role('button', name='Отправить защиту учителю').click()
     expect(student.get_by_text('Запись ожидает проверки учителя.', exact=False)).to_be_visible()
+    teacher.goto(base + '/notifications')
+    teacher.locator('main').get_by_role('link', name='Видеозащита отправлена на проверку').click()
+    expect(teacher.get_by_role('button', name='Принять видеозащиту')).to_be_visible()
     teacher.goto(assignment_url)
     teacher.get_by_role('link', name='Открыть сдачу').click()
     teacher.get_by_role('button', name='Принять видеозащиту').click()
@@ -158,7 +191,8 @@ def exercise(browser, base):
     expect(student.get_by_text('Итого: 45 / 45 · Оценка: 5')).to_be_visible()
 
     login(outsider, base + '/teacher/login', 'outside-smoke')
-    for path in (urlsplit(assignment_url).path, project_path, project_path + '/history', project_path + '/assessment'):
+    for path in (urlsplit(assignment_url).path, project_path, project_path + '/history', project_path + '/assessment',
+                 f'/teacher/review?group={group_id}'):
         assert outsider.goto(base + path).status == 403, path
     print('PASS: class assignment, consent, five stages, return and resubmission, defense, grade and outsider isolation.')
 

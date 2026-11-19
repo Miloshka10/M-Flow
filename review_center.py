@@ -15,6 +15,7 @@ from grading import CRITERIA, MAX_SCORE
 from interface import icon
 from material_links import safe_web_url
 from teacher_queue import entries, queue_page, sent_date
+from teacher_overview import project_scope
 
 KINDS = {'all': 'Все на проверке', 'stage': 'Этапы', 'defense': 'Видеозащиты', 'report': 'Отчёты — информация'}
 SORTS = {'oldest': 'Сначала ранние', 'newest': 'Сначала новые'}
@@ -37,20 +38,19 @@ def center_url(params=None, work=None, page=None, detail=False):
     return '/teacher/review' + ('?' + urlencode(values) if values else '') + ('#review-detail' if detail else '')
 
 
-def submission_index(conn, teacher_id):
+def submission_index(conn, teacher_id, group_id=None):
     """One query, current submission metadata only, scoped before transfer from DB."""
-    rows = conn.execute('''WITH visible AS (
-        SELECT id FROM projects p WHERE p.owner_id=? OR EXISTS (
-            SELECT 1 FROM project_members m WHERE m.project_id=p.id AND m.user_id=?))
+    scope, parameters = project_scope(teacher_id, group_id)
+    rows = conn.execute(scope + '''
         SELECT h.project_id,h.kind,h.number,h.attempt,h.recorded_at
-        FROM work_history h JOIN visible v ON v.id=h.project_id
+        FROM work_history h JOIN visible_projects v ON v.id=h.project_id
         JOIN project_stages s ON s.project_id=h.project_id AND s.number=h.number AND s.revision=h.revision
         WHERE h.kind='stage' AND h.event='submit' AND s.state='review'
         UNION ALL
         SELECT h.project_id,h.kind,h.number,h.attempt,h.recorded_at
-        FROM work_history h JOIN visible v ON v.id=h.project_id
+        FROM work_history h JOIN visible_projects v ON v.id=h.project_id
         JOIN project_defenses d ON d.project_id=h.project_id AND d.revision=h.revision
-        WHERE h.kind='defense' AND h.event='submit' AND d.state='submitted' ''', (teacher_id, teacher_id))
+        WHERE h.kind='defense' AND h.event='submit' AND d.state='submitted' ''', parameters)
     return {(f'stage-{r["project_id"]}-{r["number"]}' if r['kind'] == 'stage' else f'defense-{r["project_id"]}'): dict(r) for r in rows}
 
 
@@ -170,6 +170,8 @@ def render_detail(item, record, context, params, token, explicit=False, error=''
         return html + f'<p class="rc-hint">Отчёт о задаче — информация о ходе работы. Его прочтение не принимает этап и не выставляет оценку.</p><p class="rc-hint">{escape(item["author"] or "Автор не указан")} · {format_timestamp(item["sent"])}</p><p class="rc-result">{escape(item["body"])}</p></section>'
     meta = item.get('submission')
     date = meta['recorded_at'] if meta else item['sent']
+    attempt = f'Отправка №{meta["attempt"]}' if meta and meta['attempt'] else 'Номер отправки неизвестен'
+    html += f'<p class="rc-hint"><strong>{attempt}</strong></p>'
     html += f'<p class="rc-hint">Автор: {escape(item["author"] or "не указан")} · {"Отправлено" if meta else "Обновлено"}: {format_timestamp(date)}{(" · " + wait_label(date)) if meta else ""}</p>'
     if not meta:
         html += '<p class="rc-hint">История этой отправки не записана: показана дата последнего обновления, точное время ожидания неизвестно.</p>'
@@ -210,19 +212,31 @@ def render_detail(item, record, context, params, token, explicit=False, error=''
     return html + '</section>'
 
 
-def render_center(projects, result, selected, record, context, params, token, connections, explicit=False, error='', submitted=None):
+def render_center(projects, result, selected, record, context, params, token, connections, explicit=False, error='', submitted=None, groups=()):
     counts = {kind: sum(item['kind'] == kind for p in projects for item in entries(p)) for kind in ('stage', 'defense')}
     stats = ''
+    tab_params = {key: params.get(key) for key in ('group', 'q', 'project', 'sort')}
+    if tab_params['sort'] == 'oldest':
+        tab_params.pop('sort')
+    group_id = params.get('group')
+    group = next((g for g in groups if g['id'] == group_id), None)
+    group_context = (f'<p class="rc-hint">Класс: <a href="/groups/{group["id"]}">{escape(group["name"])}</a></p>'
+                     if group else '')
     for kind, number, label in (('all', sum(counts.values()), 'Все'), ('stage', counts['stage'], 'Этапы'), ('defense', counts['defense'], 'Видеозащиты')):
-        stats += f'<a class="rc-stat" href="{center_url(dict(kind=kind))}" {("aria-current=\"true\"" if params["kind"] == kind else "")}>{label} <strong>{number}</strong></a>'
+        stats += f'<a class="rc-stat" href="{escape(center_url(dict(tab_params, kind=kind)), quote=True)}" {("aria-current=\"true\"" if params["kind"] == kind else "")}>{label} <strong>{number}</strong></a>'
     options = lambda items, value: ''.join(f'<option value="{escape(str(k), quote=True)}" {("selected" if str(k) == str(value) else "")}>{escape(v)}</option>' for k, v in items)
     project_options = options([('', 'Все проекты')] + [(p['id'], p['name']) for p in projects], params.get('project', ''))
-    filtered = bool(params['q'] or params.get('project') or params['sort'] != 'oldest')
+    group_options = options([('', 'Все классы')] + [(g['id'], g['name'] + (' · архив' if g['archived'] else ''))
+                            for g in groups], group_id or '')
+    class_filter = (f'<label><span id="review-class-label">Класс</span>'
+                    f'<select name="group" aria-labelledby="review-class-label">{group_options}</select></label>'
+                    if groups else '')
+    filtered = bool(params['q'] or params.get('project') or group or params['sort'] != 'oldest')
     html = f'''<div class="rc-heading"><h1>Центр проверки</h1><a class="back" href="/teacher">{icon('arrow-left')} В кабинет</a></div>
-        <div class="rc-toolbar"><nav class="rc-stats" aria-label="Работы на проверке">{stats}</nav>
-        <a class="action-link" href="/teacher/review?kind=report" {'aria-current="true"' if params['kind'] == 'report' else ''}>Отчёты о задачах</a></div>
+        {group_context}<div class="rc-toolbar"><nav class="rc-stats" aria-label="Работы на проверке">{stats}</nav>
+        <a class="action-link" href="{escape(center_url(dict(tab_params, kind='report')), quote=True)}" {'aria-current="true"' if params['kind'] == 'report' else ''}>Отчёты о задачах</a></div>
         <details class="rc-filter-panel" {'open' if filtered else ''}><summary data-ui-icon="filter">Поиск и фильтры{' · применены' if filtered else ''}</summary><form class="rc-filters" method="get"><label>Поиск<input type="search" name="q" value="{escape(params['q'], quote=True)}" placeholder="Проект, ученик или работа"></label>
-        <label>Проект<select name="project">{project_options}</select></label><label>Работы<select name="kind">{options(KINDS.items(), params['kind'])}</select></label><label>Порядок<select name="sort">{options(SORTS.items(), params['sort'])}</select></label><button data-ui-icon="filter">Показать</button><a class="action-link" href="/teacher/review">Сбросить</a></form></details>
+        {class_filter}<label><span id="review-project-label">Проект</span><select name="project" aria-labelledby="review-project-label">{project_options}</select></label><label>Работы<select name="kind">{options(KINDS.items(), params['kind'])}</select></label><label>Порядок<select name="sort">{options(SORTS.items(), params['sort'])}</select></label><button data-ui-icon="filter">Показать</button><a class="action-link" href="/teacher/review">Сбросить</a></form></details>
         <div class="rc-layout">{render_inbox(result, params, selected, explicit)}{render_detail(selected, record, context, params, token, explicit, error, submitted)}</div>'''
     requests, more = connections
     html += '<section class="rc-connections"><h2>Согласование руководства</h2>'

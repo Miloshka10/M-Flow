@@ -3,12 +3,13 @@ from collections import Counter
 from html import escape
 import time
 
-from database import PostgresConnection, execute_schema_script, form_database_id, insert_id
+from database import PostgresConnection, execute_schema_script, form_database_id, insert_id, table_columns
 from deadlines import deadline_info, format_timestamp, parse_deadline
 from interface import icon
 from learning_groups import _lock, group_for
 from material_links import safe_web_url
 from navigation import bounded_page, page_links
+from review_center import center_url
 from project_rules import create_owned_project, has_project_teacher
 from project_stages import get_stages
 from project_workspace import next_step
@@ -35,6 +36,7 @@ def initialize_assignments(conn):
             due_on TEXT NOT NULL,
             materials TEXT NOT NULL DEFAULT '',
             material_url TEXT NOT NULL DEFAULT '',
+            criteria TEXT NOT NULL DEFAULT '',
             revision INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (CAST(CURRENT_TIMESTAMP AS TEXT))
         );
@@ -47,6 +49,30 @@ def initialize_assignments(conn):
             PRIMARY KEY (assignment_id,student_id)
         );
     """)
+    if 'criteria' not in table_columns(conn, 'group_assignments'):
+        conn.execute("ALTER TABLE group_assignments ADD COLUMN criteria TEXT NOT NULL DEFAULT ''")
+
+
+def student_home_assignments(conn, student_id):
+    return conn.execute("""SELECT a.id,a.group_id,a.title,a.due_on,g.name AS group_name,p.id AS project_id
+        FROM learning_group_members m JOIN learning_groups g ON g.id=m.group_id AND g.archived=0
+        JOIN group_assignments a ON a.group_id=g.id
+        LEFT JOIN group_assignment_projects ap ON ap.assignment_id=a.id AND ap.student_id=m.student_id
+        LEFT JOIN projects p ON p.id=ap.project_id AND p.owner_id=m.student_id
+        WHERE m.student_id=? ORDER BY CASE WHEN p.id IS NULL THEN 0 ELSE 1 END,a.due_on,a.id DESC LIMIT 5""",
+        (student_id,)).fetchall()
+
+
+def assignment_url(item):
+    return f'/groups/{item["group_id"]}/assignments/{item["id"]}'
+
+
+def project_assignment_link(project, css_class='action-link', *, new_tab=False):
+    if project is None or project['assignment_id'] is None:
+        return ''
+    url = assignment_url({'id': project['assignment_id'], 'group_id': project['assignment_group_id']})
+    attrs = ' target="_blank" rel="noopener" aria-label="Условия задания (в новой вкладке)"' if new_tab else ''
+    return f'<a class="{css_class}" href="{url}"{attrs}>Условия задания {icon("external" if new_tab else "arrow")}</a>'
 
 
 def assignments_for(conn, group_id, limit, offset=0):
@@ -63,8 +89,12 @@ def assignment_for(conn, group_id, assignment_id):
 
 
 def assignment_fields(form):
-    fields = tuple(form.get(key, '').strip() for key in ('title', 'goal', 'due_on', 'materials', 'material_url'))
-    title, goal, due_on, materials, url = fields
+    fields = tuple(form.get(key, '').strip() for key in ('title', 'goal', 'due_on', 'materials', 'material_url', 'criteria'))
+    title, goal, due_on, materials, url, criteria = fields
+    if any("\0" in value for value in fields):
+        raise ValueError("Удалите недопустимые символы из текста задания.")
+    if len(criteria) > 2000:
+        raise ValueError("Критерии должны быть до 2000 символов.")
     if not title or len(title) > 120 or not goal or len(goal) > 2000:
         raise ValueError('Укажите название до 120 символов и цель до 2000 символов.')
     if parse_deadline(due_on) is None:
@@ -82,12 +112,12 @@ def save_assignment(conn, user, group_id, form, assignment_id=None):
     fields = assignment_fields(form)
     if assignment_id is None:
         assignment_id = insert_id(conn, """INSERT INTO group_assignments
-            (group_id,title,goal,due_on,materials,material_url) VALUES (?,?,?,?,?,?)""", (group_id, *fields))
+            (group_id,title,goal,due_on,materials,material_url,criteria) VALUES (?,?,?,?,?,?,?)""", (group_id, *fields))
     else:
         assignment = assignment_for(conn, group_id, assignment_id)
         if form.get('revision') != str(assignment['revision']):
             raise ValueError('Задание изменилось. Откройте свежую версию и повторите правку.')
-        conn.execute("""UPDATE group_assignments SET title=?,goal=?,due_on=?,materials=?,material_url=?,
+        conn.execute("""UPDATE group_assignments SET title=?,goal=?,due_on=?,materials=?,material_url=?,criteria=?,
             revision=revision+1 WHERE group_id=? AND id=?""", (*fields, group_id, assignment_id))
     conn.commit()
     return assignment_id
@@ -175,10 +205,11 @@ def assignment_cards(group_id, assignments):
     return '<ul>' + ''.join(cards) + '</ul>' if cards else '<p>Заданий пока нет.</p>'
 
 
-def group_assignment_section(conn, group):
+def group_assignment_section(conn, group, teacher=False):
     gid = group['id']
+    queue_link = f'<a href="/teacher/review?group={gid}">Очередь класса {icon("arrow")}</a>' if teacher else ''
     return (f'<section class="group-panel"><h2>Задания группы</h2>{assignment_cards(gid, assignments_for(conn, gid, 3))}'
-            f'<a href="/groups/{gid}/assignments">Открыть задания группы {icon("arrow")}</a></section>')
+            f'<div class="group-actions"><a href="/groups/{gid}/assignments">Открыть задания группы {icon("arrow")}</a>{queue_link}</div></section>')
 
 
 def assignment_form(token, values, editing=False):
@@ -190,6 +221,7 @@ def assignment_form(token, values, editing=False):
         <label>Название задания<input name="title" maxlength="120" required value="{value("title")}"></label>
         <label>Цель<textarea name="goal" maxlength="2000" rows="4" required>{value("goal")}</textarea></label>
         <label>Срок сдачи<input type="date" name="due_on" required value="{value("due_on")}"></label>
+        <label>Что будет проверяться<textarea name="criteria" maxlength="2000" rows="3">{value("criteria")}</textarea></label>
         <label>Материалы и инструкции<textarea name="materials" rows="3" maxlength="2000">{value("materials")}</textarea></label>
         <label>Ссылка на материалы<input type="url" name="material_url" maxlength="2000" value="{value("material_url")}"></label>
         <button data-ui-icon="save">{"Сохранить задание" if editing else "Выдать задание"}</button></form>'''
@@ -269,7 +301,8 @@ def teacher_progress(group, assignment, rows, view, page):
         name = escape(row['project_name'] or 'Проект не выбран')
         if row['connected']:
             name = f'<a href="/project/{row["project_id"]}">{name}</a>'
-        work = f' · <a href="/teacher/review?work={row["work"]}">Открыть сдачу</a>' if row['work'] else ''
+        url = escape(center_url({"group": group["id"]}, work=row["work"], detail=True), quote=True)
+        work = f' · <a href="{url}">Открыть сдачу</a>' if row['work'] else ''
         first = f' · Первая сдача: {escape(format_timestamp(row["first_at"]))}' if row['first_at'] else ''
         students.append(f'<li><strong>{escape(row["username"])}</strong> · {name} · {PROGRESS[row["status"]]}{work}{first}</li>')
     roster = '<ul>' + ''.join(students) + '</ul>' if students else '<p>Здесь пока нет учеников.</p>'
@@ -283,6 +316,8 @@ def render_assignment(conn, user, group, assignment, token, args, submitted=None
     due = deadline_info(assignment['due_on'])
     body = STYLES + f'''<section class="group-panel"><h2>Цель</h2><p class="group-text">{escape(assignment["goal"])}</p>
         <p>Срок сдачи · {escape(due["display_date"])} (МСК)</p>'''
+    if assignment['criteria']:
+        body += f'<h2>Что будет проверяться</h2><p class="group-text">{escape(assignment["criteria"])}</p>'
     if assignment['materials'] or assignment['material_url']:
         body += f'<h2>Материалы</h2><p class="group-text">{escape(assignment["materials"])}</p>'
         if safe_web_url(assignment['material_url']):

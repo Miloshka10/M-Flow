@@ -3,6 +3,18 @@ document.addEventListener('DOMContentLoaded', () => {
   'use strict';
   if (!document.body.hasAttribute('data-design-suite')) return;
   document.documentElement.classList.add('ds-enhanced');
+  const reviewFilters = document.querySelector('.rc-filters');
+  if (reviewFilters) {
+    const group = reviewFilters.querySelector('[name="group"]');
+    const project = reviewFilters.querySelector('[name="project"]');
+    if (group && project) {
+      const loadedGroup = group.value;
+      group.addEventListener('change', () => {
+        project.disabled = group.value !== loadedGroup;
+        if (project.disabled) project.value = '';
+      });
+    }
+  }
   const main = document.querySelector('[data-suite-dashboard]');
   if (main) {
     const initial = main.dataset.suiteView;

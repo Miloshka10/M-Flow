@@ -72,7 +72,7 @@ class LearningGroupCases:
         progress = self.client.get(path).text
         self.assertIn('Ждёт проверки: 1', progress)
         self.assertIn('Первая сдача:', progress)
-        self.assertIn(f'/teacher/review?work=stage-{pid}-1', progress)
+        self.assertIn(f'/teacher/review?group={gid}&amp;work=stage-{pid}-1#review-detail', progress)
         self.assertEqual(self.center_decide(f'stage-{pid}-1', action='return', comment='Уточните методику').status_code, 302)
         self.assertIn('На доработке: 1', self.client.get(path).text)
 
@@ -95,6 +95,83 @@ class LearningGroupCases:
         self.sign_in(3)
         self.assertIn('Обзор проекта', self.client.get(first).text)
         self.assertEqual(self.post(second, data=dict(action='create_project', project_name='Архив')).status_code, 403)
+
+    def test_assignment_criteria_survive_edit_and_previous_schema_is_upgraded(self):
+        gid = self.group_create()
+        path = self.assignment_create(gid)
+        conn = self.module.get_db()
+        conn.execute('ALTER TABLE group_assignments DROP COLUMN criteria')
+        conn.commit()
+        conn.close()
+        with patch.dict(os.environ, M_FLOW_DEBUG='0', M_FLOW_TEACHER_USER='', M_FLOW_TEACHER_PASSWORD=''):
+            self.module.prepare_database()
+            self.module.prepare_database()
+        self.assertIn('Сравнить показания датчиков', self.client.get(path).text)
+        fields = dict(action='save', title='Задание класса', goal='Цель', due_on='2027-01-01',
+                      revision='0', criteria='<b>Единицы измерения</b>')
+        self.assertEqual(self.post(path, data=fields).status_code, 302)
+        self.assertIn('&lt;b&gt;Единицы измерения&lt;/b&gt;', self.client.get(path).text)
+
+    def test_home_and_project_expose_assignment_links_only_to_its_group_member(self):
+        self.add_candidate()
+        gid = self.group_create()
+        self.group_join(self.group_code(gid))
+        path = self.assignment_create(gid, title='Закрытая метеостанция')
+        self.sign_in(4)
+        self.assertNotIn(path, self.client.get('/').text)
+        self.sign_in(3)
+        self.assertIn(f'href="{path}"', self.client.get('/').text)
+        self.assertEqual(self.post(path, data=dict(action='link_project', project_id='2')).status_code, 302)
+        for project in ('/project/2', '/project/2/stages', '/next/project/2'):
+            page = self.client.get(project).text
+            self.assertIn(f'href="{path}">Условия задания', page)
+        self.group_post(gid, user=3, action='leave')
+        self.assertNotIn(path, self.client.get('/project/2').text)
+        self.assertNotIn(path, self.client.get('/').text)
+        self.assertEqual(self.client.get(path).status_code, 403)
+
+    def test_review_class_scopes_assignment_and_legacy_projects_without_granting_access(self):
+        self.add_candidate()
+        gid = self.group_create()
+        code = self.group_code(gid)
+        self.group_join(code)
+        self.group_join(code, user=4)
+        path = self.assignment_create(gid)
+        self.sign_in(3)
+        self.assertEqual(self.post(path, data=dict(action='link_project', project_id='2')).status_code, 302)
+        self.assertEqual(self.post('/project/2/stages', data=dict(action='submit', number='1', revision='0',
+                                                                result='Сдано из задания')).status_code, 302)
+        self.stage_post(3)
+        self.sign_in(4)
+        made = self.post('/add_project', data=dict(name='Обычный проект класса'))
+        legacy_id = int(made.headers['Location'].rsplit('/', 1)[-1])
+        self.assertEqual(self.group_post(gid, user=4, action='select', project_id=str(legacy_id)).status_code, 302)
+        scoped = f'/teacher/review?group={gid}'
+        self.sign_in(1)
+        self.assertNotIn('Обычный проект класса', self.client.get(scoped).text)
+        self.assertEqual(self.client.get(scoped + f'&project={legacy_id}').status_code, 403)
+        self.assertEqual(self.group_post(gid, user=4, action='propose', project_id=str(legacy_id)).status_code, 302)
+        self.assertEqual(self.supervision_reply(1).status_code, 302)
+        self.sign_in(4)
+        self.assertEqual(self.post(f'/project/{legacy_id}/stages', data=dict(action='submit', number='1',
+                                revision='0', result='Сдача из проекта группы')).status_code, 302)
+        self.sign_in(1)
+        page = self.client.get(scoped).text
+        self.assertIn('data-work-key="stage-2-1"', page)
+        self.assertIn(f'data-work-key="stage-{legacy_id}-1"', page)
+        self.assertNotIn('data-work-key="stage-1-1"', page)
+        self.assertIn('Отправка №1', self.client.get(scoped + '&work=stage-2-1').text)
+        self.assertEqual(self.client.get(scoped + '&work=stage-1-1').status_code, 403)
+        self.assertEqual(self.client.get(scoped + '&project=1').status_code, 403)
+        self.assertEqual(self.client.get('/teacher/review?group=invalid').status_code, 400)
+        result = self.center_decide('stage-2-1', action='return', comment='Уточните единицы',
+                                    suffix=f'&group={gid}&sort=newest&q=student')
+        self.assertEqual(result.status_code, 302)
+        for param in (f'group={gid}', 'sort=newest', 'q=student'):
+            self.assertIn(param, result.headers['Location'])
+        self.sign_in(2)
+        self.assertEqual(self.client.get(scoped).status_code, 403)
+        self.assertEqual(self.client.get(scoped + '&work=stage-2-1').status_code, 403)
 
     def test_archive_is_paginated_and_does_not_exhaust_active_group_limit(self):
         conn = self.module.get_db()
