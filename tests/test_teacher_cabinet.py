@@ -262,7 +262,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertEqual(re.findall(r'data-work-kind="(\w+)"', queue), ['defense','stage','report','report'])
         for text in ('Автор: student-one', 'Команда: student-one', '01.03.2026 15:00 МСК',
                      '/teacher/review/2/stage-1', '/teacher/review/1/defense', '/project/1#task-1',
-                     'Информационный отчёт · решение не требуется', '&lt;script&gt;Отчёт команды&lt;/script&gt;'):
+                     'Отчёты по задачам', '&lt;script&gt;Отчёт команды&lt;/script&gt;'):
             self.assertIn(text, queue)
         self.assertEqual(queue.count('Ожидание:'), 2)
         self.assertNotIn('Private', queue)
@@ -287,7 +287,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             self.assertEqual(set(re.findall(r'data-work-kind="(\w+)"', queue)), {kind})
         page = self.client.get('/teacher?kind=stage&project=2&focus=review&q=STUDENT&sort=newest').text
         self.assertIn('data-work-key="stage-2-1"', self.queue_html(page))
-        self.assertNotIn('<h4>Owned project</h4>', self.queue_html(page))
+        self.assertNotIn('<h3>Owned project</h3>', self.queue_html(page))
         for value in ('stage','2','review','newest'):
             self.assertIn(f'value="{value}" selected', page)
         self.assertIn('data-review-count="2"', page)
@@ -599,11 +599,11 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         queue = overdue.split('id="task-attention"')[1].split('</section>')[0]
         self.assertIn('Someone else task', queue)
         self.assertIn('Просрочено на 3 дня · 10.10.2026', queue)
-        for title in ('Этап ожидает проверки', 'Due tomorrow', 'Malformed date', 'Done past'):
+        for title in ('Проверить этап', 'Due tomorrow', 'Malformed date', 'Done past'):
             self.assertNotIn(title, queue)
         self.assertNotIn('<h2>Private project</h2>', overdue)
         review_queue = review.split('id="review-queue"')[1].split('</section>')[0]
-        self.assertIn('Этап ожидает проверки', review_queue)
+        self.assertIn('Проверить этап', review_queue)
         self.assertNotIn('Someone else task', review_queue)
         self.assertNotIn('<h2>Owned project</h2>', review)
         self.assertEqual(self.database_snapshot(), before)
@@ -1200,8 +1200,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertEqual(self.post('/project/2/defense', data=dict(defense, revision='1')).status_code, 302)
         self.sign_in(1)
         page = self.client.get('/teacher?focus=attention').text
-        self.assertIn('Этап ожидает проверки', page)
-        self.assertIn('Видеозащита ожидает проверки', page)
+        self.assertIn('Проверить этап', page)
+        self.assertIn('Проверить видеозащиту', page)
         # Completing tasks is not the same as passing project review.
         self.assertIn('Observed project', self.client.get('/teacher?focus=done').text)
 
@@ -1429,8 +1429,8 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertIn('data-review-count="2"', page)
         self.assertIn('href="/teacher#review-queue"', page)
         self.assertNotIn('project-create', page)
-        self.assertIn('Этап ожидает проверки', page)
-        self.assertIn('Видеозащита ожидает проверки', page)
+        self.assertIn('Проверить этап', page)
+        self.assertIn('Проверить видеозащиту', page)
 
     def test_product_assets_remain_lightweight_local_and_accessible(self):
         with self.client.get('/static/product-design.css') as response:

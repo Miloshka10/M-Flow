@@ -14,7 +14,7 @@ PROJECT_FOCUS = {
     'all': 'Все проекты', 'overdue': 'Просрочены задачи учеников', 'review': 'Ожидают моей проверки',
     'attention': 'Требуют внимания', 'done': 'Все задачи выполнены',
 }
-TEACHER_QUEUE_CSS = '<link rel="stylesheet" href="/static/teacher-queue.css?v=20261114-review">'
+TEACHER_QUEUE_CSS = '<link rel="stylesheet" href="/static/teacher-queue.css?v=20261122-reading">'
 PAGE_SIZE = 20
 
 
@@ -51,8 +51,7 @@ def entries(project):
                    title=f'Этап {stage["number"]}: {stage["title"]}', author=stage.get('author_name'),
                    sent=stage.get('updated_at'), revision=stage['revision'], requires_decision=True,
                    work=f'stage-{stage["number"]}', action='Проверить этап', body='',
-                   previous_decision=bool(stage.get('reviewed_by')),
-                   history_href=f'/project/{pid}/history?work=stage-{stage["number"]}')
+                   previous_decision=bool(stage.get('reviewed_by')))
     defense = project['defense']
     if defense.get('revision') and defense['state'] == 'submitted':
         yield dict(common, key=f'defense-{pid}', kind='defense', title='Видеозащита',
@@ -143,13 +142,12 @@ def render_queue(result, params, has_projects=True, *, groups=(), group_projects
     group_projects = group_projects or {}
     now = datetime.now(timezone.utc)
     html = ''
-    previous_group = None
+    report_heading = False
     first_decision = next((item['key'] for item in result['items'] if item['requires_decision']), None)
     for item in result['items']:
-        group = 'Требуется решение' if item['requires_decision'] else 'Отчёты — информация'
-        if group != previous_group:
-            html += f'<h3>{group}</h3>'
-            previous_group = group
+        if not item['requires_decision'] and not report_heading:
+            html += '<h3>Отчёты по задачам</h3>'
+            report_heading = True
         date = item['date']
         try:
             local = date.astimezone(MOSCOW) if date else None
@@ -161,29 +159,26 @@ def render_queue(result, params, has_projects=True, *, groups=(), group_projects
         if item['requires_decision'] and local and date <= now:
             hours = (now - date) // timedelta(hours=1)
             elapsed = f'{hours // 24} д.' if hours >= 24 else f'{hours} ч.' if hours else 'меньше часа'
-            waiting = f'<strong class="queue-wait">Ожидание: {elapsed}</strong>'
-        label = {'stage': 'Этап ожидает проверки', 'defense': 'Видеозащита ожидает проверки',
-                 'report': 'Информационный отчёт · решение не требуется'}[item['kind']]
+            waiting = f'<strong class="queue-wait" title="{local:%d.%m.%Y %H:%M} МСК">Ожидание: {elapsed}</strong>'
         author = escape(item['author'] or 'не указан')
         team = f'<p class="t-muted">Команда: {escape(item["team"])}</p>' if item['team'] else ''
         body = f'<p class="teacher-queue-body">{escape(item["body"])}</p>' if item['body'] else ''
-        material = (f'<details class="ds-queue-material"><summary>{"Отчёт и команда" if item["kind"] == "report" else "Команда проекта"}</summary>{team}{body}</details>'
-                    if team or body else '')
-        previous = '<p class="work-previous-decision">Есть предыдущее решение</p>' if item.get('previous_decision') else ''
-        history = (f'<a class="action-link work-review-history" href="{item["history_href"]}">История этапа</a>'
-                   if item.get('previous_decision') else '')
+        material = (f'<details class="ds-queue-material"><summary>Отчёт и команда</summary>{team}{body}</details>'
+                    if not item['requires_decision'] and (team or body) else '')
+        previous = ' · Повторная сдача' if item.get('previous_decision') else ''
         target = (review_url(item['project_id'], item['work'], dict(params, page=result['page']))
                   if item['requires_decision'] else item['href'])
         classes = [group['name'] for group in groups if item['project_id'] in group_projects.get(group['id'], ())
                    and (group_id == group['id'] if group_id else not group['archived'])]
-        scope = escape(classes[0]) + (f' · ещё {len(classes) - 1}' if len(classes) > 1 else '') if classes else ''
-        html += f'''<article class="teacher-attention-item teacher-queue-item" data-work-kind="{item['kind']}"
-            data-work-key="{item['key']}"><span class="v3-submission-mark" aria-hidden="true">{icon('video' if item['kind'] == 'defense' else 'review')}</span>
-            <div class="v3-submission-main"><strong class="v3-submission-label">{label}</strong><h4>{escape(item['project_name'])}</h4>
-            <p class="v3-submission-type">{escape(item['title'])}</p>
-            <p class="t-muted">Автор: {author}{f' · {scope}' if scope else ''}</p>{previous}{material}</div>
-            <div class="v3-submission-side"><p class="queue-timing">{waiting}{date_html}</p>
-            <a class="{'btn' if item['key'] == first_decision else 'action-link'}" href="{escape(target, quote=True)}">{item['action']} {icon('arrow')}</a>{history}</div></article>'''
+        scope = ''
+        if classes and not group_id:
+            scope = ' · ' + escape(classes[0]) + (f' · ещё {len(classes) - 1}' if len(classes) > 1 else '')
+        html += f'''<article class="queue-row" data-work-kind="{item['kind']}" data-work-key="{item['key']}">
+            <div class="queue-work"><h3>{escape(item['project_name'])}</h3>
+            <p>{escape(item['title'])}{previous}</p>
+            <p class="t-muted">Автор: {author}{scope}</p>{material}</div>
+            <div class="queue-action"><p class="queue-timing">{waiting or date_html}</p>
+            <a class="{'btn' if item['key'] == first_decision else 'action-link'}" href="{escape(target, quote=True)}">{item['action']} {icon('arrow')}</a></div></article>'''
     if not result['items']:
         filtered = bool(params.get('q') or params.get('project') or params.get('focus', 'all') != 'all' or params.get('kind', 'all') != 'all')
         if filtered:

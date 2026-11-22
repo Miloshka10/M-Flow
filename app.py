@@ -39,7 +39,7 @@ from project_rules import create_owned_project, has_project_teacher
 from teacher_supervision import (initialize_supervision, create_invite, preview_invite, request_connection,
                                 invitation_action, request_end, respond_request, render_hub, participant)
 from auth_security import reserve_supervision_attempt
-from group_assignments import CLASSROOM_CSS, assignment_links
+from group_assignments import CLASSROOM_CSS, assignment_for, assignment_links
 from learning_groups import (initialize_groups, create_group, preview_code as preview_group_code,
                              join_group, change_group, own_groups, group_for, roster,
                              project_assignment_groups, render_groups, render_group, teacher_group_projects,
@@ -3135,10 +3135,12 @@ def teacher_review_work(project_id, work):
         pending = record['state'] == ('submitted' if defense else 'review')
         submission, previous = (review_history(conn, project_id, 'defense' if defense else 'stage', number, record['revision'])
                                 if pending else (None, None))
+        assignment = assignment_for(conn, group['id']) if pending and group and group['contains_project'] else None
         if error and pending and request.form.get('revision') == str(record['revision']):
             submitted = request.form
 
-    body = render_review(project_id, work, record, submission, previous, csrf_token(), submitted)
+    body = render_review(project_id, work, record, submission, previous, csrf_token(), submitted,
+                         assignment=assignment)
     if error and submitted is None:
         body = render_unsaved_result(request.form, user, review_url(project_id, work, filters), defense=defense) + body
     back_label = 'К очереди группы' if group else 'К очереди проверки'
@@ -3702,10 +3704,10 @@ def teacher_cabinet():
                     <div class="teacher-queue-heading">
                         <h2 id="review-queue-title">Очередь работ {group_context}</h2>
                         <div class="teacher-queue-toolbar">
-                            <p class="t-muted">Найдено работ: {queue['total']} · Требуется решение: {queue['decisions']}.</p>
+                            <p class="t-muted">На проверке: {queue['decisions']}</p>
                             <div class="teacher-queue-actions">{group_links}</div></div>
                         <details class="ui-teacher-filters"{' open' if not queue['items'] and (query or kind != 'all' or focus != 'all' or project_id) else ''}>
-                            <summary data-ui-icon="filter">Поиск и фильтры работ</summary>
+                            <summary data-ui-icon="filter">Фильтры</summary>
                             <form class="teacher-filters" method="get" action="/teacher#review-queue">
                                 <input type="search" name="q" value="{escape(query, quote=True)}"
                                     aria-label="Поиск проекта, автора или работы" placeholder="Найти проект, автора или работу">
@@ -3722,20 +3724,22 @@ def teacher_cabinet():
                     {messages}
                     {queue_html}
                 </section>
-                {classrooms}
+                {f'<details class="teacher-overview-details"><summary>Классы</summary>{classrooms}</details>' if classrooms else ''}
+                <details class="teacher-overview-details" {'open' if focus in ('overdue', 'attention') else ''}>
+                <summary>Сводка и сроки</summary>
                 <div class="t-stats" role="group" aria-label="Сводка по всем вашим проектам">
                     <a class="t-stat" href="/teacher?focus=review#review-queue"><strong data-review-count="{review_count}">{review_count:02d}</strong><span>На проверке</span></a>
                     <a class="t-stat" href="/teacher#teacher-projects"><strong>{len(overview)}</strong><span>Проектов</span></a>
                     <div class="t-stat"><strong>{len(student_ids)}</strong><span>Учеников</span></div>
                     <a class="t-stat {overdue_class}" href="/teacher?focus=overdue#task-attention"><strong>{overdue_tasks}</strong><span>Задач просрочено</span></a>
                 </div>
-                <details class="teacher-signal-strip"><summary>Сводка задач</summary>
+                <div class="teacher-signal-strip">
                     <span>Выполнено задач: <b>{done_tasks} из {total_tasks}</b> · {percent(done_tasks, total_tasks)}%</span>
                     <span>В ближайшие 3 дня: <b>{soon_tasks}</b></span>
                     <span>Без ответственного: <b>{unassigned_tasks}</b></span>
-                    <span>Сроки задач: {TIMEZONE_LABEL}. Ожидание проверки — не просрочка сдачи.</span>
-                </details>
+                </div>
                 <section class="teacher-panel teacher-task-attention" id="task-attention"><h2>{attention_title}</h2>{attention_html}</section>
+                </details>
                 <details class="ds-teacher-projects" id="teacher-projects"><summary>Проекты учеников</summary><div class="section-title"><h2>Проекты</h2>
                     <span class="t-muted">Показано {len(visible_projects)} из {len(overview)}</span></div>
                 {projects_html}</details>

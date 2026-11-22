@@ -5,10 +5,9 @@ from deadlines import format_timestamp
 from interface import icon
 from material_links import safe_web_url
 from teamwork import hidden_token
-from ui_components import state_badge
 
 
-def render_review(project_id, work, record, submission, previous, token, submitted=None):
+def render_review(project_id, work, record, submission, previous, token, submitted=None, *, assignment=None):
     defense = work == 'defense'
     title = 'Видеозащита' if defense else f'Этап {record["number"]} · {record["title"]}'
     base = f'/project/{project_id}'
@@ -29,14 +28,21 @@ def render_review(project_id, work, record, submission, previous, token, submitt
     resource = record['video_url'] if defense else record['presentation_url']
     if safe_web_url(resource):
         resource_label = 'Открыть запись защиты' if defense else 'Открыть презентацию'
-        media = f'<a class="action-link review-material" href="{escape(resource, quote=True)}" target="_blank" rel="noopener noreferrer">{resource_label} {icon("external")}</a>'
+        media = f'<a class="btn secondary review-material" href="{escape(resource, quote=True)}" target="_blank" rel="noopener noreferrer">{resource_label} {icon("external")}</a>'
     elif resource:
         media = '<p class="t-muted">Не удалось открыть сохранённую ссылку.</p>'
     else:
         media = ''
-    result_html = f'<p class="review-text">{escape(result)}</p>' if result else ''
+    result_html = f'<p class="review-submission">{escape(result)}</p>' if result else ''
     if not result_html and not media:
         result_html = '<p class="t-muted">Текст результата отсутствует.</p>'
+
+    criteria = ''
+    if assignment and assignment['criteria']:
+        criteria = f'''<details class="review-criteria">
+            <summary>Текущие критерии задания класса</summary>
+            <p class="review-text">{escape(assignment['criteria'])}</p>
+        </details>'''
 
     feedback = ''
     if previous:
@@ -55,22 +61,24 @@ def render_review(project_id, work, record, submission, previous, token, submitt
     confirm = 'Принять защиту' if defense else 'Согласовать тему' if record['number'] == 1 else 'Принять этап'
     comment = escape(submitted.get('teacher_comment', '')[:2000]) if submitted is not None else ''
     number_field = '' if defense else f'<input type="hidden" name="number" value="{record["number"]}">'
+    heading = 'Запись защиты' if defense else 'Что сдал ученик'
     return f'''<div class="review-layout">
-        <section class="card review-content" aria-labelledby="review-work-title">
-            <header class="review-work-heading">
-                <h2 id="review-work-title">{title}</h2>{state_badge("На проверке", "review")}
-            </header>
-            <p class="review-meta"><strong>{attempt_label}</strong><span>Автор: {author}</span><span>{date}</span></p>
-            {result_html}{media}{feedback}
+        <section class="review-content" aria-labelledby="review-work-title">
+            <p class="review-kind">{title}</p>
+            <div class="review-reading-header">
+                <h2 id="review-work-title">{heading}</h2>
+                <a class="action-link" href="#review-decision-title">К решению {icon("arrow")}</a>
+            </div>
+            <p class="review-meta"><strong>{attempt_label}</strong><span>{author}</span><span>{date}</span></p>
+            {media}{result_html}{feedback}{criteria}
         </section>
-        <section class="card review-decision" aria-labelledby="review-decision-title">
-            <h2 id="review-decision-title">Решение</h2>
+        <section class="review-decision" aria-labelledby="review-decision-title">
+            <h2 id="review-decision-title" tabindex="-1">Решение</h2>
             <form method="post" data-guard-draft data-draft-unsaved="{int(submitted is not None)}">
                 {hidden_token(token)}{number_field}<input type="hidden" name="revision" value="{record["revision"]}">
-                <label for="review-comment">Комментарий учителя</label>
-                <textarea name="teacher_comment" id="review-comment" rows="4" maxlength="2000"
-                    aria-describedby="review-comment-hint">{comment}</textarea>
-                <p id="review-comment-hint" class="review-meta">При возврате укажите, что исправить.</p>
+                <label for="review-comment">Комментарий ученику</label>
+                <textarea name="teacher_comment" id="review-comment" rows="3" maxlength="2000"
+                    placeholder="Что исправить, если возвращаете работу">{comment}</textarea>
                 <div class="review-buttons">
                     <button name="action" value="accept" data-ui-icon="check">{confirm}</button>
                     <button name="action" value="return" class="secondary" data-ui-icon="return">Вернуть на доработку</button>

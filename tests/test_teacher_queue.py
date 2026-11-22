@@ -18,7 +18,7 @@ class QueueDateTests(unittest.TestCase):
         self.assertNotIn('class="btn"', html)
         self.assertIn('Отчёт и команда', html)
         self.assertIn('Report &lt;script&gt;', html)
-        self.assertIn('решение не требуется', html)
+        self.assertIn('Отчёты по задачам', html)
 
     def test_utc_and_offset_dates_sort_as_same_instant(self):
         self.assertEqual(sent_date('2026-01-01 12:00:00'), sent_date('2026-01-01T15:00:00+03:00'))
