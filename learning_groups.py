@@ -18,7 +18,7 @@ from project_stages import STAGES, stage_label, stage_needs_revision, get_stages
 from project_rules import create_owned_project, has_project_teacher
 from project_workspace import next_step
 from video_defense import defense_for
-from teacher_queue import sent_date
+from teacher_queue import queue_url, review_url, sent_date
 from teacher_supervision import consented_connection
 from teamwork import hidden_token
 
@@ -30,7 +30,7 @@ PAGE_SIZE = 30
 CODE_ERROR = 'Код группы недоступен. Проверьте его или попросите учителя выдать новый.'
 VIEWS = {'all': 'Все ученики', 'review': 'Ждут проверки', 'revision': 'Дорабатывают', 'unlinked': 'Нужно подключение',
          'no_project': 'Без проекта', 'stale': 'Работы без обновлений 14 дней'}
-GROUP_CSS = '<link rel="stylesheet" href="/static/learning-groups.css?v=20261112-workflow">'
+GROUP_CSS = '<link rel="stylesheet" href="/static/learning-groups.css?v=20261114-review">'
 
 
 def initialize_groups(conn):
@@ -261,11 +261,12 @@ def teacher_review_group(conn, teacher_id, project_id, raw_group_id):
         group_id = form_database_id(raw_group_id)
     except ValueError:
         return None
-    return group_id if conn.execute('''SELECT 1 FROM learning_groups g
-        JOIN learning_group_members m ON m.group_id=g.id
-        JOIN projects p ON p.id=m.project_id AND p.owner_id=m.student_id
-        JOIN project_members pm ON pm.project_id=p.id AND pm.user_id=g.teacher_id
-        WHERE g.id=? AND g.teacher_id=? AND p.id=? LIMIT 1''', (group_id, teacher_id, project_id)).fetchone() else None
+    return conn.execute('''SELECT g.id,g.name,EXISTS (
+        SELECT 1 FROM learning_group_members m JOIN projects p ON p.id=m.project_id AND p.owner_id=m.student_id
+        WHERE m.group_id=g.id AND p.id=? AND EXISTS (SELECT 1 FROM project_members pm
+            WHERE pm.project_id=p.id AND pm.user_id=g.teacher_id)
+        ) AS contains_project FROM learning_groups g WHERE g.id=? AND g.teacher_id=?''',
+        (project_id, group_id, teacher_id)).fetchone()
 
 
 def roster(conn, user, group, args):
@@ -472,12 +473,12 @@ def render_group(conn, user, group, data, token, code=None, assignment_form=None
     body = GROUP_CSS + f'''<p class="groups-intro group-identity">Учитель: {escape(group['teacher_name'])}{' · В архиве' if group['archived'] else ''}</p><p class="group-text">{escape(group['description'])}</p>'''
     if group['archived']:
         body += '<p class="group-notice">Группа в архиве. Новые вступления и выбор проекта закрыты; существующие проекты и руководство сохранены.</p>'
-    body += render_assignment(assignment_for(conn, gid), token, teacher=data['teacher'],
-                              archived=group['archived'], submitted=assignment_form)
+    assignment = render_assignment(assignment_for(conn, gid), token, teacher=data['teacher'],
+                                   archived=group['archived'], submitted=assignment_form)
     if not data['teacher']:
-        body += render_student_project(conn, user, group, data['rows'][0] if data['rows'] else {}, token)
+        body += assignment + render_student_project(conn, user, group, data['rows'][0] if data['rows'] else {}, token)
         return body + '<details class="group-panel"><summary>Выход из группы</summary><p>Проект, оценки и руководство сохранятся.</p>' + form('leave', '<button class="secondary" data-ui-icon="logout">Выйти из группы</button>') + '</details>'
-    body += f'<a class="action-link" href="/teacher?group={gid}#review-queue">Очередь работ группы {icon("arrow")}</a>'
+    body += f'<a class="btn group-review-entry" href="{queue_url(dict(group=gid))}">Очередь работ группы {icon("arrow")}</a>'
     c = data['counts']
     stats = [('all', c['total']), ('no_project', c['no_project']), ('review', c['review']),
              ('revision', c['revision']), ('unlinked', c['unlinked'])]
@@ -487,6 +488,9 @@ def render_group(conn, user, group, data, token, code=None, assignment_form=None
         stat_links.append(f'<a href="/groups/{gid}?view={view}#group-roster"{current}>'
                           f'<strong>{count}</strong><span>{VIEWS[view]}</span></a>')
     body += f'<nav class="group-stats" aria-label="Фильтры по состоянию проектов">{"".join(stat_links)}</nav>'
+    if assignment:
+        body += (f'<details id="group-assignment-panel" class="group-panel" {"open" if assignment_form is not None or not c["total"] else ""}>'
+                 f'<summary>Задание группы</summary>{assignment}</details>')
     body += f'<details class="group-panel" {"open" if code or not c["total"] else ""}><summary data-ui-icon="link">Приглашение класса</summary><p>Один код можно передать всему классу. Он действует 7 дней, показывается только при создании. Новый код отменяет предыдущий, но сохраняет состав группы.</p><div class="group-actions">'
     if not group['archived']:
         body += form('invite', '<button data-ui-icon="plus">Создать новый код группы</button>') + form('revoke', '<button class="secondary" data-ui-icon="close">Отозвать код</button>')
@@ -515,7 +519,8 @@ def render_group(conn, user, group, data, token, code=None, assignment_form=None
             if row['revision_target'] and (data['view'] == 'revision' or not row['pending']):
                 review = f'<a class="group-review-link" href="{row["revision_target"]}">Посмотреть замечание</a>'
             elif row['pending']:
-                review_target = stage_target if row['stage_review'] else f'/project/{pid}/defense'
+                work = f'stage-{row["current_number"]}' if row['stage_review'] and row['current_number'] else 'defense'
+                review_target = review_url(pid, work, dict(group=gid))
                 review = f'<a class="group-review-link" href="{review_target}">Ожидают решения: {row["pending"]}</a>'
             else:
                 review = 'Нет ожидающих проверок'

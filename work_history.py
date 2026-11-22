@@ -110,6 +110,17 @@ def recent_history(conn, pid):
         FROM work_history WHERE project_id=? ORDER BY id DESC LIMIT ?""", (pid, PAGE_SIZE)).fetchall()
 
 
+def review_history(conn, pid, kind, number, revision):
+    """Read the current submission and the last recorded return before it."""
+    params = (pid, kind, number, revision)
+    submission = conn.execute("""SELECT attempt, recorded_at FROM work_history
+        WHERE project_id=? AND kind=? AND number=? AND revision=? AND event='submit'""", params).fetchone()
+    previous = conn.execute("""SELECT attempt, comment, actor_name, recorded_at FROM work_history
+        WHERE project_id=? AND kind=? AND number=? AND revision<? AND event='return'
+        ORDER BY id DESC LIMIT 1""", params).fetchone()
+    return submission, previous
+
+
 def load_history(conn, pid, work, page):
     # Access must be checked by the route. Content reads are bounded to 12 events
     # and at most six untracked old work records, without lazy writes or N+1.

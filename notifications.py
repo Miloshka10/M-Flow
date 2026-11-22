@@ -76,17 +76,26 @@ def mark_read(conn, user_id, notification_id=None):
     return True
 
 
-def notification_target(row):
+def notification_target(row, *, teacher=False):
     """Old stage links gain an anchor at render time, without changing records."""
     target = row['target']
-    if target == f'/project/{row["project_id"]}/stages':
+    base = f'/project/{row["project_id"]}'
+    if teacher:
+        match = re.fullmatch(re.escape(base) + r'/stages#(stage-[1-5])(?:-result)?', target)
+        if match:
+            return f'/teacher/review/{row["project_id"]}/{match[1]}'
+        if target == base + '/defense':
+            return f'/teacher/review/{row["project_id"]}/defense'
+    if target == base + '/stages':
         match = re.fullmatch(r'stage:' + str(row['project_id']) + r':([1-5]):[0-9]+', row['event_key'])
         if match:
+            if teacher:
+                return f'/teacher/review/{row["project_id"]}/stage-{match[1]}'
             return target + '#stage-' + match[1] + '-result'
     return stage_result_target(target)
 
 
-def render_items(rows, token):
+def render_items(rows, token, *, teacher=False):
     if not rows:
         return '<p class="notification-empty">Пока нет уведомлений. Здесь появятся новые сдачи и результаты проверок.</p>'
     items = []
@@ -95,17 +104,17 @@ def render_items(rows, token):
         button = (f'<form method="post" action="/notifications/{row["id"]}/read">{token}'
                   '<button class="secondary" type="submit">Отметить прочитанным</button></form>') if unread else '<small>Прочитано</small>'
         items.append(f'''<li class="notification-item {'is-unread' if unread else ''}">
-            <a href="{escape(notification_target(row), quote=True)}"><strong>{escape(row['title'])}</strong>
+            <a href="{escape(notification_target(row, teacher=teacher), quote=True)}"><strong>{escape(row['title'])}</strong>
             <span>{escape(row['project_name'])}</span><span>{escape(row['message'])}</span></a>
             <div class="notification-meta"><time>{escape(row['created_at'])} UTC</time>{button}</div></li>''')
     return '<ul class="notification-list">' + ''.join(items) + '</ul>'
 
 
-def render_bell(count, rows, token):
+def render_bell(count, rows, token, *, teacher=False):
     badge = f'<span class="notification-count" aria-hidden="true">{count if count < 100 else "99+"}</span>' if count else ''
     return f'''<details class="notification-bell"><summary aria-label="Уведомления: непрочитанных {count}">
         {icon('bell')}{badge}</summary>
         <section class="notification-panel" aria-label="Последние уведомления"><h2>Уведомления</h2>
-        {render_items(rows, token)}<a class="action-link" href="/notifications">Все уведомления</a>
+        {render_items(rows, token, teacher=teacher)}<a class="action-link" href="/notifications">Все уведомления</a>
         <form method="post" action="/notifications/read-all">{token}<button class="secondary" type="submit" data-ui-icon="check">Прочитать все</button></form>
         </section></details>'''

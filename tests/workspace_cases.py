@@ -57,8 +57,10 @@ class ProjectWorkCases:
         self.assertRegex(page, r'<textarea\b[^>]*name="teacher_comment"[^>]*></textarea>')
         self.assertIn('aria-describedby="review-comment-hint-1"', page)
         queue = self.queue_html(self.client.get('/teacher').text)
-        self.assertIn('Есть предыдущее решение', queue)
-        self.assertIn('/project/2/history?work=stage-1', queue)
+        self.assertIn('Повторная сдача', queue)
+        focused_review = self.client.get('/teacher/review/2/stage-1').text
+        self.assertIn('/project/2/history?work=stage-1', focused_review)
+        self.assertIn('Старое замечание &lt;b&gt;', focused_review)
         self.assertNotIn('Private project', queue)
         self.assertIn('href="/teacher#review-queue">К очереди проверки', page)
         self.assertEqual(self.database_snapshot(), before)

@@ -1,9 +1,81 @@
-/* Existing palette and panels; only the queue's content/controls need layout rules. */
-.teacher-queue-item h4 { margin: 8px 0; font-size: 16px; }
-.teacher-queue-item p { margin: 8px 0; overflow-wrap: anywhere; }
+/* Queue and focused review use the existing theme variables. */
+.teacher-queue-heading { display: grid; gap: 4px; margin-bottom: 8px; }
+.teacher-queue-heading h2 { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 14px; margin: 0; }
+.teacher-queue-heading p { margin: 0; }
+.teacher-queue-group {
+  display: inline-block;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--mf-accent-soft);
+  color: var(--mf-text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.teacher-queue-toolbar, .teacher-queue-actions { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 18px; }
+.teacher-queue-toolbar { justify-content: space-between; }
+.teacher-queue-actions .action-link { min-height: 40px; display: inline-flex; align-items: center; gap: 6px; }
+.teacher-queue-heading .teacher-filters { margin: 0 0 12px; }
+.review-panel > .success { margin: 8px 0; }
+.queue-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 20px;
+  border-top: 1px solid var(--mf-line);
+  padding: 16px 0;
+  overflow-wrap: anywhere;
+}
+.queue-work h3 { margin: 0; font-size: 17px; }
+.queue-work p { margin: 4px 0 0; font-size: 14px; }
+.queue-action { display: grid; justify-items: end; gap: 4px; }
+.queue-action a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
 .teacher-queue-body { white-space: pre-wrap; font-size: 13px; }
+.queue-timing { margin: 0; color: var(--mf-muted); font-size: 13px; }
+.queue-wait { font-weight: 500; }
 .teacher-queue-pages { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 18px; }
+.teacher-overview-details { margin: 12px 0; border-bottom: 1px solid var(--mf-line); }
+.teacher-overview-details > summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
+.teacher-task-attention { margin: 18px 0; }
+.teacher-task-attention .teacher-attention-item {
+  display: grid; gap: 4px; padding: 14px 0; border-bottom: 1px solid var(--mf-line);
+}
+
+.teacher-review-page h1 { margin: 12px 0 4px; font-size: clamp(26px, 3vw, 36px); overflow-wrap: anywhere; }
+.teacher-review-page .review-group { margin: 0 0 12px; color: var(--mf-muted); overflow-wrap: anywhere; }
+.review-layout { max-width: 860px; margin-top: 24px; }
+.review-content, .review-decision { padding-block: 20px; border-block-start: 1px solid var(--mf-line); }
+.review-kind { margin: 0 0 8px; color: var(--mf-muted); font-size: 14px; }
+.review-content h2, .review-decision h2, .review-previous h3 { margin: 0; overflow-wrap: anywhere; }
+.review-content h2 { font-size: clamp(23px, 3vw, 28px); }
+.review-decision h2 { font-size: 20px; }
+.review-reading-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 16px; justify-content: space-between; }
+.review-reading-header a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+#review-decision-title { scroll-margin-top: 80px; }
+.review-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0; color: var(--mf-muted); font-size: 13px; overflow-wrap: anywhere; }
+.review-meta strong { color: var(--mf-text); }
+.review-text, .review-submission { white-space: pre-wrap; overflow-wrap: anywhere; }
+.review-submission { margin: 16px 0; color: var(--mf-text); font-size: clamp(17px, 2vw, 20px); line-height: 1.6; }
+.review-criteria { margin-top: 12px; }
+.review-criteria summary { cursor: pointer; padding: 8px 0; color: var(--mf-accent); }
+.review-criteria p { margin: 4px 0 0; }
+.review-related { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 16px; }
+.review-layout > .review-related { margin: 0; }
+.review-related a, .review-material { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+.review-material { margin-top: 8px; }
+.review-previous { margin-top: 20px; padding: 12px 14px; border: 1px solid var(--mf-line); border-inline-start: 3px solid var(--mf-warning); border-radius: 8px; background: var(--mf-panel); }
+.review-previous h3 { font-size: 16px; }
+.review-previous .review-text { margin: 8px 0 0; }
+.review-decision label { display: block; margin: 14px 0 6px; font-weight: 600; }
+.review-decision textarea { width: 100%; font-size: 16px; }
+.review-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.review-buttons button { margin: 0; min-height: 44px; }
 body .teacher-filters select { min-width: 0; max-width: 100%; }
 @media (max-width: 800px) {
   body .teacher-filters select { flex: 1 1 100%; width: 100%; }
+}
+@media (max-width: 600px) {
+  .queue-row { grid-template-columns: minmax(0, 1fr); }
+  .queue-action { justify-items: start; }
+  .review-buttons { display: grid; }
 }

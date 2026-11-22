@@ -37,12 +37,12 @@ class InterfaceV3Tests(unittest.TestCase):
         self.assertIn('Принято 5 из 5 этапов', html)
         self.assertNotIn('aria-current="step"', html)
 
-    def test_teacher_review_link_opens_result_instead_of_mobile_tasks(self):
+    def test_teacher_review_link_opens_focused_result(self):
         item = dict(kind='stage', requires_decision=True, date=None, author='student',
-                    team='', body='Result', key='stage-42-1', project_name='Project',
-                    title='Stage 1', href='/project/42/stages#stage-1', action='Проверить этап')
-        html = render_queue(dict(total=1, decisions=1, items=[item], pages=1), {})
-        self.assertIn('href="/project/42/stages#stage-1-result"', html)
+                    team='', body='Result', key='stage-42-1', project_id=42, project_name='Project',
+                    title='Stage 1', work='stage-1', action='Проверить этап')
+        html = render_queue(dict(total=1, decisions=1, items=[item], page=1, pages=1), {})
+        self.assertIn('href="/teacher/review/42/stage-1"', html)
 
     def test_dashboard_keeps_feedback_private_escaped_and_not_duplicated(self):
         project = dict(id=1, name='<script>project</script>', total=4, done=4, overdue=0, deadlines=[])

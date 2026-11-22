@@ -17,6 +17,11 @@ def seed_classroom(conn, due_date):
         ('Школьная среда: карта наблюдений', 'Соберите наблюдения вокруг школы и объясните результаты.',
          'Укажите места, время и метод наблюдения. Подготовьте карту и короткий вывод.',
          due_date, 'https://example.org/method'))
+    from work_history import before_change, record_change
+    first_stage = conn.execute('SELECT * FROM project_stages WHERE project_id=1 AND number=1').fetchone()
+    initial = dict(first_stage, revision=0)
+    before_change(conn, 1, 'stage', 1, initial)
+    record_change(conn, 1, 'stage', 1, 'submit', initial, {'id': 2})
     for pid, uid, title in ((4, 11, 'Карта школьного двора'), (5, 12, 'Маршрут до школы')):
         conn.execute('INSERT INTO projects(id,name,owner_id) VALUES(?,?,?)', (pid, title, uid))
         conn.executemany('INSERT INTO project_members(project_id,user_id) VALUES(?,?)', [(pid, uid), (pid, 1)])
