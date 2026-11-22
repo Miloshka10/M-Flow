@@ -42,7 +42,7 @@ class InterfaceV3Tests(unittest.TestCase):
         stage = dict(number=1, title='Topic', state='review', revision=1)
         project = dict(id=42, name='Project', students=[], current_stage=stage, defense={}, reports=[])
         item = next(entries(project))
-        html = render_detail(item, stage, {}, {}, 'csrf', explicit=True)
+        html = render_detail(item, stage, {}, {}, 'csrf')
         self.assertIn('href="/project/42/stages#stage-1-result"', html)
 
     def test_dashboard_keeps_feedback_private_escaped_and_not_duplicated(self):

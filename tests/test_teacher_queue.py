@@ -11,7 +11,7 @@ class QueueDateTests(unittest.TestCase):
                        reports=[dict(task_title='Task', task_id=10, report=dict(id=20, username='Student',
                                      created_at='2026-11-06 09:00:00', body='Report <script>'))])
         item = queue_page([project])['items'][0]
-        html = render_detail(item, {}, {}, {}, 'csrf', explicit=True)
+        html = render_detail(item, {}, {}, {}, 'csrf')
         self.assertNotIn('<form', html)
         self.assertIn('Report &lt;script&gt;', html)
         self.assertIn('Его прочтение не принимает этап', html)
