@@ -61,6 +61,59 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+  document.querySelectorAll('[data-source-picker]').forEach(picker => {
+    const form = picker.closest('form');
+    const folder = picker.querySelector('[data-source-folder]');
+    const zip = form.elements.source_archive;
+    const status = picker.querySelector('[data-source-status]');
+    const clear = picker.querySelector('[data-clear-sources]');
+    const extensions = new Set(picker.dataset.types.split(' '));
+    const omitted = new Set(picker.dataset.omitted.split(' '));
+    let files = [], issue = '', attaching = false;
+    if ('webkitdirectory' in folder) picker.querySelector('[data-folder-field]').hidden = false;
+
+    function update() {
+      files = [...folder.files].map(file => ({file, path: file.webkitRelativePath.split('/').slice(1).join('/')}))
+        .filter(({path}) => {
+          const parts = path.split('/');
+          const name = parts.pop();
+          return name.includes('.') && !path.split('/').some(part => part.startsWith('.')) &&
+            !parts.some(part => omitted.has(part.toLowerCase())) && extensions.has(name.split('.').pop().toLowerCase());
+        });
+      const total = files.reduce((bytes, {file}) => bytes + file.size, 0);
+      issue = '';
+      if (folder.files.length && !files.length) issue = 'В этой папке нет поддерживаемых текстовых файлов.';
+      else if (files.length > Number(picker.dataset.countLimit) || total > Number(picker.dataset.totalLimit) ||
+               files.some(({file}) => file.size > Number(picker.dataset.fileLimit))) {
+        issue = 'Выберите папку поменьше или подготовьте ZIP с нужными исходниками.';
+      } else if (zip.files[0] && zip.files[0].size > Number(picker.dataset.archiveLimit)) {
+        issue = 'ZIP должен быть не больше 384 КБ.';
+      }
+      clear.hidden = !(folder.files.length || zip.files.length);
+      status.textContent = issue || (files.length ? `К сдаче будут приложены файлы: ${files.length}.`
+        : zip.files.length ? `К сдаче будет приложен ${zip.files[0].name}.` : '');
+    }
+    folder.addEventListener('change', () => { if (folder.files.length) zip.value = ''; update(); });
+    zip.addEventListener('change', () => { if (zip.files.length) folder.value = ''; update(); });
+    clear.addEventListener('click', () => {
+      folder.value = '';
+      zip.value = '';
+      folder.dispatchEvent(new Event('change', {bubbles: true}));
+    });
+    form.addEventListener('submit', event => {
+      attaching = event.submitter?.value === 'submit';
+      update();
+      if (attaching && issue) {
+        event.preventDefault();
+        (folder.files.length ? folder : zip).focus();
+      }
+    });
+    form.addEventListener('formdata', event => {
+      if (!attaching) event.formData.delete('source_archive');
+      else for (const {file, path} of files) event.formData.append('source_files', file, path);
+    });
+    update();
+  });
   document.querySelectorAll('[data-ai-review-form]').forEach(form => {
     form.addEventListener('submit', () => {
       form.querySelector('[data-ai-progress]').textContent = 'Ollama анализирует материалы…';

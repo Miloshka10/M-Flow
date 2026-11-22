@@ -1,6 +1,7 @@
-"""Presentation for local assistance and independent file comparison."""
+"""Presentation for local assistance and comparison of submitted sources."""
 
 from html import escape
+from local_assistant import FILE_LIMIT, IGNORED_FOLDERS, SOURCE_FILE_COUNT, TEXT_EXTENSIONS, TEXT_LIMIT, ZIP_LIMIT
 
 FILE_STATUS = {'added': 'Добавлен', 'removed': 'Удалён', 'changed': 'Изменён'}
 
@@ -9,6 +10,22 @@ def draft_panel(project_id, number):
     return f'''<section class="local-assistant" data-local-assistant data-stage-advice="/project/{project_id}/stages/{number}/advice" hidden>
         <button class="secondary" type="button" data-request-advice>Получить совет по доработке</button>
         <p role="status" data-advice-status></p><div data-advice-result hidden></div></section>'''
+
+
+def source_picker():
+    extensions = ' '.join(sorted(TEXT_EXTENSIONS))
+    omitted = ' '.join(sorted(IGNORED_FOLDERS))
+    return f'''<fieldset class="source-picker" data-local-assistant data-source-picker data-types="{extensions}"
+        data-omitted="{omitted}" data-file-limit="{FILE_LIMIT}" data-total-limit="{TEXT_LIMIT}"
+        data-count-limit="{SOURCE_FILE_COUNT}" data-archive-limit="{ZIP_LIMIT}">
+        <legend>Версия проекта</legend>
+        <p>При отправке можно приложить исходники. Учитель увидит изменения между сдачами.</p>
+        <label data-folder-field hidden>Папка с исходниками<input type="file" webkitdirectory multiple data-source-folder></label>
+        <details><summary>Приложить ZIP с исходниками</summary>
+        <label>ZIP с исходниками<input type="file" name="source_archive" accept=".zip,application/zip"></label></details>
+        <p class="local-assistant-hint">До 60 текстовых файлов, до 64 КБ на файл и 384 КБ вместе.</p>
+        <p role="status" data-source-status></p><button class="secondary" type="button" data-clear-sources hidden>Убрать вложение</button>
+        </fieldset>'''
 
 
 def model_report(result):
@@ -24,23 +41,31 @@ def model_report(result):
         <h3>Что проверить дальше</h3><ol>{suggestions}</ol></section>'''
 
 
-def analysis_page(stage, versions, terms, label, archives, result, token, errors=()):
+def analysis_page(stage, versions, terms, label, archives, result, token, errors=(), *,
+                  has_current_sources=False, has_previous_sources=False):
     current = versions[0]
     previous = versions[1] if len(versions) > 1 else None
     assignment = f'<p>Задание · {escape(terms["title"])}</p>' if terms else ''
     versions_label = f'Отправки №{previous["attempt"]} и №{current["attempt"]}' if previous else (
         f'Отправка №{current["attempt"]}' if current['attempt'] else 'Сохранённый результат')
-    files = ''
+    if has_current_sources:
+        note = 'К предыдущей сдаче исходники не приложены.' if previous else 'Это первая сдача с приложенными исходниками.'
+    elif has_previous_sources:
+        note = 'К текущей сдаче исходники не приложены.'
+    else:
+        note = 'К этим отправкам исходники не приложены. Доступно сравнение описаний.'
+    files = f'<p class="local-assistant-hint">{note}</p>'
     if archives:
         rows = ''.join(f'<tr><th scope="row">{escape(row["path"])}</th><td>{FILE_STATUS[row["kind"]]}</td>'
                        f'<td>+{row["added"]} / −{row["removed"]}</td></tr>' for row in archives['files'])
         table = (f'<div class="local-assistant-table"><table><thead><tr><th scope="col">Файл</th><th scope="col">Статус</th>'
                  f'<th scope="col">Строки</th></tr></thead><tbody>{rows}</tbody></table></div>') if rows else ''
-        ignored = f' · пропущено записей в двух ZIP: {archives["ignored"]}' if archives['ignored'] else ''
+        ignored = f' · пропущено файлов: {archives["ignored"]}' if archives['ignored'] else ''
         declarations = ''.join(f'<li>{FILE_STATUS[row["kind"]]} <code>{escape(row["name"])}()</code> в {escape(row["path"])}</li>'
                                for row in archives['declarations'])
         functions = f'<h3>Объявления функций Python</h3><ul>{declarations}</ul>' if declarations else ''
         files = f'''<section class="local-assistant-panel"><h2>Сравнение исходников</h2>
+            <p>Исходники взяты из двух сдач.</p>
             <p data-archive-verdict><strong>{escape(archives['status'])}</strong></p>
             <p>Сопоставлено путей: {archives['compared']}{ignored} · строки +{archives['added']} / −{archives['removed']}</p>
             {table}{functions}</section>'''
@@ -49,12 +74,9 @@ def analysis_page(stage, versions, terms, label, archives, result, token, errors
     return f'''<div class="local-assistant-page" data-local-assistant>
         <section class="local-assistant-panel"><h2>{escape(stage)}</h2>{assignment}
         <p>{versions_label}</p><p><strong>{escape(label)}</strong></p>
-        <p>Чтобы проверить изменения исходников, приложите два ZIP с одинаковой структурой папок.</p>
-        <form method="post" enctype="multipart/form-data" data-ai-review-form>
+        {files if not archives else ''}
+        <form method="post" data-ai-review-form>
         <input type="hidden" name="csrf_token" value="{escape(token, quote=True)}">
         <input type="hidden" name="revision" value="{current['revision']}">
-        <div class="local-assistant-files"><label>Предыдущий ZIP<input type="file" name="before" accept=".zip,application/zip"></label>
-        <label>Текущий ZIP<input type="file" name="after" accept=".zip,application/zip"></label></div>
-        <p class="local-assistant-hint">До 384 КБ на архив. Сравниваются текстовые файлы. Ссылки из сдач не открываются.</p>
         <button type="submit">Запустить анализ</button><p role="status" data-ai-progress></p></form></section>
-        {messages}{files}{report}</div>'''
+        {messages}{files if archives else ''}{report}</div>'''

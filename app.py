@@ -187,8 +187,8 @@ def render_page(html, title=None):
                    if 'class="auth-page ' in html else '')
     work_assets = '<link rel="stylesheet" href="/static/work-screens.css?v=20261106-work">' if 'data-work-screens=' in html else ''
     dashboard_script = '<script src="/static/dashboard.js?v=20261106-work" defer></script>' if 'id="project-create"' in html else ''
-    assistant_assets = ('<link rel="stylesheet" href="/static/classroom-assistant.css?v=20261122">'
-                        '<script src="/static/classroom-assistant.js?v=20261122" defer></script>') if ' data-local-assistant' in html else ''
+    assistant_assets = ('<link rel="stylesheet" href="/static/classroom-assistant.css?v=20261122-sources">'
+                        '<script src="/static/classroom-assistant.js?v=20261122-sources" defer></script>') if ' data-local-assistant' in html else ''
     guard_script = '<script src="/static/form-guard.js?v=20261029" defer></script>' if ' data-guard-draft ' in html else ''
     shell_scripts = ('<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
                      '<script src="/static/interface.js?v=20261115-panel" defer></script>'
@@ -3152,7 +3152,10 @@ def project_stage_page(project_id):
         return render_error_page("Нет доступа", "Вы не участвуете в этом проекте.", 403)
     with closing(get_db()) as conn:
         try:
-            message = change_stage(conn, project_id, user, request.form)
+            snapshot = None
+            if user['role'] == 'student' and request.form.get('action') == 'submit' and local_assistant.configured_model():
+                snapshot = local_assistant.read_submission_sources(request.files)
+            message = change_stage(conn, project_id, user, request.form, source_snapshot=snapshot)
             flash(message)
             return redirect(board_return(project_id, request.form.get("return_to"), default=f"/project/{project_id}/stages"))
         except ValueError as exc:
@@ -3225,33 +3228,31 @@ def teacher_submission_analysis(project_id, number):
         if not versions and (record['state'] in ('review', 'submitted', 'done', 'accepted') and (body or link)):
             versions = [dict(revision=record['revision'], attempt=0, result=body, resource_url=link)]
         terms = local_assistant.assignment_terms(conn, project_id, user)
+        snapshots = local_assistant.load_submission_sources(conn, versions) if number else {}
     if not versions:
         return render_error_page('Сдача отсутствует', 'Пока нет отправленной работы для анализа.', 404)
     current, previous = versions[0], versions[1] if len(versions) > 1 else None
     text_label, evidence = local_assistant.text_difference(current, previous)
     report, archives, errors, status = None, None, [], 200
+    current_sources = snapshots.get(current.get('id'))
+    previous_sources = snapshots.get(previous.get('id')) if previous else None
+    if current_sources and previous_sources:
+        archives = local_assistant.compare_sources(previous_sources, current_sources)
+        evidence = archives['evidence']
     if request.method == 'POST':
         if request.form.get('revision') != str(current['revision']):
             errors.append('Появилась новая сдача. Проверьте номера отправок и повторите анализ.')
             status = 409
         else:
-            before, after = request.files.get('before'), request.files.get('after')
             try:
-                if before or after:
-                    if not before or not after:
-                        raise ValueError('Приложите оба файла ZIP, чтобы сравнить исходники.')
-                    archives = local_assistant.archive_difference(before, after)
-                    evidence = archives['evidence']
                 report = local_assistant.advise(current['result'], stage, terms, record['teacher_comment'],
                                                 previous['result'] if previous else '', evidence,
                                                 scope='archives' if archives else 'submission')
-            except ValueError as error:
-                errors.append(str(error))
-                status = 400
             except local_assistant.AssistantUnavailable as error:
                 errors.append(str(error))
                 status = 503
-    page = analysis_page(stage, versions, terms, text_label, archives, report, csrf_token(), errors)
+    page = analysis_page(stage, versions, terms, text_label, archives, report, csrf_token(), errors,
+                         has_current_sources=bool(current_sources), has_previous_sources=bool(previous_sources))
     back = request.args.get('back', '')
     if not back.startswith('/teacher/review?') or len(back) > 1400:
         back = review_center.center_url(work=work, detail=True)

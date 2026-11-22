@@ -17,6 +17,7 @@ MODEL_LOCK = BoundedSemaphore(1)
 ZIP_LIMIT = 384 * 1024
 TEXT_LIMIT = 384 * 1024
 FILE_LIMIT = 64 * 1024
+SOURCE_FILE_COUNT = 60
 TEXT_EXTENSIONS = frozenset('py js ts jsx tsx cjs mjs html htm css scss json yaml yml toml sql md txt csv '
                             'java kt cs c h cpp hpp go rs php rb swift dart vue svelte ino xml'.split())
 IGNORED_FOLDERS = frozenset({'node_modules', 'vendor', 'dist', 'build', '__pycache__', 'coverage'})
@@ -76,9 +77,26 @@ def assignment_terms(conn, project_id, user):
 
 
 def submission_versions(conn, project_id, kind, number):
-    return [dict(row) for row in conn.execute('''SELECT revision,attempt,result,resource_url FROM work_history
+    return [dict(row) for row in conn.execute('''SELECT id,revision,attempt,result,resource_url FROM work_history
         WHERE project_id=? AND kind=? AND number=? AND event='submit' ORDER BY revision DESC LIMIT 2''',
         (project_id, kind, number))]
+
+
+def save_submission_sources(conn, project_id, number, revision, snapshot):
+    sources, ignored = snapshot
+    conn.execute('''INSERT INTO submission_sources(history_id,files_json,ignored)
+        SELECT id,?,? FROM work_history
+        WHERE project_id=? AND kind='stage' AND number=? AND revision=? AND event='submit' ''',
+        (json.dumps(sources, ensure_ascii=False), ignored, project_id, number, revision))
+
+
+def load_submission_sources(conn, versions):
+    ids = [row['id'] for row in versions if 'id' in row]
+    if not ids:
+        return {}
+    placeholders = ','.join('?' for _ in ids)
+    rows = conn.execute(f'SELECT history_id,files_json,ignored FROM submission_sources WHERE history_id IN ({placeholders})', ids)
+    return {row['history_id']: (json.loads(row['files_json']), row['ignored']) for row in rows}
 
 
 def text_difference(current, previous):
@@ -110,52 +128,79 @@ def text_difference(current, previous):
     return label, evidence
 
 
+def _read_sources(entries):
+    """Entries contain a relative name, optional declared size and bounded reader."""
+    sources, names, ignored, total = {}, set(), 0, 0
+    for filename, declared_size, read in entries:
+        name = filename.replace('\\', '/')
+        path = PurePosixPath(name)
+        if (not path.parts or path.is_absolute() or '..' in path.parts or ':' in name or len(name) > 220
+                or any(ord(char) < 32 for char in name)):
+            raise ValueError('В исходниках есть некорректное имя файла.')
+        if (read is None or path.suffix.lower()[1:] not in TEXT_EXTENSIONS
+                or any(part.startswith('.') for part in path.parts)
+                or any(part.lower() in IGNORED_FOLDERS for part in path.parts[:-1])):
+            ignored += 1
+            continue
+        normalized = path.as_posix()
+        if normalized.casefold() in names:
+            raise ValueError('Имена файлов исходников должны быть уникальны.')
+        names.add(normalized.casefold())
+        if (len(sources) >= SOURCE_FILE_COUNT or (declared_size is not None
+                and (declared_size > FILE_LIMIT or total + declared_size > TEXT_LIMIT))):
+            raise ValueError('Выберите до 60 исходников, до 64 КБ каждый и до 384 КБ вместе.')
+        raw = read(min(FILE_LIMIT, TEXT_LIMIT - total) + 1)
+        total += len(raw)
+        if len(raw) > FILE_LIMIT or total > TEXT_LIMIT:
+            raise ValueError('Выберите до 60 исходников, до 64 КБ каждый и до 384 КБ вместе.')
+        if declared_size is not None and len(raw) != declared_size:
+            raise ValueError('Некорректный размер файла внутри ZIP.')
+        try:
+            text = raw.decode('utf-8-sig').replace('\r\n', '\n').replace('\r', '\n')
+        except UnicodeDecodeError as error:
+            raise ValueError('Для сравнения нужны файлы в кодировке UTF‑8.') from error
+        if '\0' in text or text.count('\n') > 5000:
+            raise ValueError('Для сравнения нужны текстовые файлы до 5000 строк в каждом.')
+        sources[normalized] = text
+    if not sources:
+        raise ValueError('В выбранной версии нет поддерживаемых текстовых файлов проекта.')
+    return sources, ignored
+
+
 def read_source_archive(upload):
-    """Read a bounded set of UTF-8 text files in memory. No paths are extracted."""
     contents = upload.read(ZIP_LIMIT + 1)
     if not contents or len(contents) > ZIP_LIMIT:
-        raise ValueError('Каждый ZIP должен быть не больше 384 КБ.')
-    sources, names, ignored, total = {}, set(), 0, 0
+        raise ValueError('ZIP должен быть не больше 384 КБ.')
     try:
         with ZipFile(BytesIO(contents)) as archive:
             entries = archive.infolist()
             if len(entries) > 250:
                 raise ValueError('Слишком много файлов в ZIP. Оставьте файлы самого проекта.')
-            for entry in entries:
-                name = entry.filename.replace('\\', '/')
-                path = PurePosixPath(name)
-                if (not path.parts or path.is_absolute() or '..' in path.parts or ':' in name or len(name) > 220
-                        or any(ord(char) < 32 for char in name)):
-                    raise ValueError('В ZIP есть некорректное имя файла.')
-                if entry.is_dir():
-                    continue
-                if (path.suffix.lower()[1:] not in TEXT_EXTENSIONS or any(part.startswith('.') for part in path.parts)
-                        or any(part.lower() in IGNORED_FOLDERS for part in path.parts[:-1])
-                        or stat.S_ISLNK(entry.external_attr >> 16)):
-                    ignored += 1
-                    continue
-                normalized = path.as_posix()
-                if normalized.casefold() in names:
-                    raise ValueError('Имена файлов в ZIP должны быть уникальны.')
-                names.add(normalized.casefold())
-                if entry.file_size > FILE_LIMIT or total + entry.file_size > TEXT_LIMIT or len(sources) >= 60:
-                    raise ValueError('В ZIP должно быть до 60 небольших исходников, суммарно до 384 КБ текста.')
+
+            def read_member(entry, maximum):
                 with archive.open(entry) as member:
-                    raw = member.read(FILE_LIMIT + 1)
-                total += len(raw)
-                if len(raw) != entry.file_size or total > TEXT_LIMIT:
-                    raise ValueError('Некорректный размер файла внутри ZIP.')
-                text = raw.decode('utf-8-sig').replace('\r\n', '\n').replace('\r', '\n')
-                if '\0' in text:
-                    raise ValueError('Файлы проекта в ZIP должны быть текстом в UTF-8.')
-                if text.count('\n') > 5000:
-                    raise ValueError('В одном файле из ZIP допускается до 5000 строк.')
-                sources[normalized] = text
-    except (BadZipFile, RuntimeError, NotImplementedError, UnicodeDecodeError, EOFError, ZipDataError) as error:
-        raise ValueError('Не удалось прочитать ZIP. Используйте обычный ZIP без пароля и файлы в UTF-8.') from error
-    if not sources:
-        raise ValueError('В ZIP нет поддерживаемых текстовых файлов проекта.')
-    return sources, ignored
+                    return member.read(maximum)
+
+            return _read_sources((entry.filename, entry.file_size,
+                                  None if stat.S_ISLNK(entry.external_attr >> 16) else
+                                  lambda maximum, entry=entry: read_member(entry, maximum))
+                                 for entry in entries if not entry.is_dir())
+    except (BadZipFile, RuntimeError, NotImplementedError, EOFError, ZipDataError) as error:
+        raise ValueError('Не удалось прочитать ZIP. Используйте обычный ZIP без пароля.') from error
+
+
+def read_submission_sources(files):
+    archive = files.get('source_archive')
+    folder = [file for file in files.getlist('source_files') if file.filename]
+    if archive and folder:
+        raise ValueError('Выберите одну версию исходников: папку или ZIP.')
+    if archive:
+        return read_source_archive(archive)
+    if len(folder) > SOURCE_FILE_COUNT:
+        raise ValueError('Выберите до 60 исходников.')
+    if folder:
+        return _read_sources((file.filename, None, file.read) for file in folder)
+    return None
 
 
 def _python_functions(text):
@@ -174,9 +219,9 @@ def _python_functions(text):
     return functions
 
 
-def archive_difference(before, after):
-    old, ignored_old = read_source_archive(before)
-    new, ignored_new = read_source_archive(after)
+def compare_sources(before, after):
+    old, ignored_old = before
+    new, ignored_new = after
     files, declarations, primary, secondary = [], [], [], []
     added_lines, removed_lines = 0, 0
     for path in sorted(old.keys() | new.keys()):

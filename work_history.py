@@ -47,6 +47,11 @@ def initialize_history(conn):
     )''')
     execute_schema(conn, 'CREATE INDEX IF NOT EXISTS idx_work_history_project ON work_history(project_id,id)')
     execute_schema(conn, 'CREATE INDEX IF NOT EXISTS idx_work_history_item ON work_history(project_id,kind,number,id)')
+    execute_schema(conn, '''CREATE TABLE IF NOT EXISTS submission_sources (
+        history_id BIGINT PRIMARY KEY NOT NULL REFERENCES work_history(id) ON DELETE CASCADE,
+        files_json TEXT NOT NULL,
+        ignored INTEGER NOT NULL DEFAULT 0
+    )''')
 
 
 def _snapshot(current, kind):

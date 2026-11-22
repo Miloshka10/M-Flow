@@ -9,8 +9,8 @@ from notifications import notify_project
 from teacher_supervision import participant
 from deadlines import format_timestamp
 from work_history import before_change, record_change
-from local_assistant import configured_model
-from assistant_view import draft_panel
+from local_assistant import configured_model, save_submission_sources
+from assistant_view import draft_panel, source_picker
 
 STAGES = (
     (1, "Выбор темы и согласование с учителем"),
@@ -82,7 +82,7 @@ def stage_summary(stages):
     return completed, current
 
 
-def change_stage(conn, project_id, user, form):
+def change_stage(conn, project_id, user, form, *, source_snapshot=None):
     """Caller checks project membership and CSRF. Transaction prevents lost updates."""
     begin_project_write(conn, project_id)
     try:
@@ -139,6 +139,8 @@ def change_stage(conn, project_id, user, form):
                       dict(current, state=state, result=result, presentation_url=url,
                            teacher_comment=comment, submitted_by=submitted_by, reviewed_by=reviewed_by), user)
         if action == 'submit':
+            if source_snapshot is not None:
+                save_submission_sources(conn, project_id, current['number'], current['revision'] + 1, source_snapshot)
             notify_project(conn, project_id, 'teacher',
                 f'stage:{project_id}:{current["number"]}:{current["revision"] + 1}',
                 f'Этап {current["number"]} отправлен на проверку', '', f'/project/{project_id}/stages#stage-{current["number"]}')
@@ -197,7 +199,9 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
         if number == current_number:
             values = submitted or stage
             pid = stage.get('project_id', project_id)
-            prefix = f'<form method="post" action="/project/{pid}/stages" data-guard-draft data-draft-unsaved="{int(submitted is not None)}"><input type="hidden" name="csrf_token" value="{token}"><input type="hidden" name="number" value="{number}"><input type="hidden" name="revision" value="{stage["revision"]}">'
+            assistant = user['role'] == 'student' and bool(configured_model())
+            encoding = ' enctype="multipart/form-data"' if assistant else ''
+            prefix = f'<form method="post" action="/project/{pid}/stages"{encoding} data-guard-draft data-draft-unsaved="{int(submitted is not None)}"><input type="hidden" name="csrf_token" value="{token}"><input type="hidden" name="number" value="{number}"><input type="hidden" name="revision" value="{stage["revision"]}">'
             if return_to:
                 prefix += f'<input type="hidden" name="return_to" value="{escape(return_to, quote=True)}">'
             if user["role"] == "student" and stage["state"] in ("todo", "progress"):
@@ -214,8 +218,8 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
                 html += prefix + f'<label>{result_label}<textarea name="result" rows="5" maxlength="5000">{escape(values.get("result", ""))}</textarea></label>'
                 if number == 5:
                     html += f'<label>Ссылка на презентацию<input type="url" name="presentation_url" maxlength="2000" placeholder="https://…" value="{escape(values.get("presentation_url", ""), quote=True)}"></label><p>Проверьте, что учитель сможет открыть презентацию по ссылке.</p>'
-                if configured_model():
-                    html += draft_panel(pid, number)
+                if assistant:
+                    html += source_picker() + draft_panel(pid, number)
                 html += f'<div class="stage-actions"><button name="action" value="save" data-ui-icon="save">Сохранить черновик</button><button name="action" value="submit" {"disabled" if not has_teacher else ""}>Отправить учителю</button></div></form>'
                 if compact:
                     html += '</div></details>'

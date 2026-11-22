@@ -1,3 +1,4 @@
+from contextlib import closing
 import io
 import json
 import unittest
@@ -16,22 +17,27 @@ def archive(files):
     return buffer
 
 
+def compare(before, after):
+    return assistant.compare_sources(assistant.read_source_archive(archive(before)),
+                                     assistant.read_source_archive(archive(after)))
+
+
 class LocalAssistantTests(unittest.TestCase):
     def test_identical_small_and_functional_changes_are_distinguished(self):
         original = {'app.py': 'print("temperature")\r\n', 'diagram.png': 'omitted'}
-        same = assistant.archive_difference(archive(original), archive({'app.py': 'print("temperature")\n'}))
+        same = compare(original, {'app.py': 'print("temperature")\n'})
         self.assertEqual(same['files'], [])
         self.assertEqual(same['evidence'], [])
         self.assertEqual(same['ignored'], 1)
-        small = assistant.archive_difference(archive(original), archive({'app.py': 'print("temperature °C")\n'}))
+        small = compare(original, {'app.py': 'print("temperature °C")\n'})
         self.assertIn('Небольшой', small['status'])
         self.assertEqual((small['added'], small['removed']), (1, 1))
         revised = {'app.py': original['app.py'], 'export.py': 'def export_csv(rows):\n    return csv.writer(rows)\n'}
-        result = assistant.archive_difference(archive(original), archive(revised))
+        result = compare(original, revised)
         self.assertEqual(result['files'][0]['kind'], 'added')
         self.assertEqual(result['declarations'], [dict(path='export.py', kind='added', name='export_csv')])
         self.assertIn('def export_csv', result['evidence'][0]['excerpt'])
-        removed = assistant.archive_difference(archive(revised), archive(original))
+        removed = compare(revised, original)
         self.assertEqual(removed['evidence'][0]['kind'], 'removed')
         self.assertEqual(removed['removed'], 2)
 
@@ -105,16 +111,27 @@ class AssistantRouteCases:
             self.assertEqual(self.database_snapshot(), snapshot)
 
     def test_local_assistant_review_reports_files_even_when_model_is_down(self):
-        self.sign_in(3)
-        submission = dict(action='submit', number='1', revision='0', result='Замер температуры')
-        self.assertEqual(self.post('/project/1/stages', data=submission).status_code, 302)
-        self.assertEqual(self.stage_post(1, revision=1, action='return', teacher_comment='Нужна единица').status_code, 302)
-        self.sign_in(3)
-        self.assertEqual(self.post('/project/1/stages', data=dict(submission, revision='2', result='Замер температуры 20 °C')).status_code, 302)
         review = '/teacher/review/analysis/1/1'
         with patch.dict('os.environ', {'M_FLOW_OLLAMA_MODEL': 'qwen3:4b-instruct'}), \
                 patch.object(assistant, 'advise', side_effect=assistant.AssistantUnavailable('Ollama недоступна')) as advise:
             self.sign_in(3)
+            submission = dict(action='submit', number='1', revision='0', result='Замер температуры')
+            before = self.database_snapshot()
+            bad_archive = (archive({'../weather.py': 'old'}), 'bad.zip')
+            self.assertEqual(self.post('/project/1/stages', data=dict(submission, source_archive=bad_archive)).status_code, 400)
+            self.assertEqual(self.database_snapshot(), before)
+            first = (archive({'src/weather.py': 'print(20)\n'}), 'first.zip')
+            self.assertEqual(self.post('/project/1/stages', data=dict(submission, source_archive=first)).status_code, 302)
+            self.sign_in(1)
+            page = self.client.get(review).text
+            self.assertIn('Это первая сдача с приложенными исходниками.', page)
+            self.assertNotIn('data-archive-verdict', page)
+            self.assertEqual(self.stage_post(1, revision=1, action='return', teacher_comment='Нужна единица').status_code, 302)
+            self.sign_in(3)
+            second = [(io.BytesIO(b'print(20)\n'), 'src/weather.py'),
+                      (io.BytesIO(b'def export_csv():\n    pass\n'), 'src/export.py')]
+            revised = dict(submission, revision='2', result='Замер температуры 20 °C', source_files=second)
+            self.assertEqual(self.post('/project/1/stages', data=revised).status_code, 302)
             self.assertEqual(self.client.get(review).status_code, 403)
             self.sign_in(1)
             self.assertEqual(self.client.get('/teacher/review/analysis/3/1').status_code, 403)
@@ -122,20 +139,37 @@ class AssistantRouteCases:
             self.assertEqual(page.status_code, 200)
             self.assertIn('Отправки №1 и №2', page.text)
             self.assertIn('Небольшая правка текста', page.text)
+            self.assertIn('Объявления функций Python', page.text)
+            self.assertIn('src/export.py', page.text)
+            self.assertNotIn('type="file"', page.text)
             page = self.client.get(review, query_string={'back': '/teacher/review?group=7&work=stage-1-1#review-detail'})
             self.assertIn('href="/teacher/review?group=7&amp;work=stage-1-1#review-detail"', page.text)
             page = self.client.get(review, query_string={'back': 'https://example.com/elsewhere'})
             self.assertNotIn('example.com/elsewhere', page.text)
             self.assertEqual(self.post(review, data={'revision': '1'}).status_code, 409)
-            self.assertEqual(self.post(review, data={'revision': '3', 'before': (archive({'app.py': 'old'}), 'before.zip')}).status_code, 400)
             snapshot = self.database_snapshot()
-            response = self.post(review, data={
-                'revision': '3', 'before': (archive({'app.py': 'old'}), 'before.zip'),
-                'after': (archive({'app.py': 'old', 'export.py': 'def export_csv():\n    pass'}), 'after.zip'),
-            })
+            response = self.post(review, data={'revision': '3'})
             self.assertEqual(response.status_code, 503)
             self.assertIn('Заметные изменения'.lower(), response.text.lower())
             self.assertIn('export.py', response.text)
             self.assertIn('Ollama недоступна', response.text)
             self.assertEqual(advise.call_count, 1)
             self.assertEqual(self.database_snapshot(), snapshot)
+
+    def test_local_assistant_keeps_saved_drafts_and_existing_submissions_without_sources(self):
+        self.sign_in(3)
+        self.assertEqual(self.stage_post(3).status_code, 302)
+        self.assertEqual(self.stage_post(1, revision=1, action='return', teacher_comment='Нужно уточнение').status_code, 302)
+        self.sign_in(3)
+        with patch.dict('os.environ', {'M_FLOW_OLLAMA_MODEL': 'qwen3:4b-instruct'}):
+            source = lambda: (archive({'weather.py': 'print(20)'}), 'weather.zip')
+            saved = dict(action='save', number='1', revision='2', result='Черновик', source_archive=source())
+            self.assertEqual(self.post('/project/1/stages', data=saved).status_code, 302)
+            with closing(self.module.get_db()) as conn:
+                self.assertEqual(conn.execute('SELECT COUNT(*) FROM submission_sources').fetchone()[0], 0)
+            self.assertEqual(self.post('/project/1/stages', data=dict(saved, action='submit', revision='3',
+                                                                    source_archive=source())).status_code, 302)
+            self.sign_in(1)
+            page = self.client.get('/teacher/review/analysis/1/1').text
+            self.assertIn('К предыдущей сдаче исходники не приложены.', page)
+            self.assertNotIn('data-archive-verdict', page)
