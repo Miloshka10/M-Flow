@@ -13,3 +13,10 @@
 .local-assistant-table {overflow:auto}
 .local-assistant-table table {border-collapse:collapse;width:100%;text-align:start}
 .local-assistant-table :is(th,td) {padding:7px 10px;border-bottom:1px solid var(--mf-line);text-align:start}
+.local-assistant-page {max-width:880px}
+.local-assistant-page .local-assistant-panel {padding:16px 0;border:0;border-top:1px solid var(--mf-line);border-radius:0;background:transparent}
+.local-assistant-page h2 {margin:6px 0 12px;font-size:clamp(21px,2.5vw,27px)}
+.local-assistant-page .analysis-reading {margin:12px 0;font-size:clamp(17px,2vw,20px);line-height:1.6;color:var(--mf-text);white-space:pre-wrap}
+.local-assistant-page summary {padding-block:10px;cursor:pointer;color:var(--mf-accent)}
+.local-assistant-page form button {min-height:44px}
+#model-report {scroll-margin-top:80px}

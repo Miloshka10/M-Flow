@@ -47,7 +47,6 @@ from learning_groups import (initialize_groups, create_group, preview_code as pr
 import group_assignments as assignments
 from teacher_overview import load_teacher_projects, load_attention, review_groups
 from dashboard_view import student_dashboard
-from design_suite import cabinet_shortcuts
 import review_center
 import local_assistant
 from assistant_view import analysis_page
@@ -187,7 +186,7 @@ def render_page(html, title=None):
                    if 'class="auth-page ' in html else '')
     work_assets = '<link rel="stylesheet" href="/static/work-screens.css?v=20261106-work">' if 'data-work-screens=' in html else ''
     dashboard_script = '<script src="/static/dashboard.js?v=20261106-work" defer></script>' if 'id="project-create"' in html else ''
-    assistant_assets = ('<link rel="stylesheet" href="/static/classroom-assistant.css?v=20261122-sources">'
+    assistant_assets = ('<link rel="stylesheet" href="/static/classroom-assistant.css?v=20261122-reading">'
                         '<script src="/static/classroom-assistant.js?v=20261122-sources" defer></script>') if ' data-local-assistant' in html else ''
     guard_script = '<script src="/static/form-guard.js?v=20261029" defer></script>' if ' data-guard-draft ' in html else ''
     shell_scripts = ('<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
@@ -2659,11 +2658,14 @@ def notifications_page():
     # The first page already contains the latest header items. Reuse only within
     # this response; older pages must still fetch the latest items for the bell.
     header = render_header(user, (count, rows[:12]) if before is None else None)
+    token = csrf_input()
+    unread = f'<p>Непрочитанных: {count}</p>' if count else ''
+    read_all = (f'<form method="post" action="/notifications/read-all">{token}'
+                '<button class="secondary" type="submit" data-ui-icon="check">Прочитать все</button></form>'
+                if count else '')
     return render_page(PAGE_STYLE + f'''<div class="container">{header}
-        <main class="notifications-page"><div class="notification-heading"><div><h1>Уведомления</h1><p>Непрочитанных: {count}</p></div>
-        <form method="post" action="/notifications/read-all">{csrf_input()}
-        <button class="secondary" type="submit" data-ui-icon="check">Прочитать все</button></form></div>
-        {render_items(rows[:30], csrf_input(), teacher=user['role'] == 'teacher')}{older}</main></div>''')
+        <main class="notifications-page"><div class="notification-heading"><div><h1>Уведомления</h1>{unread}</div>
+        {read_all}</div>{render_items(rows[:30], token, teacher=user['role'] == 'teacher')}{older}</main></div>''')
 
 
 @app.route('/notifications/<int:notification_id>/read', methods=['POST'])
@@ -3376,7 +3378,7 @@ def project_assessment(project_id):
                 <div class="assessment-table"><table><thead><tr><th>Критерий</th><th>Максимум</th><th>Баллы</th></tr></thead><tbody>{fields}</tbody></table></div>
                 <p id="assessment-total" aria-live="polite">Итого: {total} / {MAX_SCORE} · Оценка: {grade if grade is not None else 'не все критерии заполнены'}</p>
                 <label>Примечание учителя<textarea name="note" maxlength="1000" rows="4">{escape(note)}</textarea></label>
-                <p>Черновик виден только вам. Публикация открывает оценку ученику. Сохранение опубликованной оценки как черновика снова скроет её.</p>
+                <p>{'Сохранение как черновика скроет оценку от ученика.' if row and row['state'] == 'published' else 'Оценка станет видна ученику после публикации.'}</p>
                 <div class="assessment-actions"><button name="action" value="draft" type="submit" data-ui-icon="save" {blocked}>Сохранить черновик</button><button name="action" value="published" type="submit" data-ui-icon="check" {blocked}>Опубликовать оценку</button></div>
             </form></section>"""
     elif is_teacher:
@@ -3400,12 +3402,12 @@ def project_assessment(project_id):
             content = f'<section class="card"><h2>Оценка ещё не опубликована</h2><p>Здесь появятся ваши баллы и примечание учителя. Приём этапов и видеозащиты не выставляет баллы автоматически. Дождитесь публикации учителем; оценки других участников здесь не показываются.</p><a href="/project/{project_id}">Посмотреть следующий шаг {icon('arrow')}</a></section>'
     conn.close()
     messages = "".join(f'<p role="status">{escape(message)}</p>' for message in get_flashed_messages())
+    alert = f'<p role="alert">{escape(error)}</p>' if error else ''
     return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/assessment.css">
         <div class="app">{render_header(user)}<main class="main-content assessment-page">
-        <a class="back" href="/project/{project_id}">{icon('arrow-left')} К обзору проекта</a>
         <h1>Оценивание · {escape(project_name)}</h1>{project_navigation(project_id, "assessment")}
-        <p>12 критериев · максимум 45 баллов. Шкала: «5» — 39–45, «4» — 30–38, «3» — 21–29, «2» — 0–20.</p>
-        {messages}<p role="alert">{escape(error)}</p>{content}</main></div>
+        {messages}{alert}{content}
+        <details><summary>Шкала оценивания</summary><p>«5» — 39–45, «4» — 30–38, «3» — 21–29, «2» — 0–20 баллов.</p></details></main></div>
         <script src="/static/assessment.js"></script>'''), status
 
 
@@ -3576,7 +3578,7 @@ def teacher_review_center():
         # Explicit deep links stay stable even when filters or pagination change.
         selected = (next((item for p in projects if p['id'] == selected_pid
                           for item in review_center.entries(p) if item['key'] == key), None)
-                    if key else next(iter(queue['items']), None))
+                    if key else None)
         record, context = {}, {}
         if request.method == 'POST':
             submitted = request.form
@@ -3615,7 +3617,7 @@ def teacher_review_center():
     if error and not selected:
         body = f'<p class="error" role="alert">{escape(error)}</p><aside class="rc-comment"><h2>Ваш комментарий не сохранён</h2><p class="rc-result">{escape(request.form.get("teacher_comment", ""))}</p></aside>' + body
     messages = ''.join(f'<div class="{escape(category, quote=True)}" role="status">{escape(text)}</div>' for category, text in get_flashed_messages(with_categories=True))
-    return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/review-center.css?v=20261115-cabinet">'
+    return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/review-center.css?v=20261122-reading">'
                        + f'<div class="container workspace">{render_header(user)}<main class="review-center">{messages}{body}</main></div>',
                        title='Центр проверки · M-Flow'), status
 
@@ -3737,29 +3739,24 @@ def teacher_cabinet():
             <main>
                 <section class="teacher-hero workspace-hero">
                     <h1>Кабинет учителя</h1>
-                    <a class="btn" href="/supervision">{icon('link')} Подключить проект</a>
+                    <a class="action-link" href="/supervision">{icon('link')} Подключить проект</a>
                 </section>
                 {messages}
+                <section class="teacher-panel review-panel" id="review-queue"><h2>Проверка работ</h2>
+                    <p>На проверке: <strong data-review-count="{review_count}">{review_count}</strong></p>
+                    <a class="btn" href="{review_url}">Открыть центр проверки {icon('arrow')}</a>
+                </section>
+                <details class="teacher-signal-strip" {'open' if focus in ('overdue', 'attention') else ''}><summary>Сводка и сроки</summary>
                 <div class="t-stats">
-                    <a class="t-stat" href="{review_url}"><strong data-review-count="{review_count}">{review_count}</strong><span>На проверке</span></a>
                     <div class="t-stat"><strong>{len(overview)}</strong><span>Проектов</span></div>
                     <div class="t-stat"><strong>{len(student_ids)}</strong><span>Учеников</span></div>
                     <div class="t-stat {overdue_class}"><strong>{overdue_tasks}</strong><span>Просрочено</span></div>
                 </div>
-                <details class="teacher-signal-strip"><summary>Сводка задач</summary>
                     <span>Выполнено задач: <b>{done_tasks} из {total_tasks}</b> · {percent(done_tasks, total_tasks)}%</span>
                     <span>В ближайшие 3 дня: <b>{soon_tasks}</b></span>
                     <span>Без ответственного: <b>{unassigned_tasks}</b></span>
-                    <span>Сроки задач: {TIMEZONE_LABEL}. Ожидание проверки — не просрочка сдачи.</span>
+                <section class="teacher-panel" id="task-attention"><h2>{attention_title}</h2>{attention_html}</section>
                 </details>
-                <div class="teacher-dashboard-grid">
-                    <section class="teacher-panel review-panel" id="review-queue"><h2>Проверка работ</h2>
-                        <p>{f'Работ ждут решения: {review_count}.' if review_count else 'Сейчас нет работ, ожидающих решения.'}</p>
-                        <p><a class="teacher-primary-link" href="{review_url}">Открыть центр проверки {icon('arrow')}</a></p>
-                    </section>
-                    <section class="teacher-panel" id="task-attention"><h2>{attention_title}</h2><p class="t-muted">Дедлайны учеников отдельно от ожидания проверки учителем.</p>{attention_html}</section>
-                </div>
-                {cabinet_shortcuts(teacher=True)}
                 <details class="ds-teacher-projects" id="teacher-projects"{open_projects}><summary>Проекты учеников</summary>
                     <div class="section-title"><h2>Проекты</h2>
                     <span class="t-muted">Найдено {len(visible_projects)} из {len(overview)} · страница {page} из {pages}</span></div>

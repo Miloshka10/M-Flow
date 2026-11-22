@@ -263,7 +263,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         before = self.database_snapshot()
         cabinet = self.client.get('/teacher').text
         summary = self.queue_html(cabinet)
-        self.assertIn('Работ ждут решения: 2', summary)
+        self.assertIn('data-review-count="2">2</strong>', summary)
         self.assertIn('/teacher/review', summary)
         self.assertNotIn('data-work-key=', cabinet)
         self.assertNotIn('Отчёт команды', cabinet)
@@ -523,7 +523,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
             self.assertNotIn(title, queue)
         self.assertNotIn('<h2>Private project</h2>', overdue)
         review_queue = review.split('id="review-queue"')[1].split('</section>')[0]
-        self.assertIn('Работ ждут решения: 1', review_queue)
+        self.assertIn('data-review-count="1">1</strong>', review_queue)
         self.assertNotIn('Someone else task', review_queue)
         self.assertNotIn('<h2>Owned project</h2>', review)
         self.assertEqual(self.database_snapshot(), before)
@@ -1117,7 +1117,7 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         self.assertEqual(self.post('/project/2/defense', data=dict(defense, revision='1')).status_code, 302)
         self.sign_in(1)
         page = self.client.get('/teacher?focus=attention').text
-        self.assertIn('Работ ждут решения: 2', page)
+        self.assertIn('data-review-count="2">2</strong>', self.queue_html(page))
         center = self.client.get('/teacher/review').text
         self.assertIn('data-work-key="stage-2-1"', center)
         self.assertIn('data-work-key="defense-2"', center)

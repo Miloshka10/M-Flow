@@ -190,14 +190,14 @@ def render_results(result, params, projects):
     states = ''.join(f'<option value="{key}" {"selected" if params["state"] == key else ""}>{label}</option>' for key, label in STATES.items())
     counts = result['counts']
     html = f'''<section id="student-results" class="student-results" aria-labelledby="results-title">
-        <div class="section-title"><div><span class="eyebrow">ОБРАТНАЯ СВЯЗЬ И СЛЕДУЮЩИЙ ШАГ</span>
-        <h2 id="results-title">Мои результаты</h2></div></div>
+        <h2 id="results-title">Сдачи и оценки</h2>
         <p class="t-muted">Доработать: {counts.get('revision', 0)} · На проверке: {counts.get('review', 0)} · Принято: {counts.get('accepted', 0)} · Личных оценок: {counts.get('grade', 0)}</p>
-        <form class="results-filters" method="get" action="/#student-results">
+        <details class="results-help"{' open' if params['project'] or params['state'] != 'all' else ''}>
+        <summary>Фильтры</summary><form class="results-filters" method="get" action="/#student-results">
             {focus_field}
             <label>Проект<select name="result_project">{options}</select></label>
             <label>Состояние<select name="result_state">{states}</select></label>
-            <button type="submit">Показать</button><a class="action-link" href="{reset}">Сбросить</a></form>
+            <button type="submit">Показать</button><a class="action-link" href="{reset}">Сбросить</a></form></details>
         <details class="results-help"><summary>О датах и состояниях</summary><p class="t-muted">Даты: Москва (UTC+3). У этапа после правок известна дата последнего обновления, а не отдельная дата прежней проверки. Отчёты находятся в задачах и не получают статус принятого этапа.</p></details>'''
     if not projects:
         html += f'<div class="results-empty"><h3>Пока нет проектов</h3><p>Создай проект — здесь появятся результаты и обратная связь учителя.</p><a class="action-link" href="#project-create" data-open-project>Создать первый проект {icon('arrow')}</a></div>'

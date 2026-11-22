@@ -192,19 +192,19 @@ def render_profile(profile, token, form=None):
 def render_directory(candidates, projects, invitations, token, filters, is_student):
     body = '<div class="team-toolbar"><a class="teacher-primary-link" href="/skills">Мои навыки</a></div>' if is_student else ''
     if is_student:
-        body += '<section class="card" id="team-invitations" tabindex="-1"><h2>Приглашения в команды</h2>'
+        body += f'<details class="card" id="team-invitations" tabindex="-1"{" open" if invitations else ""}><summary>Приглашения в команды · {len(invitations)}</summary>'
         if not invitations:
-            body += '<p>Приглашений пока нет. Когда участник пригласит вас в проект, приглашение появится здесь.</p>'
+            body += '<p>Приглашений пока нет.</p>'
         for item in invitations:
             body += f'''<article class="team-invite"><h3>{escape(item['project_name'])}</h3><p>От {escape(item['sender_name'])} · Роль: {escape(item['role_text'] or 'Обсудите с командой')}</p>
                 <p class="team-text">{escape(item['message'])}</p><form method="post" action="/teams/invitations/{item['id']}/respond" class="team-actions">{hidden_token(token)}
                 <button name="action" value="accept" data-ui-icon="check">Принять приглашение</button><button class="secondary" name="action" value="decline" data-ui-icon="close">Отказаться</button></form></article>'''
-        body += '</section>'
+        body += '</details>'
     body += f'''<h2 id="people" tabindex="-1">Найти участников</h2><form method="get" class="team-filters"><input name="q" aria-label="Поиск учеников" placeholder="Логин, навык или интерес" value="{escape(filters['q'], quote=True)}">
         <input name="skill" aria-label="Навык" placeholder="Навык: например Python" value="{escape(filters['skill'], quote=True)}">
         <input name="direction" aria-label="Направление" placeholder="Направление" value="{escape(filters['direction'], quote=True)}">
         <input name="class_name" aria-label="Класс" placeholder="Класс (необязательно)" value="{escape(filters['class_name'], quote=True)}">
-        <button data-ui-icon="search">Найти</button><a class="back" href="/teams">Сбросить</a></form><p>Найдено участников: {len(candidates)}. Участники могут быть из разных классов и направлений.</p><div class="team-directory">'''
+        <button data-ui-icon="search">Найти</button><a class="back" href="/teams">Сбросить</a></form><p>Найдено участников: {len(candidates)}</p><div class="team-directory">'''
     for item in candidates:
         tags = ''.join(f'<span class="team-skill">{escape(skill)}</span>' for skill in item['skills'])
         body += f'''<article class="card team-person"><h2>{escape(item['username'])}</h2><p>{escape(item['class_name'])} · {escape(item['direction'])}</p><div class="team-skills">{tags}</div><p class="team-text">{escape(item['bio'])}</p>'''

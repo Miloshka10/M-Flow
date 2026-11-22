@@ -125,23 +125,23 @@ def material(url, label):
     return f'<a class="action-link rc-material" href="{escape(url, quote=True)}" target="_blank" rel="noopener noreferrer">{escape(label)} {icon("external")}</a>'
 
 
-def render_inbox(result, params, selected, explicit):
-    html = f'<aside class="rc-inbox" id="review-inbox" tabindex="-1" aria-labelledby="inbox-title" data-mobile-hidden="{str(explicit).lower()}"><div class="rc-inbox-head"><h2 id="inbox-title">{"Отчёты" if params["kind"] == "report" else "Ждут решения"}</h2><span>{result["total"]}</span></div>'
+def render_inbox(result, params):
+    html = f'<section class="rc-inbox" id="review-inbox" tabindex="-1" aria-labelledby="inbox-title"><div class="rc-inbox-head"><h2 id="inbox-title">{"Отчёты" if params["kind"] == "report" else "Ждут решения"}</h2><span>{result["total"]}</span></div>'
     if not result['items']:
         html += '<div class="rc-empty">' + icon('check') + '<h3>Здесь пока нет работ</h3><p>Новые сдачи появятся после отправки учениками. Попробуйте изменить фильтры.</p><a class="action-link" href="/teacher/review">Сбросить фильтры</a></div>'
     html += '<ul class="rc-list">'
     for item in result['items']:
         meta = item.get('submission')
         repeat = meta and meta['attempt'] > 1
-        badge = 'Отчёт' if item['kind'] == 'report' else 'Повторная сдача' if repeat else 'Видеозащита' if item['kind'] == 'defense' else 'Этап'
+        badge = ' · повторная сдача' if repeat else ''
         date = meta['recorded_at'] if meta else item['sent']
         wait = (wait_label(date) if meta else 'Время отправки неизвестно') if item['requires_decision'] else 'Решение не требуется'
         href = escape(center_url(params, item['key'], detail=True), quote=True)
-        html += f'''<li><a class="rc-work" data-work-key="{item['key']}" href="{href}" {('aria-current="true"' if selected and selected['key'] == item['key'] else '')}>
+        html += f'''<li><a class="rc-work" data-work-key="{item['key']}" href="{href}">
             <strong class="rc-work-project">{escape(item['project_name'])}</strong>
-            <span class="rc-work-top"><span class="rc-badge">{badge}</span><span class="rc-wait">{wait}</span></span>
-            <span class="rc-work-title">{escape(item['title'])}</span>
-            <span class="rc-work-meta">{escape(item['author'] or 'Автор не указан')}</span></a></li>'''
+            <span class="rc-work-title">{escape(item['title'])}{badge}</span>
+            <span class="rc-work-meta">{escape(item['author'] or 'Автор не указан')} · {wait}</span>
+            <span class="rc-work-open">{'Открыть отчёт' if item['kind'] == 'report' else 'Открыть сдачу'} {icon('arrow')}</span></a></li>'''
     html += '</ul>'
     if result['pages'] > 1:
         html += '<nav class="rc-pagination" aria-label="Страницы работ">'
@@ -151,49 +151,43 @@ def render_inbox(result, params, selected, explicit):
         if result['page'] < result['pages']:
             html += f'<a href="{escape(center_url(params, page=result["page"]+1), quote=True)}">Далее {icon("arrow")}</a>'
         html += '</nav>'
-    return html + '</aside>'
+    return html + '</section>'
 
 
-def render_detail(item, record, context, params, token, explicit=False, error='', submitted=None):
-    back = f'<a class="action-link rc-mobile-back" href="{escape(center_url(params), quote=True)}">{icon("arrow-left")} К списку работ</a>'
-    html = f'<section class="rc-detail" id="review-detail" tabindex="-1" aria-labelledby="detail-title" data-mobile-hidden="{str(not explicit).lower()}">{back}'
+def render_detail(item, record, context, params, token, error='', submitted=None):
+    back = f'<a class="action-link rc-back" href="{escape(center_url(params), quote=True)}#review-inbox">{icon("arrow-left")} К списку работ</a>'
+    html = f'<section class="rc-detail" id="review-detail" tabindex="-1" aria-labelledby="detail-title">{back}'
     if not item:
-        explanation = ('Результат мог быть проверен другим учителем. Откройте актуальный список; история решений сохранена.' if explicit else
-                       'Работ по выбранным условиям пока нет. Новые результаты появятся после отправки учениками.')
-        return html + '<div class="rc-empty">' + icon('review') + '<h2 id="detail-title">' + ('Работа уже не в очереди' if explicit else 'Всё готово к новой проверке') + f'</h2><p>{explanation}</p><a class="action-link" href="/teacher/review">Открыть список</a></div></section>'
+        return html + f'<div class="rc-empty">{icon("review")}<h1 id="detail-title">Работа уже не в очереди</h1><p>Возможно, её уже проверили. Решение доступно в истории проекта.</p></div></section>'
     pid = item['project_id']
     work = f'stage-{record["number"]}' if item['kind'] == 'stage' else 'defense'
-    html += f'''<div class="rc-detail-head"><span class="eyebrow">{"ИНФОРМАЦИОННЫЙ ОТЧЁТ" if item['kind'] == 'report' else "ПРОВЕРКА РЕЗУЛЬТАТА"}</span>
-        <h2 id="detail-title">{escape(item['project_name'])}</h2><p>{escape(item['title'])}</p></div>
-        <div class="rc-detail-links"><a class="action-link" href="/project/{pid}">{icon('folder')} Проект</a>
-        <a class="action-link" href="{item['href']}">Открыть в проекте {icon('arrow')}</a></div>'''
+    html += f'''<div class="rc-detail-head"><h1 id="detail-title">{escape(item['project_name'])}</h1>
+        <p>{escape(item['title'])}</p></div>'''
     if item['kind'] == 'report':
-        return html + f'<p class="rc-hint">Отчёт о задаче — информация о ходе работы. Его прочтение не принимает этап и не выставляет оценку.</p><p class="rc-hint">{escape(item["author"] or "Автор не указан")} · {format_timestamp(item["sent"])}</p><p class="rc-result">{escape(item["body"])}</p></section>'
+        return html + f'<p class="rc-hint">Отчёт о задаче — информация о ходе работы. Его прочтение не принимает этап и не выставляет оценку.</p><p class="rc-hint">{escape(item["author"] or "Автор не указан")} · {format_timestamp(item["sent"])}</p><p class="rc-result rc-current">{escape(item["body"])}</p><a class="action-link" href="{item["href"]}">Открыть задачу {icon("arrow")}</a></section>'
+    analysis = ''
     if configured_model():
         number = record['number'] if item['kind'] == 'stage' else 0
         query = urlencode({'back': center_url(params, work=item['key'], detail=True)})
-        html += f'<p><a class="action-link" href="/teacher/review/analysis/{pid}/{number}?{query}">Анализ сдачи</a></p>'
+        analysis = f'<a class="btn secondary" href="/teacher/review/analysis/{pid}/{number}?{query}">Анализ сдачи {icon("arrow")}</a>'
     meta = item.get('submission')
     date = meta['recorded_at'] if meta else item['sent']
     attempt = f'Отправка №{meta["attempt"]}' if meta and meta['attempt'] else 'Номер отправки неизвестен'
-    html += f'<p class="rc-hint"><strong>{attempt}</strong></p>'
-    html += f'<p class="rc-hint">Автор: {escape(item["author"] or "не указан")} · {"Отправлено" if meta else "Обновлено"}: {format_timestamp(date)}{(" · " + wait_label(date)) if meta else ""}</p>'
-    if not meta:
-        html += '<p class="rc-hint">История этой отправки не записана: показана дата последнего обновления, точное время ожидания неизвестно.</p>'
+    html += f'<p class="rc-hint">{attempt} · {escape(item["author"] or "Автор не указан")} · {format_timestamp(date)}</p>'
     result = record.get('result', '') if item['kind'] == 'stage' else record.get('description', '')
     url = record.get('presentation_url', '') if item['kind'] == 'stage' else record.get('video_url', '')
     previous = context.get('previous')
-    html += '<div class="rc-section"><h3>' + ('Сравнение отправок' if previous else 'Текущая работа') + '</h3>'
+    html += f'''<div class="rc-section"><h2>Что сдал ученик</h2>
+        <p class="rc-result rc-current" data-version="current">{escape(result or "Описание не указано.")}</p>
+        {material(url, "Открыть презентацию" if item["kind"] == "stage" else "Смотреть видеозащиту")}
+        <div class="rc-reading-actions">{analysis}<a class="action-link" href="#review-decision">К решению {icon("arrow")}</a></div>'''
     if previous:
-        html += f'<div class="rc-comparison"><article class="rc-version" data-version="previous"><h4>Предыдущая сдача</h4><small>{format_timestamp(previous["recorded_at"])}</small><p class="rc-result">{escape(previous["result"] or "Описание не указано.")}</p>{material(previous["resource_url"], "Материал прошлой сдачи")}</article><article class="rc-version" data-version="current"><h4>Новая сдача</h4><small>{format_timestamp(date)}</small><p class="rc-result">{escape(result or "Описание не указано.")}</p>{material(url, "Открыть презентацию" if item["kind"] == "stage" else "Смотреть видеозащиту")}</article></div>'
-    else:
-        html += f'<p class="rc-result" data-version="current">{escape(result or "Описание не указано.")}</p>{material(url, "Открыть презентацию" if item["kind"] == "stage" else "Смотреть видеозащиту")}<p class="rc-hint">Более ранних отправок в истории нет. Черновики не считаются сдачами.</p>'
+        html += f'<details class="rc-history" data-version="previous"><summary>Предыдущая сдача</summary><p class="rc-result">{escape(previous["result"] or "Описание не указано.")}</p>{material(previous["resource_url"], "Материал прошлой сдачи")}</details>'
     html += '</div>'
     decision = context.get('decision')
     comment = decision['comment'] if decision else record.get('teacher_comment')
     if comment:
         html += f'<aside class="rc-comment"><h3>Замечание к предыдущей сдаче</h3><p class="rc-result">{escape(comment)}</p><p class="rc-hint">Новая версия ещё не проверена.{(" Решение: " + escape(decision["actor_name"]) + " · " + format_timestamp(decision["recorded_at"])) if decision else " Ранее сохранённое замечание; точная история неизвестна."}</p></aside>'
-    html += f'<div class="rc-detail-links"><a class="action-link" href="/project/{pid}/history?work={work}">{icon("history")} Вся история этой работы</a></div>'
     criteria = ''.join(f'<li>{escape(label)} <span>до {maximum}</span></li>' for _, label, maximum in CRITERIA)
     html += f'<details class="rc-history"><summary>Критерии итоговой оценки</summary><p class="rc-hint">Ориентир для обратной связи. Итоговые баллы каждого ученика выставляются отдельно, максимум {MAX_SCORE}.</p><ul class="rc-criteria">{criteria}</ul><a class="action-link" href="/project/{pid}/assessment">Перейти к личным оценкам {icon("arrow")}</a></details>'
     editable = record['state'] in ('review', 'submitted')
@@ -205,16 +199,17 @@ def render_detail(item, record, context, params, token, explicit=False, error=''
     if editable:
         value = submitted.get('teacher_comment', '') if submitted is not None and same_version else ''
         html += f'''<form class="rc-decision" method="post" action="{escape(center_url(params, item['key'], detail=True), quote=True)}" data-guard-draft data-draft-unsaved="{int(bool(value))}">
-            <h3>Ваше решение</h3><input type="hidden" name="csrf_token" value="{escape(token, quote=True)}"><input type="hidden" name="revision" value="{record['revision']}">'''
+            <h2 id="review-decision" tabindex="-1">Решение</h2><input type="hidden" name="csrf_token" value="{escape(token, quote=True)}"><input type="hidden" name="revision" value="{record['revision']}">'''
         if item['kind'] == 'stage':
             html += f'<input type="hidden" name="number" value="{record["number"]}">'
         html += f'''<label for="review-comment">Комментарий ученикам</label><p class="rc-hint" id="comment-hint">Для возврата напишите, что исправить. Для принятия комментарий необязателен. До 2000 символов.</p>
             <textarea id="review-comment" name="teacher_comment" rows="4" maxlength="2000" aria-describedby="comment-hint" placeholder="Что получилось и что нужно улучшить">{escape(value)}</textarea>
             <div class="rc-decision-actions"><button name="action" value="accept" data-ui-icon="check">Принять {"этап" if item['kind'] == 'stage' else 'видеозащиту'}</button><button class="secondary" name="action" value="return" data-ui-icon="return">На доработку</button></div>
-            <p class="rc-hint">Решение сохраняется в истории, ученики получат уведомление. Личные оценки не изменятся.</p></form>'''
+            </form>'''
     else:
         html += '<p class="rc-hint">Работа уже не ожидает решения. Обновите очередь.</p>'
-    return html + '</section>'
+    return html + f'''<div class="rc-detail-links"><a class="action-link" href="/project/{pid}/history?work={work}">{icon("history")} История отправок</a>
+        <a class="action-link" href="{item['href']}">Открыть в проекте {icon("arrow")}</a></div></section>'''
 
 
 def render_center(projects, result, selected, record, context, params, token, connections, explicit=False, error='', submitted=None, groups=()):
@@ -227,6 +222,8 @@ def render_center(projects, result, selected, record, context, params, token, co
     group = next((g for g in groups if g['id'] == group_id), None)
     group_context = (f'<p class="rc-hint">Класс: <a href="/groups/{group["id"]}">{escape(group["name"])}</a></p>'
                      if group else '')
+    if explicit:
+        return f'{group_context}{render_detail(selected, record, context, params, token, error, submitted)}'
     for kind, number, label in (('all', sum(counts.values()), 'Все'), ('stage', counts['stage'], 'Этапы'), ('defense', counts['defense'], 'Видеозащиты')):
         stats += f'<a class="rc-stat" href="{escape(center_url(dict(tab_params, kind=kind)), quote=True)}" {("aria-current=\"true\"" if params["kind"] == kind else "")}>{label} <strong>{number}</strong></a>'
     options = lambda items, value: ''.join(f'<option value="{escape(str(k), quote=True)}" {("selected" if str(k) == str(value) else "")}>{escape(v)}</option>' for k, v in items)
@@ -236,19 +233,19 @@ def render_center(projects, result, selected, record, context, params, token, co
     class_filter = (f'<label><span id="review-class-label">Класс</span>'
                     f'<select name="group" aria-labelledby="review-class-label">{group_options}</select></label>'
                     if groups else '')
-    filtered = bool(params['q'] or params.get('project') or group or params['sort'] != 'oldest')
+    filtered = bool(params['q'] or params.get('project') or params['sort'] != 'oldest')
     html = f'''<div class="rc-heading"><h1>Центр проверки</h1><a class="back" href="/teacher">{icon('arrow-left')} В кабинет</a></div>
         {group_context}<div class="rc-toolbar"><nav class="rc-stats" aria-label="Работы на проверке">{stats}</nav>
         <a class="action-link" href="{escape(center_url(dict(tab_params, kind='report')), quote=True)}" {'aria-current="true"' if params['kind'] == 'report' else ''}>Отчёты о задачах</a></div>
         <details class="rc-filter-panel" {'open' if filtered else ''}><summary data-ui-icon="filter">Поиск и фильтры{' · применены' if filtered else ''}</summary><form class="rc-filters" method="get"><label>Поиск<input type="search" name="q" value="{escape(params['q'], quote=True)}" placeholder="Проект, ученик или работа"></label>
         {class_filter}<label><span id="review-project-label">Проект</span><select name="project" aria-labelledby="review-project-label">{project_options}</select></label><label>Работы<select name="kind">{options(KINDS.items(), params['kind'])}</select></label><label>Порядок<select name="sort">{options(SORTS.items(), params['sort'])}</select></label><button data-ui-icon="filter">Показать</button><a class="action-link" href="/teacher/review">Сбросить</a></form></details>
-        <div class="rc-layout">{render_inbox(result, params, selected, explicit)}{render_detail(selected, record, context, params, token, explicit, error, submitted)}</div>'''
+        {render_inbox(result, params)}'''
     requests, more = connections
-    html += '<section class="rc-connections"><h2>Согласование руководства</h2>'
+    html += '<details class="rc-connections"><summary>Согласование руководства</summary>'
     for row in requests:
         html += f'<p><strong>{escape(row["name"])}</strong> · {escape(row["owner_name"])} <a class="action-link" href="/supervision#request-{row["id"]}">Рассмотреть {icon("arrow")}</a></p>'
     if not requests:
         html += '<p class="rc-hint">В показанных запросах вашего решения сейчас не требуется.</p>'
     if more:
         html += '<p class="rc-hint">Показана часть последних запросов. Все согласования доступны по ссылке ниже.</p>'
-    return html + f'<a class="action-link" href="/supervision">Все согласования {icon("arrow")}</a><a class="action-link" href="/groups">{icon("groups")} Обзор учебных групп</a></section>'
+    return html + f'<a class="action-link" href="/supervision">Все согласования {icon("arrow")}</a><a class="action-link" href="/groups">{icon("groups")} Обзор учебных групп</a></details>'

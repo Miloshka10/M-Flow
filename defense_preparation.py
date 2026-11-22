@@ -145,18 +145,15 @@ def render_preparation(project_id, user, plan, stages, defense, token, form=None
                     + (f'<p class="prep-note"><b>{"Замечание к предыдущей сдаче" if previous else "Комментарий учителя"}:</b> {escape(comment)}</p>' if comment else '')
                     + f'<a href="{url}">{"Открыть проверку" if not student else "Открыть работу"} {icon("arrow")}</a></div>')
     return f'''<link rel="stylesheet" href="/static/defense-preparation.css?v=20261027">
-        <div class="prep-intro"><p>Соберите материалы и короткие тезисы, чтобы уверенно рассказать о своём проекте.</p>
-        <span>План доступен команде и руководителю</span>
-        <nav class="prep-jump" aria-label="На этой странице"><a href="#prep-plan-title">План выступления</a><a href="#prep-materials-title">Материалы · {ready}/3</a></nav></div>
         <div class="prep-layout"><section class="prep-plan" aria-labelledby="prep-plan-title">
-            <header class="prep-section-heading"><div><span class="prep-eyebrow">Выступление</span><h2 id="prep-plan-title">План выступления</h2></div>
+            <header class="prep-section-heading"><h2 id="prep-plan-title">План выступления</h2>
             <span class="prep-counter">Сохранено {filled} из 5 тезисов</span></header>
             <p class="prep-meta">{metadata}</p>
             <p class="prep-guidance">{"Запишите опорные мысли своими словами. Это подсказки для выступления, а не полный текст доклада." if student else "Общие тезисы команды. Ученики заполняют и сохраняют план; учитель может его прочитать."}</p>
             {fields}</section>
         <aside class="prep-sidebar" aria-label="Материалы и проверка">
             <section class="prep-materials" aria-labelledby="prep-materials-title">
-                <span class="prep-eyebrow">Готовность материалов</span><h2 id="prep-materials-title">Что уже собрано</h2>
+                <h2 id="prep-materials-title">Материалы</h2>
                 <p class="prep-count"><strong>{ready}<span> / 3</span></strong><span>материалов добавлено</span></p>
                 <ul>{cards}</ul><p class="prep-footnote">Наличие материалов не означает принятие учителем. Откройте ссылки и проверьте права просмотра самостоятельно.</p>
             </section>

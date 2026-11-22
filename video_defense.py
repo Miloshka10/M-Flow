@@ -95,7 +95,7 @@ def change_defense(conn, project_id, user, form):
 
 def render_defense(record, user, token, form=None, has_teacher=True):
     values = form or record
-    body = f'<section class="card ds-defense"><h2>{DEFENSE_STATES[record["state"]]}</h2><details class="ds-guide"><summary>О видеозащите</summary><p>Одна запись защиты на проект. Черновик и проверка доступны только участникам проекта, включая учителя.</p></details>'
+    body = f'<section class="card ds-defense"><h2>{DEFENSE_STATES[record["state"]]}</h2>'
     if safe_web_url(record['video_url']):
         body += f'<p><a class="teacher-primary-link" href="{escape(record["video_url"],quote=True)}" target="_blank" rel="noopener noreferrer">Открыть запись защиты {icon('external')}</a></p>'
     elif record['video_url']:

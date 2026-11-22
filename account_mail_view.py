@@ -146,13 +146,13 @@ def profile_panel(user, projects_count, email, token, message='', error='', read
     feedback = f'<div class="success" role="status">{escape(message)}</div>' if message else ''
     error_html = f'<div class="error" role="alert" tabindex="-1" data-account-password-error>{escape(error)}</div>' if error else ''
     return f'''<main class="profile-card account-profile access-profile" data-access-page="profile">
-        <a class="back" href="{home}">На главную</a><header class="access-profile-heading"><h1>Профиль</h1><p>Ваш аккаунт, почта и доступ к M-Flow.</p></header>{feedback}
-        <div class="access-profile-grid"><section class="access-identity ui-surface" aria-labelledby="account-identity-title"><p class="eyebrow">ЛИЧНЫЙ АККАУНТ</p><h2 id="account-identity-title">{escape(user['username'])}</h2>
+        <a class="back" href="{home}">На главную</a><header class="access-profile-heading"><h1>Профиль</h1></header>{feedback}
+        <div class="access-profile-grid"><section class="access-identity ui-surface" aria-labelledby="account-identity-title"><h2 id="account-identity-title">{escape(user['username'])}</h2>
         <dl class="account-profile-facts"><dt>Роль</dt><dd>{role}</dd><dt>Проектов</dt><dd>{projects_count}</dd></dl>
         <nav class="access-account-links" aria-label="Разделы аккаунта">{skills}<a class="action-link" href="/settings">Настройки оформления и анимаций</a></nav></section>
-        <section class="access-recovery-summary ui-surface" aria-labelledby="account-recovery-title"><p class="eyebrow">ПОЧТА И ВОССТАНОВЛЕНИЕ</p>{state_badge(mail['label'], mail['tone'])}<h2 id="account-recovery-title">{mail['title']}</h2><p>{mail['text']}</p>
+        <section class="access-recovery-summary ui-surface" aria-labelledby="account-recovery-title">{state_badge(mail['label'], mail['tone'])}<h2 id="account-recovery-title">{mail['title']}</h2><p>{mail['text']}</p>
         {f'<p class="access-current-email">{escape(email["email"])}</p>' if email['email'] else ''}<a class="btn {"secondary" if email['email'] and not email['pending_email'] else ""}" href="/profile/email">{mail['action']}</a></section></div>
-        <details class="account-access-layout account-password-layout access-password-section" {"open" if error else ""}><summary><span><strong>Смена пароля</strong><small>Измените пароль, если хотите обновить доступ.</small></span></summary>
+        <details id="change-password" class="account-access-layout account-password-layout access-password-section" {"open" if error else ""}><summary><strong>Смена пароля</strong></summary>
         <section class="account-security-panel" data-account-form><p class="account-section-intro">Текущий сеанс сохранится. После смены пароля другие сеансы этого аккаунта завершатся.</p>{error_html}
         <form method="post" class="access-form"><input type="hidden" name="csrf_token" value="{escape(token, quote=True)}">
         {password_control('old-password', 'old_password', 'Старый пароль', 'current-password')}

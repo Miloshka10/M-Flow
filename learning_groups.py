@@ -352,13 +352,15 @@ def render_group(conn, user, group, data, token, code=None, assignments=''):
     def form(action, content):
         return f'<form method="post">{hidden_token(token)}<input type="hidden" name="revision" value="{revision}"><input type="hidden" name="action" value="{action}">{content}</form>'
     body = f'''<link rel="stylesheet" href="/static/learning-groups.css?v=20261119-assignments">
-        <p class="groups-intro group-identity">Учитель: {escape(group['teacher_name'])} · {'Группа в архиве' if group['archived'] else 'Действующая группа'}</p><p class="group-text">{escape(group['description'])}</p>'''
+        <p class="groups-intro group-identity">Учитель: {escape(group['teacher_name'])}</p>'''
+    if group['description']:
+        body += f'<p class="group-text">{escape(group["description"])}</p>'
     if group['archived']:
         body += '<p class="group-notice">Группа в архиве. Новые вступления и выбор проекта закрыты; существующие проекты и руководство сохранены.</p>'
     if data['teacher']:
         c = data['counts']
-        body += f'''<section class="group-stats" aria-label="Показатели группы"><div><strong>{c['total']}</strong>Учеников</div><div><strong>{c['review']}</strong>Ждут проверки</div>
-            <div><strong>{c['unlinked']}</strong>Нужно подключение</div><div><strong>{c['no_project']}</strong>Без проекта</div></section>'''
+        body += (f'<p class="group-queue-action"><a class="btn" href="/teacher/review?group={gid}">Проверка работ класса {icon("arrow")}</a></p>'
+                 f'<p class="t-muted">Учеников: {c["total"]} · Ждут проверки: {c["review"]} · Без проекта: {c["no_project"]} · Нужно подключение: {c["unlinked"]}</p>')
         body += f'<details class="group-panel" {"open" if code or not c["total"] else ""}><summary data-ui-icon="link">Приглашение класса</summary><p>Один код можно передать всему классу. Он действует 7 дней, показывается только при создании. Новый код отменяет предыдущий, но сохраняет состав группы.</p><div class="group-actions">'
         if not group['archived']:
             body += form('invite', '<button data-ui-icon="plus">Создать новый код группы</button>') + form('revoke', '<button class="secondary" data-ui-icon="close">Отозвать код</button>')

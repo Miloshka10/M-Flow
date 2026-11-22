@@ -177,8 +177,8 @@ def _render_event(row):
 
 def render_history(pid, data, work):
     options = ''.join(f'<option value="{key}" {"selected" if key == work else ""}>{label}</option>' for key,label in WORKS.items())
-    html = f'''<link rel="stylesheet" href="/static/work-history.css?v=20261019"><p class="history-intro">Здесь сохраняются отправленные версии и решения учителя. Изменения черновиков не записываются.
-        Номера отправок учитывают только новые сдачи после включения истории. Ранее перезаписанные версии восстановить нельзя.</p>
+    html = f'''<link rel="stylesheet" href="/static/work-history.css?v=20261019"><details class="history-intro"><summary>Как устроена история</summary>
+        <p>Здесь сохраняются отправленные версии и решения учителя. Номера учитывают сдачи после включения истории.</p></details>
         <form class="history-filters" method="get"><label>Работа<select name="work">{options}</select></label><button data-ui-icon="filter">Показать</button></form>
         <p class="t-muted">Записей: {data['total']} · Страница {data['page']} из {data['pages']}. Новые события сверху.</p>'''
     html += ''.join(_render_event(row) for row in data['items']) or '<p>Новых отправок и решений пока нет. Они появятся после отправки работы учителю.</p>'

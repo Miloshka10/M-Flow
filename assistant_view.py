@@ -1,6 +1,7 @@
 """Presentation for local assistance and comparison of submitted sources."""
 
 from html import escape
+from material_links import safe_web_url
 from local_assistant import FILE_LIMIT, IGNORED_FOLDERS, SOURCE_FILE_COUNT, TEXT_EXTENSIONS, TEXT_LIMIT, ZIP_LIMIT
 
 FILE_STATUS = {'added': 'Добавлен', 'removed': 'Удалён', 'changed': 'Изменён'}
@@ -36,9 +37,11 @@ def model_report(result):
     changes = ''.join(f'<li><strong>{escape(row["description"])}</strong><p>{escape(row["source"])}</p>'
                       f'<blockquote>{escape(row["quote"])}</blockquote></li>' for row in result['changes'])
     change_section = f'<h3>Что изменилось по доступным данным</h3><ul>{changes}</ul>' if changes else ''
-    return f'''<section class="local-assistant-panel"><h2>Разбор Ollama</h2><p>{escape(result['summary'])}</p>
-        <h3>Проверка критериев</h3><ul>{checks}</ul>{change_section}
-        <h3>Что проверить дальше</h3><ol>{suggestions}</ol></section>'''
+    return f'''<section class="local-assistant-panel" id="model-report" tabindex="-1">
+        <h2>Разбор Ollama</h2><p class="local-assistant-hint">Сверьте вывод с работой перед решением.</p>
+        <p class="analysis-reading">{escape(result['summary'])}</p>
+        <h3>Что проверить дальше</h3><ol>{suggestions}</ol>
+        <details><summary>Критерии и цитаты из работы</summary><ul>{checks}</ul>{change_section}</details></section>'''
 
 
 def analysis_page(stage, versions, terms, label, archives, result, token, errors=(), *,
@@ -70,13 +73,25 @@ def analysis_page(stage, versions, terms, label, archives, result, token, errors
             <p>Сопоставлено путей: {archives['compared']}{ignored} · строки +{archives['added']} / −{archives['removed']}</p>
             {table}{functions}</section>'''
     messages = ''.join(f'<p class="error" role="alert">{escape(error)}</p>' for error in errors)
+    if messages:
+        messages = f'<div id="model-report" tabindex="-1">{messages}</div>' if not result else messages
     report = model_report(result) if result else ''
+    link = current['resource_url']
+    material = (f'<a class="action-link" href="{escape(link, quote=True)}" target="_blank" rel="noopener noreferrer">Открыть материал сдачи</a>'
+                if safe_web_url(link) else '')
+    past = (f'<details><summary>Описание прошлой сдачи</summary><p class="analysis-reading">{escape(previous["result"] or "Описание отсутствует.")}</p></details>'
+            if previous else '')
     return f'''<div class="local-assistant-page" data-local-assistant>
-        <section class="local-assistant-panel"><h2>{escape(stage)}</h2>{assignment}
-        <p>{versions_label}</p><p><strong>{escape(label)}</strong></p>
-        {files if not archives else ''}
-        <form method="post" data-ai-review-form>
+        <section class="local-assistant-panel analysis-current">
+        <p class="local-assistant-hint">{escape(stage)} · {versions_label}</p>
+        <h2>Что сдал ученик</h2>
+        <p class="analysis-reading">{escape(current['result'] or 'Описание отсутствует.')}</p>
+        {material}{assignment}
+        <h3>Что изменилось</h3><p>{escape(label)}</p>{past}{files if not archives else ''}</section>
+        <section class="local-assistant-panel"><h2>Проверка критериев</h2>
+        <form method="post" action="#model-report" data-ai-review-form>
         <input type="hidden" name="csrf_token" value="{escape(token, quote=True)}">
         <input type="hidden" name="revision" value="{current['revision']}">
-        <button type="submit">Запустить анализ</button><p role="status" data-ai-progress></p></form></section>
-        {messages}{files if archives else ''}{report}</div>'''
+        <button type="submit">Запустить анализ</button><p role="status" data-ai-progress></p></form>
+        {messages}</section>{report}
+        {files if archives else ''}</div>'''

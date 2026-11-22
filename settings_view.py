@@ -137,8 +137,7 @@ def render_notification_settings(role, en, muted, csrf, saved):
     options = ''.join(f'<label class="settings-checkbox"><input type="checkbox" name="notification" '
                       f'value="{category}"{" checked" if category not in muted else ""}>'
                       f'{NOTIFICATION_LABELS[role][category][en]}</label>' for category in ROLE_NOTIFICATION_GROUPS[role])
-    hint = ('Choose what appears in the bell. The full notification history stays available.' if en else
-            'Выбери, что показывать в колокольчике. Все события останутся в истории.')
+    hint = 'Show in the notification menu' if en else 'Показывать в меню уведомлений'
     status = (f'<p role="status" class="success">{"Settings saved." if en else "Настройки сохранены."}</p>' if saved else '')
     return f'''{status}<p class="settings-hint">{hint}</p><form method="post" action="/settings/notifications">{csrf}
         {options}<button type="submit" class="settings-save">{'Save' if en else 'Сохранить'}</button></form>

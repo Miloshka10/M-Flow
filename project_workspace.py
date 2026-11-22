@@ -169,10 +169,10 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
             <a class="action-link" href="/next/project/{project_id}">{icon('overview')} Орбита проекта</a></div>
         {project_navigation(project_id, active)}<section class="project-overview" aria-label="Маршрут проекта">
         <div class="ui-project-overview-grid"><section class="ui-project-next" aria-label="Следующий шаг проекта">
-            <div class="journey-action" data-next-step="{step['key']}"><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span>
+            <div class="journey-action" data-next-step="{step['key']}">
             <p>{current_name} · {current_label}</p><h2>{step['title']}</h2><p>{step['text']}</p>{action}</div>
             {feedback}
-            <p class="ui-project-deadline"><span data-task-deadline>{task_deadline(tasks, today)}</span><br>Срок относится к задаче, не к этапу</p></section>
+            <p class="ui-project-deadline"><span data-task-deadline>{task_deadline(tasks, today)}</span></p></section>
         <aside class="ui-project-aside"><section class="ui-project-progress" aria-label="Прогресс проекта"><span class="eyebrow">ПРИНЯТЫЕ ЭТАПЫ</span>
             <div class="ui-progress-number">{done:02d} <small>/ 05</small></div><p>Принято {done} из 5 этапов</p>
             <div class="project-progress" aria-hidden="true"><div style="width:{done * 20}%"></div></div>
@@ -183,9 +183,8 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
             <p>{escape(', '.join(m['username'] for m in members if m['role'] == 'teacher')) if has_teacher else 'Учитель пока не подключён. Черновики можно готовить уже сейчас.'}</p>
             <a class="action-link" href="/supervision?project={project_id}">Подключение и согласования {icon('arrow')}</a></section></aside></div>
         {team_map}<details class="journey-route"><summary data-ui-icon="stages">Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
-            <p class="journey-explanation">Задачи помогают выполнять работу. Этап принимается только после решения учителя; защита и оценки проверяются отдельно.</p><ol>{route}</ol></details>
+            <ol>{route}</ol></details>
         <section class="project-finish" aria-labelledby="finish-title"><h2 id="finish-title">Завершение проекта</h2>
-            <p>Подготовьте выступление, отправьте видеозащиту и посмотрите итоговую оценку. Открыть эти разделы можно в любое время.</p>
             <div class="project-finish-links"><a href="{base}/preparation"><strong>{icon('tasks')} Подготовка к защите</strong><span>Материалы и план выступления</span></a>
             <a href="{base}/defense"><strong>{icon('video')} Видеозащита</strong><span>{defense_label}</span></a>
             <a href="{base}/assessment"><strong>{icon('assessment')} Оценивание</strong><span>{grading}</span></a></div></section>

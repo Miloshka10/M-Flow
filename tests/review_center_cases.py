@@ -93,7 +93,8 @@ class ReviewCenterCases:
         page = self.client.get('/teacher/review?kind=stage&project=2&q=STUDENT&sort=newest').text
         self.assertIn('stage-2-1', self.center_work_keys(page))
         self.assertNotIn('defense-1', self.center_work_keys(page))
-        self.assertIn('id="review-detail"', page)
+        self.assertIn('id="review-inbox"', page)
+        self.assertNotIn('id="review-detail"', page)
         page = self.client.get('/teacher/review?kind=report&q=КОМАНДНЫЙ').text
         self.assertIn('report-1-11', self.center_work_keys(page))
         self.assertNotIn('report-1-10', self.center_work_keys(page))
