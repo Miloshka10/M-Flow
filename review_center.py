@@ -14,6 +14,7 @@ from deadlines import format_timestamp
 from grading import CRITERIA, MAX_SCORE
 from interface import icon
 from material_links import safe_web_url
+from local_assistant import configured_model
 from teacher_queue import entries, queue_page, sent_date
 from teacher_overview import project_scope
 
@@ -168,6 +169,10 @@ def render_detail(item, record, context, params, token, explicit=False, error=''
         <a class="action-link" href="{item['href']}">Открыть в проекте {icon('arrow')}</a></div>'''
     if item['kind'] == 'report':
         return html + f'<p class="rc-hint">Отчёт о задаче — информация о ходе работы. Его прочтение не принимает этап и не выставляет оценку.</p><p class="rc-hint">{escape(item["author"] or "Автор не указан")} · {format_timestamp(item["sent"])}</p><p class="rc-result">{escape(item["body"])}</p></section>'
+    if configured_model():
+        number = record['number'] if item['kind'] == 'stage' else 0
+        query = urlencode({'back': center_url(params, work=item['key'], detail=True)})
+        html += f'<p><a class="action-link" href="/teacher/review/analysis/{pid}/{number}?{query}">Анализ сдачи</a></p>'
     meta = item.get('submission')
     date = meta['recorded_at'] if meta else item['sent']
     attempt = f'Отправка №{meta["attempt"]}' if meta and meta['attempt'] else 'Номер отправки неизвестен'

@@ -24,6 +24,7 @@ from workspace_cases import ProjectWorkCases
 from preparation_cases import DefensePreparationCases
 from review_cases import QualityReviewCases
 from account_recovery_cases import AccountRecoveryCases
+from test_local_assistant import AssistantRouteCases
 
 
 class FormTokens(HTMLParser):
@@ -48,7 +49,7 @@ class FormTokens(HTMLParser):
             self.current = None
 
 
-class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, NavigationCases, WorkHistoryCases, TaskBoardCases, ProjectWorkCases, DefensePreparationCases, QualityReviewCases, ReviewCenterCases, AccountRecoveryCases, unittest.TestCase):
+class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCases, LearningGroupCases, NavigationCases, WorkHistoryCases, TaskBoardCases, ProjectWorkCases, DefensePreparationCases, QualityReviewCases, ReviewCenterCases, AccountRecoveryCases, AssistantRouteCases, unittest.TestCase):
     def test_result_pages_show_moscow_update_time_for_both_roles(self):
         self.stage_post(3)
         self.defense_post()

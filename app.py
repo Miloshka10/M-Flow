@@ -49,6 +49,8 @@ from teacher_overview import load_teacher_projects, load_attention, review_group
 from dashboard_view import student_dashboard
 from design_suite import cabinet_shortcuts
 import review_center
+import local_assistant
+from assistant_view import analysis_page
 from graphics import illustration
 from project_workspace import render_workspace, task_deadline
 from project_work import render_project_work
@@ -185,6 +187,8 @@ def render_page(html, title=None):
                    if 'class="auth-page ' in html else '')
     work_assets = '<link rel="stylesheet" href="/static/work-screens.css?v=20261106-work">' if 'data-work-screens=' in html else ''
     dashboard_script = '<script src="/static/dashboard.js?v=20261106-work" defer></script>' if 'id="project-create"' in html else ''
+    assistant_assets = ('<link rel="stylesheet" href="/static/classroom-assistant.css?v=20261122">'
+                        '<script src="/static/classroom-assistant.js?v=20261122" defer></script>') if ' data-local-assistant' in html else ''
     guard_script = '<script src="/static/form-guard.js?v=20261029" defer></script>' if ' data-guard-draft ' in html else ''
     shell_scripts = ('<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
                      '<script src="/static/interface.js?v=20261115-panel" defer></script>'
@@ -194,7 +198,7 @@ def render_page(html, title=None):
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<title>{escape(title) if title is not None else document_title(html)}</title>'
             f'<meta name="csrf-token" content="{escape(csrf_token(), quote=True)}">'
-        + appearance_assets() +
+        + appearance_assets() + assistant_assets +
         f'<link rel="stylesheet" href="/static/mflow-theme.css?v={APPEARANCE_VERSION}">'
         '<link rel="stylesheet" href="/static/mobile.css?v=20261006-scrollbar">'
         '<link rel="stylesheet" href="/static/motion.css?v=20261005-controls">'
@@ -3165,6 +3169,94 @@ def project_stage_page(project_id):
     if response.status_code == 200:
         response.status_code = 400
     return response
+
+
+@app.post('/project/<int:project_id>/stages/<int:number>/advice')
+@login_required
+def student_stage_advice(project_id, number):
+    if not local_assistant.configured_model():
+        return jsonify(error='Локальная модель не включена.'), 404
+    user = get_current_user()
+    if user['role'] != 'student' or not valid_database_id(project_id) or not 1 <= number <= 5:
+        return jsonify(error='Нет доступа к советам для этого этапа.'), 403
+    data = request.get_json(silent=True)
+    result = data.get('result') if isinstance(data, dict) else None
+    revision = data.get('revision') if isinstance(data, dict) else None
+    if not isinstance(result, str) or not result.strip() or len(result) > 5000:
+        return jsonify(error='Добавьте описание результата до 5000 символов.'), 400
+    with closing(get_db()) as conn:
+        if not participant(conn, project_id, user['id']):
+            return jsonify(error='Вы не участвуете в этом проекте.'), 403
+        _, current = stage_summary(get_stages(conn, project_id))
+        if (current is None or current['number'] != number or str(current['revision']) != revision
+                or current['state'] not in ('todo', 'progress')):
+            return jsonify(error='Этап изменился. Откройте свежую версию проекта.'), 409
+        terms = local_assistant.assignment_terms(conn, project_id, user)
+    try:
+        report = local_assistant.advise(result.strip(), current['title'], terms, current['teacher_comment'])
+    except local_assistant.AssistantUnavailable as error:
+        return jsonify(error=str(error)), 503
+    return jsonify(report)
+
+
+@app.route('/teacher/review/analysis/<int:project_id>/<int:number>', methods=['GET', 'POST'])
+@login_required
+def teacher_submission_analysis(project_id, number):
+    if not local_assistant.configured_model():
+        return render_error_page('Анализ недоступен', 'Локальная модель не включена.', 404)
+    user = get_current_user()
+    if user['role'] != 'teacher' or not valid_database_id(project_id) or not 0 <= number <= 5:
+        return render_error_page('Нет доступа', 'Анализ сдачи доступен учителю проекта.', 403)
+    kind = 'stage' if number else 'defense'
+    work = f'stage-{project_id}-{number}' if number else f'defense-{project_id}'
+    with closing(get_db()) as conn:
+        if not participant(conn, project_id, user['id']):
+            return render_error_page('Нет доступа', 'Вы не участвуете в этом проекте.', 403)
+        project_details = get_project_details(project_id, connection=conn)
+        if project_details is None:
+            return render_error_page('Нет доступа', 'Доступ к проекту изменился.', 403)
+        if number:
+            record = get_stages(conn, project_id)[number-1]
+            stage, body, link = record['title'], record['result'], record['presentation_url']
+        else:
+            record = defense_for(conn, project_id)
+            stage, body, link = 'Видеозащита', record['description'], record['video_url']
+        versions = local_assistant.submission_versions(conn, project_id, kind, number)
+        if not versions and (record['state'] in ('review', 'submitted', 'done', 'accepted') and (body or link)):
+            versions = [dict(revision=record['revision'], attempt=0, result=body, resource_url=link)]
+        terms = local_assistant.assignment_terms(conn, project_id, user)
+    if not versions:
+        return render_error_page('Сдача отсутствует', 'Пока нет отправленной работы для анализа.', 404)
+    current, previous = versions[0], versions[1] if len(versions) > 1 else None
+    text_label, evidence = local_assistant.text_difference(current, previous)
+    report, archives, errors, status = None, None, [], 200
+    if request.method == 'POST':
+        if request.form.get('revision') != str(current['revision']):
+            errors.append('Появилась новая сдача. Проверьте номера отправок и повторите анализ.')
+            status = 409
+        else:
+            before, after = request.files.get('before'), request.files.get('after')
+            try:
+                if before or after:
+                    if not before or not after:
+                        raise ValueError('Приложите оба файла ZIP, чтобы сравнить исходники.')
+                    archives = local_assistant.archive_difference(before, after)
+                    evidence = archives['evidence']
+                report = local_assistant.advise(current['result'], stage, terms, record['teacher_comment'],
+                                                previous['result'] if previous else '', evidence,
+                                                scope='archives' if archives else 'submission')
+            except ValueError as error:
+                errors.append(str(error))
+                status = 400
+            except local_assistant.AssistantUnavailable as error:
+                errors.append(str(error))
+                status = 503
+    page = analysis_page(stage, versions, terms, text_label, archives, report, csrf_token(), errors)
+    back = request.args.get('back', '')
+    if not back.startswith('/teacher/review?') or len(back) > 1400:
+        back = review_center.center_url(work=work, detail=True)
+    return render_collaboration_page(user, 'Анализ сдачи · ' + project_details['name'], page, status=status,
+                                     back_url=back, back_label='К проверке работы')
 
 
 @app.route("/project/<int:project_id>/assessment", methods=["GET", "POST"])

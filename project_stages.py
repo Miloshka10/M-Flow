@@ -9,6 +9,8 @@ from notifications import notify_project
 from teacher_supervision import participant
 from deadlines import format_timestamp
 from work_history import before_change, record_change
+from local_assistant import configured_model
+from assistant_view import draft_panel
 
 STAGES = (
     (1, "Выбор темы и согласование с учителем"),
@@ -212,6 +214,8 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
                 html += prefix + f'<label>{result_label}<textarea name="result" rows="5" maxlength="5000">{escape(values.get("result", ""))}</textarea></label>'
                 if number == 5:
                     html += f'<label>Ссылка на презентацию<input type="url" name="presentation_url" maxlength="2000" placeholder="https://…" value="{escape(values.get("presentation_url", ""), quote=True)}"></label><p>Проверьте, что учитель сможет открыть презентацию по ссылке.</p>'
+                if configured_model():
+                    html += draft_panel(pid, number)
                 html += f'<div class="stage-actions"><button name="action" value="save" data-ui-icon="save">Сохранить черновик</button><button name="action" value="submit" {"disabled" if not has_teacher else ""}>Отправить учителю</button></div></form>'
                 if compact:
                     html += '</div></details>'
