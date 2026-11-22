@@ -286,6 +286,7 @@ class ReviewCenterCases:
         self.assertIn('Consent-only project', page)
         self.assertIn('student-one', page)
         self.assertIn(f'/supervision#request-{request_id}', page)
+        self.assertIn(f'id="request-{request_id}"', self.client.get('/supervision').text)
         self.assertNotIn('Скрытый результат будущего подопечного', page)
         self.assertNotIn('Скрытая история будущего подопечного', page)
         self.assertNotIn('stage-50-1', self.center_work_keys(page))

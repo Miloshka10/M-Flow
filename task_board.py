@@ -67,7 +67,7 @@ def create_form(pid, members, token, return_to, values=None, error=''):
     task.update(values or {})
     priority = task.get('priority','normal')
     return f'''<details class="board-disclosure task-create" id="task-create"><summary data-ui-icon="plus">Добавить задачу</summary>
-        <div class="task-detail-content"><h2>Добавить задачу</h2><p>Опишите конкретный результат, назначьте ответственного и срок.</p>
+        <div class="task-detail-content">
         {f'<p role="alert">{escape(error)}</p>' if error else ''}
         <form action="/project/{pid}/add" method="post" class="add-task-form board-task-form">
         {token}<input type="hidden" name="return_to" value="{escape(return_to,quote=True)}">

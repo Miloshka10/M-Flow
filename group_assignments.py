@@ -205,11 +205,10 @@ def assignment_cards(group_id, assignments):
     return '<ul>' + ''.join(cards) + '</ul>' if cards else '<p>Заданий пока нет.</p>'
 
 
-def group_assignment_section(conn, group, teacher=False):
+def group_assignment_section(conn, group):
     gid = group['id']
-    queue_link = f'<a href="/teacher/review?group={gid}">Очередь класса {icon("arrow")}</a>' if teacher else ''
     return (f'<section class="group-panel"><h2>Задания группы</h2>{assignment_cards(gid, assignments_for(conn, gid, 3))}'
-            f'<div class="group-actions"><a href="/groups/{gid}/assignments">Открыть задания группы {icon("arrow")}</a>{queue_link}</div></section>')
+            f'<div class="group-actions"><a href="/groups/{gid}/assignments">Все задания {icon("arrow")}</a></div></section>')
 
 
 def assignment_form(token, values, editing=False):
@@ -233,13 +232,13 @@ STYLES = '<link rel="stylesheet" href="/static/learning-groups.css?v=20261119-as
 def render_assignments(conn, user, group, token, page, submitted=None):
     base = f'/groups/{group["id"]}/assignments'
     rows = assignments_for(conn, group['id'], PAGE_SIZE + 1, (page - 1) * PAGE_SIZE)
-    body = STYLES + f'<section class="group-panel">{assignment_cards(group["id"], rows[:PAGE_SIZE])}'
-    body += page_links(base, page, len(rows) > PAGE_SIZE) + '</section>'
+    body = STYLES
     if user['role'] == 'teacher' and not group['archived']:
         opened = ' open' if submitted is not None or not rows else ''
         body += (f'<details class="group-panel"{opened}><summary>Новое задание</summary>'
                  + assignment_form(token, submitted or {}) + '</details>')
-    return body
+    return (body + f'<section class="group-panel">{assignment_cards(group["id"], rows[:PAGE_SIZE])}'
+            + page_links(base, page, len(rows) > PAGE_SIZE) + '</section>')
 
 
 def student_assignment(conn, user, group, assignment, row, token):
@@ -267,7 +266,7 @@ def student_assignment(conn, user, group, assignment, row, token):
             step.update(title='Согласуй сопровождение проекта',
                         text='После подтверждения учителем можно отправить работу на проверку.')
             next_link = ''
-        return f'''<section class="group-panel"><h2>Следующий шаг</h2><h3>{escape(step["title"])}</h3>
+        return f'''<section class="group-panel"><h2>{escape(step["title"])}</h2>
             <p>{escape(step["text"])}</p><div class="group-actions">{next_link}
             <a href="{base}">Обзор проекта</a>{proposal}</div></section>'''
     if group['archived']:
@@ -275,9 +274,9 @@ def student_assignment(conn, user, group, assignment, row, token):
     projects = conn.execute("""SELECT p.id,p.name FROM projects p WHERE p.owner_id=? AND NOT EXISTS
         (SELECT 1 FROM group_assignment_projects ap WHERE ap.project_id=p.id) ORDER BY p.id DESC""", (user['id'],)).fetchall()
     options = ''.join(f'<option value="{p["id"]}">{escape(p["name"])}</option>' for p in projects)
-    link = f'''<form method="post" class="group-form">{hidden_token(token)}
+    link = f'''<details><summary>Выбрать существующий проект</summary><form method="post" class="group-form">{hidden_token(token)}
         <label>Готовый проект<select name="project_id" required><option value="">Выберите проект</option>{options}</select></label>
-        <button name="action" value="link_project">Привязать проект</button></form>''' if options else ''
+        <button name="action" value="link_project">Привязать проект</button></form></details>''' if options else ''
     return f'''<section class="group-panel"><h2>Начать работу</h2><form method="post" class="group-form">{hidden_token(token)}
         <label>Название проекта<input name="project_name" value="{escape(assignment["title"][:80], quote=True)}" required maxlength="80"></label>
         <button name="action" value="create_project">Создать проект по заданию</button></form>{link}
@@ -314,20 +313,24 @@ def teacher_progress(group, assignment, rows, view, page):
 def render_assignment(conn, user, group, assignment, token, args, submitted=None):
     rows = progress_rows(conn, group, assignment, user)
     due = deadline_info(assignment['due_on'])
-    body = STYLES + f'''<section class="group-panel"><h2>Цель</h2><p class="group-text">{escape(assignment["goal"])}</p>
-        <p>Срок сдачи · {escape(due["display_date"])} (МСК)</p>'''
+    brief = f'''<p>Срок сдачи · {escape(due["display_date"])} (МСК)</p>
+        <h2>Цель</h2><p class="group-text">{escape(assignment["goal"])}</p>'''
     if assignment['criteria']:
-        body += f'<h2>Что будет проверяться</h2><p class="group-text">{escape(assignment["criteria"])}</p>'
+        brief += f'<h2>Что будет проверяться</h2><p class="group-text">{escape(assignment["criteria"])}</p>'
     if assignment['materials'] or assignment['material_url']:
-        body += f'<h2>Материалы</h2><p class="group-text">{escape(assignment["materials"])}</p>'
+        brief += '<details><summary>Материалы</summary>'
+        if assignment['materials']:
+            brief += f'<p class="group-text">{escape(assignment["materials"])}</p>'
         if safe_web_url(assignment['material_url']):
-            body += f'<a href="{escape(assignment["material_url"], quote=True)}" rel="noopener noreferrer" target="_blank">Открыть материалы</a>'
-    body += '</section>'
+            brief += f'<a href="{escape(assignment["material_url"], quote=True)}" rel="noopener noreferrer" target="_blank">Открыть материалы</a>'
+        brief += '</details>'
     if user['role'] == 'student':
-        return body + student_assignment(conn, user, group, assignment, rows[0] if rows else None, token)
+        return (STYLES + f'<section class="group-panel">{brief}</section>'
+                + student_assignment(conn, user, group, assignment, rows[0] if rows else None, token))
     view = args.get('view', 'all')
     view = view if view in PROGRESS else 'all'
-    body += teacher_progress(group, assignment, rows, view, bounded_page(args.get('page', '1')))
+    body = STYLES + teacher_progress(group, assignment, rows, view, bounded_page(args.get('page', '1')))
+    body += f'<details class="group-panel"><summary>Условия задания · до {escape(due["display_date"])}</summary>{brief}</details>'
     if not group['archived']:
         opened = ' open' if submitted is not None else ''
         body += (f'<details class="group-panel"{opened}><summary>Изменить задание</summary>'

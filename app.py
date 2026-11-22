@@ -2805,7 +2805,7 @@ def learning_group_page(group_id):
                 return render_error_page('Нет доступа', 'Вы больше не состоите в учебной группе.', 403)
             data = roster(conn, user, group, {})
         body = render_group(conn, user, group, data, csrf_token(), code,
-                            assignments.group_assignment_section(conn, group, teacher=data["teacher"]))
+                            assignments.group_assignment_section(conn, group))
     return render_collaboration_page(user, group['name'], body, error=error, status=status,
                                      back_url='/groups', back_label='Учебные группы')
 
