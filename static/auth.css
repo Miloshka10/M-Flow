@@ -5,8 +5,7 @@ html body.mf-v2 .auth-page {
   align-items:center; gap:12px; padding:32px; background:var(--mf-bg); border:0;
 }
 html body.mf-v2 .auth-card {
-  width:min(1030px,100%); min-height:560px; margin:0;
-  display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:0;
+  width:min(440px,100%); margin:0;
   background:var(--mf-surface); border:1px solid var(--mf-line); border-radius:16px; overflow:hidden;
 }
 html body.mf-v2 .auth-form-side {
@@ -184,36 +183,52 @@ html body.mf-v2 .auth-recovery-links a,html body.mf-v2 .auth-retry a,html body.m
 /* Interface stage 3: access forms and account compositions on shared tokens. */
 html body.mf-v2[data-interface-v3][data-scenery] .auth-page {
   display:grid;grid-template-rows:auto 1fr auto;justify-content:stretch;justify-items:center;align-items:center;
-  min-height:100dvh;padding:0 clamp(16px,4vw,56px);gap:24px;
+  min-height:100dvh;padding:0 clamp(20px,4vw,56px);gap:16px;
+}
+html body.mf-v2 .auth-page .access-topbar {
+  width:100%;min-height:64px;display:flex;align-items:center;
+}
+html body.mf-v2 .auth-page .access-topbar .brand {
+  display:inline-flex;align-items:center;min-height:44px;margin:0;
+}
+html body.mf-v2 .auth-mode-login {position:relative;isolation:isolate}
+html body.mf-v2 .auth-orbits {
+  position:absolute;z-index:-1;pointer-events:none;
+  inset:64px 0;margin-inline:auto;width:min(100%,1260px);height:calc(100% - 128px);
+}
+html body.mf-v2 .auth-mode-login :is(h1,label,.auth-label-row a,.auth-footer) {
+  text-shadow:0 0 .35em var(--mf-bg),0 0 .7em var(--mf-bg);
 }
 html body.mf-v2[data-interface-v3][data-scenery] .auth-card {
-  display:grid;grid-template-columns:minmax(300px,.94fr) minmax(0,1.06fr);width:min(1064px,100%);
-  max-width:none;min-height:0;overflow:visible;background:transparent;border:0;box-shadow:none;
+  display:block;width:min(440px,100%);max-width:none;min-height:0;
+  overflow:visible;background:transparent;border:0;box-shadow:none;
 }
 html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-form-side {
-  display:grid;align-items:center;padding:24px 40px;border-radius:0;background:transparent;
+  display:grid;align-items:center;padding:24px 0;border-radius:0;background:transparent;
 }
-html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-form-inner {max-width:352px}
+html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-form-inner {max-width:384px}
 html body.mf-v2[data-interface-v3][data-scenery] .access-page h1 {
-  margin:0 0 12px;font-size:clamp(27px,2.8vw,35px);font-weight:620;line-height:1.16;letter-spacing:-1px;
+  margin:0 0 12px;font-size:clamp(28px,3.2vw,40px);font-weight:650;line-height:1.16;letter-spacing:-.04em;
 }
 html body.mf-v2[data-interface-v3][data-scenery] .auth-role-switch {margin:24px 0;border:1px solid var(--mf-line);border-radius:8px}
 html body.mf-v2[data-interface-v3][data-scenery] .auth-role-switch a {min-height:44px;font-size:13px}
 html body.mf-v2[data-interface-v3][data-scenery] .auth-role-switch::before {border-radius:5px;box-shadow:0 0 0 1px var(--mf-line)}
-html body.mf-v2[data-interface-v3][data-scenery] .auth-access-aside {
-  display:grid;min-height:500px;min-width:0;padding:14px;
-  border:1px solid var(--mf-line);border-radius:10px;background:var(--mf-card);
-}
-html body.mf-v2[data-interface-v3][data-scenery] .auth-orbit {
-  position:relative;overflow:hidden;border:1px solid var(--mf-line);border-radius:6px;
-  background:radial-gradient(circle,color-mix(in srgb,var(--mf-muted) 24%,transparent) .65px,transparent .9px)
-    center / 22px 22px var(--mf-bg);
-}
-html body.mf-v2[data-interface-v3][data-scenery] .auth-orbit canvas {
-  display:block;position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
-}
 html body.mf-v2[data-interface-v3][data-scenery] .auth-page-footer {
-  width:100%;text-align:left;padding:0 4px 8px;
+  display:flex;align-items:center;justify-content:space-between;width:100%;min-height:64px;gap:16px;
+}
+html body.mf-v2 .auth-page-footer a {padding-inline:0}
+html body.mf-v2 .auth-page-footer .theme-toggle {width:44px;height:44px;flex-basis:44px}
+html body.mf-v2 .auth-page-options {display:flex;align-items:center;gap:2px}
+html body.mf-v2 .auth-page .auth-page-options button.auth-orbit-toggle {
+  display:grid;place-items:center;width:44px;height:44px;min-width:44px;margin:0;padding:0;
+  border:0;border-radius:6px;background:transparent;color:var(--mf-muted);box-shadow:none;
+}
+html body.mf-v2 .auth-page .auth-page-options button.auth-orbit-toggle:hover {background:var(--mf-panel);color:var(--mf-text)}
+html body.mf-v2 .auth-orbit-toggle span {
+  box-sizing:border-box;width:11px;height:13px;border-inline:2px solid currentColor;
+}
+html body.mf-v2 .auth-orbit-toggle[aria-pressed="true"] span {
+  width:0;height:0;border:7px solid transparent;border-left:10px solid currentColor;border-right:0;
 }
 html body.mf-v2[data-interface-v3][data-scenery] .access-form {display:grid;gap:var(--mf-space-4);margin:0;min-width:0}
 html body.mf-v2[data-interface-v3][data-scenery] .access-field {display:grid;gap:var(--mf-space-2);min-width:0}
@@ -301,9 +316,6 @@ html body.mf-v2[data-interface-v3][data-scenery] .access-mail-checks li>span:fir
 @media(max-width:800px) {
  html body.mf-v2[data-interface-v3][data-scenery] .access-profile-grid {grid-template-columns:minmax(0,1fr)}
  html body.mf-v2[data-interface-v3][data-scenery] .auth-page {align-items:start;gap:16px}
- html body.mf-v2[data-interface-v3][data-scenery] .auth-card {grid-template-columns:minmax(0,1fr);max-width:440px}
- html body.mf-v2[data-interface-v3][data-scenery] .access-page .auth-form-side {padding:24px 4px}
- html body.mf-v2[data-interface-v3][data-scenery] .auth-access-aside {display:none}
  html body.mf-v2[data-interface-v3][data-scenery] .access-profile .access-password-section .account-security-panel {padding:20px}
 }
 @media(max-width:600px) {

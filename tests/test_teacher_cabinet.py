@@ -1432,8 +1432,13 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
             page = self.client.get(path).text
             self.assertEqual(page.count('/static/graphics.css'), 1)
-            self.assertIn('<aside class="auth-access-aside" aria-hidden="true">', page)
-            self.assertIn('data-access-orbit', page)
+            if path.endswith('/login'):
+                self.assertIn('data-access-orbit aria-hidden="true"', page)
+                self.assertIn('/static/access-orbit.js', page)
+                self.assertIn('data-orbit-pause', page)
+            else:
+                self.assertNotIn('data-access-orbit', page)
+                self.assertNotIn('/static/access-orbit.js', page)
             self.assertNotIn('Школьная медиастудия', page)
             self.assertNotIn('by Minich', page)
             self.assertNotIn('project-kit.svg', page)
@@ -1593,14 +1598,20 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         conn.close()
         self.assertIn("/project/1/stages", self.client.get("/project/1").text)
 
-    def test_auth_design_form_precedes_brand_and_preserves_controls(self):
+    def test_auth_design_centers_form_and_keeps_theme_in_footer(self):
         for path in ("/login", "/register", "/teacher/login", "/teacher/register"):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200)
             self.assertTrue(response.text.startswith('<!doctype html><html lang="ru" data-theme="dark">'))
             self.assertEqual(response.text.count('name="viewport"'), 1)
             self.assertEqual(response.text.count('/static/mflow-theme.css'), 1)
-            self.assertLess(response.text.index('class="auth-form-side"'), response.text.index('data-access-orbit'))
+            header, rest = response.text.split('</header>', 1)
+            footer = rest.split('<footer class="auth-page-footer">', 1)[1]
+            self.assertIn('class="brand"', header)
+            self.assertNotIn('data-theme-toggle', header)
+            self.assertEqual(response.text.count('data-theme-toggle'), 1)
+            self.assertIn('data-theme-toggle', footer)
+            self.assertNotIn('auth-access-aside', rest)
             self.assertNotIn('by Minich', response.text)
             self.assertIn('name="username"', response.text)
             self.assertIn('type="password"', response.text)
