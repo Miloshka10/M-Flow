@@ -17,7 +17,7 @@ def password_control(input_id, name, label, autocomplete, limits='', hint=''):
 
 
 def account_assets():
-    return f'<link rel="stylesheet" href="/static/auth.css?v=20261123-centered-entry"><script src="/static/auth.js?v={ACCESS_VERSION}" defer></script><script src="/static/account-mail.js?v={ACCESS_VERSION}" defer></script>'
+    return f'<link rel="stylesheet" href="/static/auth.css?v=20261123-login-orbits"><script src="/static/auth.js?v={ACCESS_VERSION}" defer></script><script src="/static/account-mail.js?v={ACCESS_VERSION}" defer></script>'
 
 
 def token_field(value=''):

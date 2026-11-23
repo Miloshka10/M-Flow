@@ -191,6 +191,14 @@ html body.mf-v2 .auth-page .access-topbar {
 html body.mf-v2 .auth-page .access-topbar .brand {
   display:inline-flex;align-items:center;min-height:44px;margin:0;
 }
+html body.mf-v2 .auth-mode-login {position:relative;isolation:isolate}
+html body.mf-v2 .auth-orbits {
+  position:absolute;z-index:-1;pointer-events:none;
+  inset:64px 0;margin-inline:auto;width:min(100%,1260px);height:calc(100% - 128px);
+}
+html body.mf-v2 .auth-mode-login :is(h1,label,.auth-label-row a,.auth-footer) {
+  text-shadow:0 0 .35em var(--mf-bg),0 0 .7em var(--mf-bg);
+}
 html body.mf-v2[data-interface-v3][data-scenery] .auth-card {
   display:block;width:min(440px,100%);max-width:none;min-height:0;
   overflow:visible;background:transparent;border:0;box-shadow:none;
@@ -210,6 +218,18 @@ html body.mf-v2[data-interface-v3][data-scenery] .auth-page-footer {
 }
 html body.mf-v2 .auth-page-footer a {padding-inline:0}
 html body.mf-v2 .auth-page-footer .theme-toggle {width:44px;height:44px;flex-basis:44px}
+html body.mf-v2 .auth-page-options {display:flex;align-items:center;gap:2px}
+html body.mf-v2 .auth-page .auth-page-options button.auth-orbit-toggle {
+  display:grid;place-items:center;width:44px;height:44px;min-width:44px;margin:0;padding:0;
+  border:0;border-radius:6px;background:transparent;color:var(--mf-muted);box-shadow:none;
+}
+html body.mf-v2 .auth-page .auth-page-options button.auth-orbit-toggle:hover {background:var(--mf-panel);color:var(--mf-text)}
+html body.mf-v2 .auth-orbit-toggle span {
+  box-sizing:border-box;width:11px;height:13px;border-inline:2px solid currentColor;
+}
+html body.mf-v2 .auth-orbit-toggle[aria-pressed="true"] span {
+  width:0;height:0;border:7px solid transparent;border-left:10px solid currentColor;border-right:0;
+}
 html body.mf-v2[data-interface-v3][data-scenery] .access-form {display:grid;gap:var(--mf-space-4);margin:0;min-width:0}
 html body.mf-v2[data-interface-v3][data-scenery] .access-field {display:grid;gap:var(--mf-space-2);min-width:0}
 html body.mf-v2[data-interface-v3][data-scenery] .access-field>label {display:block;margin:0;font-size:var(--mf-type-label);line-height:1.5}

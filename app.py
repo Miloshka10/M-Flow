@@ -179,7 +179,7 @@ def render_page(html, title=None):
     scenery_context = ('together' if endpoint in ('learning_groups_page', 'learning_group_page', 'teams_directory', 'project_team')
                        else 'review' if endpoint.startswith('teacher_') or
                        ('data-interface-shell="teacher"' in html) else 'workshop')
-    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261123-centered-entry">'
+    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261123-login-orbits">'
                    f'<script src="/static/auth.js?v={APPEARANCE_VERSION}" defer></script>'
                    if 'class="auth-page ' in html else '')
     work_assets = '<link rel="stylesheet" href="/static/work-screens.css?v=20261106-work">' if 'data-work-screens=' in html else ''
@@ -1094,10 +1094,14 @@ def render_auth_page(mode, error=None, role="student", field=None):
     if is_teacher and not is_login and not teacher_registration_code():
         auth_form = '<p class="auth-intro">Регистрация учителей пока закрыта. Для получения доступа обратитесь к организатору M-Flow. Если аккаунт уже есть, войдите в него.</p>'
 
+    orbit = ('<canvas class="auth-orbits" data-access-orbit aria-hidden="true"></canvas>'
+             '<script type="module" src="/static/access-orbit.js?v=20261123-login-orbits"></script>'
+             if is_login else '')
     return render_page(
         f"""
         <div class="auth-page access-page auth-role-{role} auth-mode-{mode}">
             {access_header(f'{prefix}/login', show_theme=False)}
+            {orbit}
             <div class="auth-card">
                 <main class="auth-form-side">
                     <div class="auth-form-inner">
@@ -1112,7 +1116,7 @@ def render_auth_page(mode, error=None, role="student", field=None):
                     </div>
                 </main>
             </div>
-            {access_footer()}
+            {access_footer(orbit=is_login)}
         </div>
         """, title="Вход — M-Flow" if is_login else "Регистрация — M-Flow"
     )

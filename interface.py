@@ -98,8 +98,11 @@ def access_header(href='/login', *, show_theme=True):
             f'M-Flow<span class="ui-brand-dot">.</span></a>{theme}</header>')
 
 
-def access_footer():
-    return f'<footer class="auth-page-footer"><a href="/data">Данные и помощь</a>{theme_button()}</footer>'
+def access_footer(*, orbit=False):
+    motion = ('''<button type="button" class="auth-orbit-toggle" data-orbit-pause aria-label="Пауза анимации"
+                        aria-pressed="false" hidden><span aria-hidden="true"></span></button>''' if orbit else '')
+    return (f'<footer class="auth-page-footer"><a href="/data">Данные и помощь</a>'
+            f'<div class="auth-page-options">{motion}{theme_button()}</div></footer>')
 
 
 def project_art():

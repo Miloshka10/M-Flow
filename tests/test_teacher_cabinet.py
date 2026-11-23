@@ -1432,8 +1432,13 @@ class TeacherCabinetTests(AuthSecurityCases, SupervisionCases, StudentResultsCas
         for path in ('/login', '/register', '/teacher/login', '/teacher/register'):
             page = self.client.get(path).text
             self.assertEqual(page.count('/static/graphics.css'), 1)
-            self.assertNotIn('data-access-orbit', page)
-            self.assertNotIn('/static/access-orbit.js', page)
+            if path.endswith('/login'):
+                self.assertIn('data-access-orbit aria-hidden="true"', page)
+                self.assertIn('/static/access-orbit.js', page)
+                self.assertIn('data-orbit-pause', page)
+            else:
+                self.assertNotIn('data-access-orbit', page)
+                self.assertNotIn('/static/access-orbit.js', page)
             self.assertNotIn('Школьная медиастудия', page)
             self.assertNotIn('by Minich', page)
             self.assertNotIn('project-kit.svg', page)
