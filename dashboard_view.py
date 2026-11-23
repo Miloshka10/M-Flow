@@ -218,6 +218,9 @@ def student_dashboard(projects, token, header, messages, results='', focus=None,
     else:
         hero = ''
     projects_html = f'''<section class="workspace-projects" id="my-projects" aria-label="Мои проекты"><div class="ds-project-head"><h2>Мои проекты</h2>{create}</div>
+        <nav class="project-people-links" aria-label="Участники и приглашения">
+        <a class="action-link" href="/teams#people">Найти участников</a>
+        <a class="action-link" href="/teams#team-invitations">Приглашения в команды</a></nav>
         <div class="ds-project-tools" hidden><label>Поиск проектов<input type="search" data-project-search placeholder="Найти проект…"></label>
         <label>Состояние<select data-project-filter><option value="all">Все</option><option value="work">В работе</option>
         <option value="review">На проверке</option><option value="revision">Нужна доработка</option><option value="accepted">Защита принята</option></select></label></div>
@@ -233,5 +236,5 @@ def student_dashboard(projects, token, header, messages, results='', focus=None,
         {student_assignment_cards(class_assignments)}</section>''' if class_assignments else '')
     secondary = f'<details class="home-details" {"open" if results_open else ""}><summary data-ui-icon="results">Мои результаты</summary>{results}</details>'
     return f'''<div class="container workspace student-workspace">{header}<main id="main-content" class="simple-home" data-suite-dashboard data-suite-view="{'results' if results_open else 'home'}">
-        <h1 data-dashboard-heading>{'Мои результаты' if results_open else 'Главная'}</h1>{messages}
+        <h1 id="dashboard-title" tabindex="-1" data-home-title="Главная">{'Мои результаты' if results_open else 'Главная'}</h1>{messages}
         {hero}{class_work}{agenda}{projects_html}{groups_html}{secondary}</main></div>'''

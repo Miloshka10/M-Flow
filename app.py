@@ -1470,7 +1470,8 @@ def index():
         result_params['home_project'] = selected
         result_rows = load_results(conn, user, result_params)
         groups = own_groups(conn, user)
-        home_assignments = assignments.student_assignments(conn, user['id'], assignments.HOME_ASSIGNMENTS_LIMIT)
+        home_assignments = (assignments.student_assignments(conn, user['id'], assignments.HOME_ASSIGNMENTS_LIMIT)
+                            if any(not group['archived'] for group in groups) else ())
         try:
             focus = load_focus(conn, user, next(p for p in projects if p['id'] == selected)) if selected else None
         except PermissionError as error:
