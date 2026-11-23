@@ -89,6 +89,27 @@ class LocalAssistantTests(unittest.TestCase):
                 with self.assertRaisesRegex(assistant.AssistantUnavailable, 'недоступна'):
                     assistant.advise('Данные замеров', 'Первый этап')
 
+    def test_cloud_demo_uses_pinned_https_endpoint_and_same_evidence_checks(self):
+        config = {'M_FLOW_CLOUD_DEMO': '1', 'M_FLOW_AI_PROVIDER': 'groq', 'M_FLOW_GROQ_API_KEY': 'example-key',
+                  'M_FLOW_DATABASE_BACKEND': 'sqlite'}
+        raw = dict(summary='Критерии проверены', suggestions=['Покажите таблицу'], changes=[],
+                   checks=[dict(criterion='Температура', status='found', evidence='20 °C')])
+        response = MagicMock(status=200)
+        response.__enter__.return_value = response
+        response.read.return_value = json.dumps({'choices': [{'message': {'content': json.dumps(raw)}}]}).encode()
+        with patch.dict('os.environ', config), patch.object(assistant, 'HTTPSConnection') as transport:
+            transport.return_value.getresponse.return_value = response
+            self.assertTrue(assistant.assistant_allowed({'username': assistant.DEMO_STUDENT}))
+            self.assertFalse(assistant.assistant_allowed({'username': 'student-other'}))
+            report = assistant.advise('Замер 20 °C', 'Первый этап')
+            transport.assert_called_once_with('api.groq.com', timeout=25)
+            method, route, body, headers = transport.return_value.request.call_args.args
+        self.assertEqual((method, route), ('POST', '/openai/v1/chat/completions'))
+        self.assertEqual(headers['Authorization'], 'Bearer example-key')
+        self.assertNotIn(b'example-key', body)
+        self.assertEqual(json.loads(body)['response_format'], {'type': 'json_object'})
+        self.assertEqual(report['checks'][0]['status'], 'Есть подтверждение')
+
 
 class AssistantRouteCases:
     def test_local_assistant_draft_checks_access_and_does_not_change_stage(self):

@@ -187,7 +187,7 @@ def render_page(html, title=None):
     work_assets = '<link rel="stylesheet" href="/static/work-screens.css?v=20261106-work">' if 'data-work-screens=' in html else ''
     dashboard_script = '<script src="/static/dashboard.js?v=20261106-work" defer></script>' if 'id="project-create"' in html else ''
     assistant_assets = ('<link rel="stylesheet" href="/static/classroom-assistant.css?v=20261122-reading">'
-                        '<script src="/static/classroom-assistant.js?v=20261122-sources" defer></script>') if ' data-local-assistant' in html else ''
+                        '<script src="/static/classroom-assistant.js?v=20261123-cloud" defer></script>') if ' data-local-assistant' in html else ''
     guard_script = '<script src="/static/form-guard.js?v=20261029" defer></script>' if ' data-guard-draft ' in html else ''
     shell_scripts = ('<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
                      '<script src="/static/interface.js?v=20261115-panel" defer></script>'
@@ -1166,6 +1166,8 @@ def login_for_role(role):
 
 
 def register_for_role(role):
+    if local_assistant.cloud_mode():
+        return render_error_page('Учебное демо', 'Войдите через один из двух демонстрационных аккаунтов.', 403)
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
@@ -3182,7 +3184,8 @@ def student_stage_advice(project_id, number):
     if not local_assistant.configured_model():
         return jsonify(error='Локальная модель не включена.'), 404
     user = get_current_user()
-    if user['role'] != 'student' or not valid_database_id(project_id) or not 1 <= number <= 5:
+    if (user['role'] != 'student' or not local_assistant.assistant_allowed(user)
+            or not valid_database_id(project_id) or not 1 <= number <= 5):
         return jsonify(error='Нет доступа к советам для этого этапа.'), 403
     data = request.get_json(silent=True)
     result = data.get('result') if isinstance(data, dict) else None
@@ -3210,7 +3213,8 @@ def teacher_submission_analysis(project_id, number):
     if not local_assistant.configured_model():
         return render_error_page('Анализ недоступен', 'Локальная модель не включена.', 404)
     user = get_current_user()
-    if user['role'] != 'teacher' or not valid_database_id(project_id) or not 0 <= number <= 5:
+    if (user['role'] != 'teacher' or not local_assistant.assistant_allowed(user)
+            or not valid_database_id(project_id) or not 0 <= number <= 5):
         return render_error_page('Нет доступа', 'Анализ сдачи доступен учителю проекта.', 403)
     kind = 'stage' if number else 'defense'
     work = f'stage-{project_id}-{number}' if number else f'defense-{project_id}'

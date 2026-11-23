@@ -2,7 +2,7 @@
 
 import ast
 from difflib import SequenceMatcher
-from http.client import HTTPConnection, HTTPException
+from http.client import HTTPConnection, HTTPException, HTTPSConnection
 from io import BytesIO
 import json
 import os
@@ -22,6 +22,8 @@ TEXT_EXTENSIONS = frozenset('py js ts jsx tsx cjs mjs html htm css scss json yam
                             'java kt cs c h cpp hpp go rs php rb swift dart vue svelte ino xml'.split())
 IGNORED_FOLDERS = frozenset({'node_modules', 'vendor', 'dist', 'build', '__pycache__', 'coverage'})
 CRITERION_STATUS = {'found': 'Есть подтверждение', 'partial': 'Подтверждено частично', 'missing': 'Не подтверждено'}
+DEMO_TEACHER = 'demo-teacher'
+DEMO_STUDENT = 'demo-student'
 SCHEMA = {
     'type': 'object',
     'additionalProperties': False,
@@ -60,10 +62,27 @@ class AssistantUnavailable(Exception):
 
 
 def configured_model():
+    if cloud_mode():
+        name = os.environ.get('M_FLOW_GROQ_MODEL', 'openai/gpt-oss-20b').strip()
+        key = os.environ.get('M_FLOW_GROQ_API_KEY', '').strip()
+        return name if key and re.fullmatch(r'[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)?', name) else ''
     name = os.environ.get('M_FLOW_OLLAMA_MODEL', '').strip()
     if re.fullmatch(r'[a-zA-Z0-9_.-]+(?::[a-zA-Z0-9_.-]+)?', name) and 'cloud' not in name.lower():
         return name
     return ''
+
+
+def cloud_mode():
+    return os.environ.get('M_FLOW_AI_PROVIDER') == 'groq' and os.environ.get('M_FLOW_CLOUD_DEMO') == '1'
+
+
+def assistant_allowed(user):
+    return not cloud_mode() or (os.environ.get('M_FLOW_DATABASE_BACKEND') == 'sqlite'
+                                and user['username'] in (DEMO_TEACHER, DEMO_STUDENT))
+
+
+def engine_label():
+    return 'ИИ' if cloud_mode() else 'Ollama'
 
 
 def assignment_terms(conn, project_id, user):
@@ -309,38 +328,59 @@ def _normalize_response(payload, data):
 def advise(current, stage, terms=None, comment='', previous='', evidence=(), *, scope='submission'):
     model = configured_model()
     if not model:
-        raise AssistantUnavailable('Локальная модель не включена.')
-    try:
-        port = int(os.environ.get('M_FLOW_OLLAMA_PORT', '11434'))
-        if not 1 <= port <= 65535:
-            raise ValueError
-    except ValueError as error:
-        raise AssistantUnavailable('Не удалось подключиться к порту Ollama.') from error
+        raise AssistantUnavailable('Модель не включена.')
     data = dict(scope=scope, current=current, previous=previous[:2200], stage=stage, assignment=dict(terms) if terms else {},
                 teacher_comment=comment[:900], evidence=list(evidence))
-    body = json.dumps({'model': model, 'stream': False, 'format': SCHEMA, 'keep_alive': '5m',
-                       **({'think': False} if 'qwen3' in model.lower() else {}),
-                       'messages': [{'role': 'system', 'content': SYSTEM_PROMPT},
-                                    {'role': 'user', 'content': json.dumps(data, ensure_ascii=False)}],
-                       'options': {'temperature': 0, 'num_ctx': 8192, 'num_predict': 1000}},
-                      ensure_ascii=False).encode('utf-8')
+    messages = [{'role': 'system', 'content': SYSTEM_PROMPT},
+                {'role': 'user', 'content': json.dumps(data, ensure_ascii=False)}]
     if not MODEL_LOCK.acquire(blocking=False):
         raise AssistantUnavailable('Модель сейчас отвечает на другой запрос. Повторите чуть позже.')
-    connection = HTTPConnection('127.0.0.1', port, timeout=80)
     try:
-        connection.request('POST', '/api/chat', body, {'Content-Type': 'application/json'})
-        with connection.getresponse() as response:
-            if response.status == 404:
-                raise AssistantUnavailable('Ollama работает, но выбранная модель не найдена на ноутбуке.')
-            if response.status != 200:
-                raise AssistantUnavailable('Ollama не смогла обработать запрос. Попробуйте ещё раз.')
-            reply = json.loads(response.read(64 * 1024 + 1))
-        answer = json.loads(reply['message']['content'])
-        return _normalize_response(answer, data)
+        if cloud_mode():
+            messages[0]['content'] += '\nВерни только JSON следующей структуры:\n' + json.dumps(SCHEMA, ensure_ascii=False)
+            parameters = {'model': model, 'messages': messages, 'stream': False,
+                          'response_format': {'type': 'json_object'}, 'max_completion_tokens': 2200}
+            if model.startswith('openai/gpt-oss'):
+                parameters['reasoning_effort'] = 'low'
+            reply = _chat(HTTPSConnection('api.groq.com', timeout=25), '/openai/v1/chat/completions', parameters,
+                          {'Authorization': 'Bearer ' + os.environ['M_FLOW_GROQ_API_KEY'].strip()})
+            content = reply['choices'][0]['message']['content']
+        else:
+            try:
+                port = int(os.environ.get('M_FLOW_OLLAMA_PORT', '11434'))
+                if not 1 <= port <= 65535:
+                    raise ValueError
+            except ValueError as error:
+                raise AssistantUnavailable('Не удалось подключиться к порту Ollama.') from error
+            parameters = {'model': model, 'messages': messages, 'stream': False, 'format': SCHEMA, 'keep_alive': '5m',
+                          **({'think': False} if 'qwen3' in model.lower() else {}),
+                          'options': {'temperature': 0, 'num_ctx': 8192, 'num_predict': 1000}}
+            reply = _chat(HTTPConnection('127.0.0.1', port, timeout=80), '/api/chat', parameters)
+            content = reply['message']['content']
+        return _normalize_response(json.loads(content), data)
     except (OSError, HTTPException) as error:
-        raise AssistantUnavailable('Локальная Ollama недоступна или не успела ответить. Проверьте её запуск.') from error
-    except (ValueError, TypeError, KeyError) as error:
+        message = ('Облачная модель недоступна или не успела ответить.' if cloud_mode()
+                   else 'Локальная Ollama недоступна или не успела ответить. Проверьте её запуск.')
+        raise AssistantUnavailable(message) from error
+    except (ValueError, TypeError, KeyError, IndexError) as error:
         raise AssistantUnavailable('Модель вернула неполный ответ. Попробуйте ещё раз.') from error
     finally:
-        connection.close()
         MODEL_LOCK.release()
+
+
+def _chat(connection, path, parameters, extra_headers=None):
+    try:
+        headers = {'Content-Type': 'application/json', **(extra_headers or {})}
+        connection.request('POST', path, json.dumps(parameters, ensure_ascii=False).encode('utf-8'), headers)
+        with connection.getresponse() as response:
+            if response.status == 429:
+                raise AssistantUnavailable('Достигнут лимит запросов к модели. Повторите чуть позже.')
+            if response.status == 404 and extra_headers is None:
+                raise AssistantUnavailable('Ollama работает, но выбранная модель не найдена на ноутбуке.')
+            if response.status in (401, 403) and extra_headers:
+                raise AssistantUnavailable('Groq отклонил ключ или доступ к модели.')
+            if response.status != 200:
+                raise AssistantUnavailable('Модель не смогла обработать запрос. Попробуйте ещё раз.')
+            return json.loads(response.read(64 * 1024 + 1))
+    finally:
+        connection.close()

@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       output.hidden = true;
       button.disabled = true;
-      status.textContent = 'Ollama читает черновик…';
+      status.textContent = `${panel.dataset.aiEngine} читает черновик…`;
       try {
         const response = await fetch(panel.dataset.stageAdvice, {
           method: 'POST',
@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
         output.replaceChildren();
-        add(output, 'h3', 'Совет Ollama');
+        add(output, 'h3', `Совет ${panel.dataset.aiEngine}`);
         add(output, 'p', data.summary);
         add(output, 'h4', 'Проверка критериев');
         const checks = add(output, 'ul', '');
@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.querySelectorAll('[data-ai-review-form]').forEach(form => {
     form.addEventListener('submit', () => {
-      form.querySelector('[data-ai-progress]').textContent = 'Ollama анализирует материалы…';
+      form.querySelector('[data-ai-progress]').textContent = `${form.dataset.aiEngine} анализирует материалы…`;
     });
     window.addEventListener('pageshow', () => {
       form.querySelector('[data-ai-progress]').textContent = '';

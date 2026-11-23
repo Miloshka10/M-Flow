@@ -2,13 +2,16 @@
 
 from html import escape
 from material_links import safe_web_url
-from local_assistant import FILE_LIMIT, IGNORED_FOLDERS, SOURCE_FILE_COUNT, TEXT_EXTENSIONS, TEXT_LIMIT, ZIP_LIMIT
+from local_assistant import (FILE_LIMIT, IGNORED_FOLDERS, SOURCE_FILE_COUNT, TEXT_EXTENSIONS, TEXT_LIMIT, ZIP_LIMIT,
+                             cloud_mode, engine_label)
 
 FILE_STATUS = {'added': 'Добавлен', 'removed': 'Удалён', 'changed': 'Изменён'}
 
 
 def draft_panel(project_id, number):
-    return f'''<section class="local-assistant" data-local-assistant data-stage-advice="/project/{project_id}/stages/{number}/advice" hidden>
+    notice = '<p>Демо использует Groq для анализа учебных примеров.</p>' if cloud_mode() else ''
+    return f'''<section class="local-assistant" data-local-assistant data-ai-engine="{engine_label()}" data-stage-advice="/project/{project_id}/stages/{number}/advice" hidden>
+        {notice}
         <button class="secondary" type="button" data-request-advice>Получить совет по доработке</button>
         <p role="status" data-advice-status></p><div data-advice-result hidden></div></section>'''
 
@@ -38,7 +41,7 @@ def model_report(result):
                       f'<blockquote>{escape(row["quote"])}</blockquote></li>' for row in result['changes'])
     change_section = f'<h3>Что изменилось по доступным данным</h3><ul>{changes}</ul>' if changes else ''
     return f'''<section class="local-assistant-panel" id="model-report" tabindex="-1">
-        <h2>Разбор Ollama</h2><p class="local-assistant-hint">Сверьте вывод с работой перед решением.</p>
+        <h2>Разбор {engine_label()}</h2><p class="local-assistant-hint">Сверьте вывод с работой перед решением.</p>
         <p class="analysis-reading">{escape(result['summary'])}</p>
         <h3>Что проверить дальше</h3><ol>{suggestions}</ol>
         <details><summary>Критерии и цитаты из работы</summary><ul>{checks}</ul>{change_section}</details></section>'''
@@ -89,7 +92,7 @@ def analysis_page(stage, versions, terms, label, archives, result, token, errors
         {material}{assignment}
         <h3>Что изменилось</h3><p>{escape(label)}</p>{past}{files if not archives else ''}</section>
         <section class="local-assistant-panel"><h2>Проверка критериев</h2>
-        <form method="post" action="#model-report" data-ai-review-form>
+        <form method="post" action="#model-report" data-ai-review-form data-ai-engine="{engine_label()}">
         <input type="hidden" name="csrf_token" value="{escape(token, quote=True)}">
         <input type="hidden" name="revision" value="{current['revision']}">
         <button type="submit">Запустить анализ</button><p role="status" data-ai-progress></p></form>
