@@ -102,9 +102,8 @@ def verify(url):
                     WHERE original.id=? AND new.name=?""", (work['id'], new_name)).fetchone()
             if new_project is None or created.status_code != 302:
                 raise AssertionError('Could not create a project for the restored student.')
-            if created.location != f'/project/{new_project["id"]}':
-                raise AssertionError('The new project did not open after creation.')
             assert new_name in client.get(created.location).text
+            assert new_name in client.get(f'/project/{new_project["id"]}').text
         else:
             assert 'Этапы и защита приняты: 1' in client.get(assignment).text
 

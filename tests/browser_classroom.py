@@ -72,6 +72,9 @@ def exercise(browser, base):
     expect(teacher.get_by_role('heading', name='Кабинет учителя')).to_be_visible()
     expect(teacher.locator('main a[href="/teacher/review"]:visible').first).to_be_visible()
     teacher.goto(base + '/groups')
+    new_group = teacher.locator("details.ds-group-form")
+    if not new_group.locator("input[name=name]").is_visible():
+        new_group.locator("summary").click()
     teacher.get_by_label('Название группы').fill('10 А — браузерная проверка')
     teacher.get_by_role('button', name='Создать группу', exact=True).click()
     group_url = teacher.url
@@ -88,6 +91,9 @@ def exercise(browser, base):
 
     login(student, base + '/login', 'student-smoke')
     student.goto(base + '/groups')
+    join_group = student.locator("details#group-code")
+    if not join_group.locator("input[name=code]").is_visible():
+        join_group.locator("summary").click()
     student.get_by_label('Код группы от учителя').fill(code)
     student.get_by_role('button', name='Проверить код группы').click()
     student.get_by_role('button', name='Подтвердить вступление').click()

@@ -190,7 +190,7 @@ def render_page(html, title=None):
     shell_scripts = ('<script src="/static/navigation.js?v=20261017-fixes" defer></script>'
                      '<script src="/static/interface.js?v=20261115-panel" defer></script>'
                      + guard_script
-                     + '<script src="/static/design-suite.js?v=20261118-home-settings" defer></script>') if authenticated else guard_script
+                     + '<script src="/static/design-suite.js?v=20261123-classroom" defer></script>') if authenticated else guard_script
     return ('<!doctype html><html lang="ru" data-theme="dark"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<title>{escape(title) if title is not None else document_title(html)}</title>'
@@ -205,7 +205,7 @@ def render_page(html, title=None):
         '<link rel="stylesheet" href="/static/graphics.css?v=20261015">'
         f'<link rel="stylesheet" href="/static/notifications.css?v={APPEARANCE_VERSION}">'
         '<link rel="stylesheet" href="/static/deadlines.css?v=20261118-home-settings">'
-        '<link rel="stylesheet" href="/static/navigation.css?v=20261017-fixes">'
+        '<link rel="stylesheet" href="/static/navigation.css?v=20261123-classroom">'
         f'<link rel="stylesheet" href="/static/icon-symbols.css?v={APPEARANCE_VERSION}">'
         f'<link rel="stylesheet" href="/static/components.css?v={APPEARANCE_VERSION}">'
         '<link rel="stylesheet" href="/static/interface.css?v=20261118-home-settings">'

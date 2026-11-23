@@ -115,10 +115,6 @@ document.addEventListener('DOMContentLoaded', () => {
     disclose([...document.querySelectorAll('.prep-intro')], 'О подготовке');
   }
   document.querySelectorAll('.groups-intro:not(.group-identity)').forEach(node => disclose([node], 'О группе и доступе'));
-  if (document.body.dataset.designPage === 'learning_groups_page') {
-    const form = document.querySelector('form.group-form input[value="create"]')?.closest('.group-panel');
-    if (form) disclose([form], 'Новая учебная группа');
-  }
   if (document.body.dataset.designPage === 'project_team') {
     document.querySelectorAll('.team-person .team-skills').forEach(node => disclose([node], 'Навыки'));
   }
