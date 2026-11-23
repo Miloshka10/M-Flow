@@ -44,7 +44,7 @@ def entries(project):
         yield dict(common, key=f'report-{pid}-{report["id"]}', kind='report',
                    title='Отчёт: ' + entry['task_title'], author=report['username'], sent=report['created_at'],
                    revision=None, requires_decision=False, href=f'/project/{pid}#task-{entry["task_id"]}',
-                   action='Открыть задачу и отчёт', body=report['body'])
+                   action='Открыть задачу и отчёт', body=report['body'] if 'body' in report.keys() else '')
 
 
 def matches_query(item, query):

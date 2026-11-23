@@ -3,14 +3,16 @@ from datetime import datetime, timezone
 import getpass
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 
 import psycopg
 from psycopg import sql
 from database import DatabaseUnavailable
-from postgres_backup import (BackupError, REQUIRED_TABLES, OPTIONAL_TABLES, archive_check,
-                             connection_environment, file_hash, run_private, tool_path)
+from postgres_backup import (BackupError, OPTIONAL_TABLES, REQUIRED_TABLES, ROW_HASH_FORMAT,
+                             archive_check, connection_environment, file_hash, run_private,
+                             table_row_hashes, tool_path)
 
 TEST_DATABASE = "mflow_restore_check"
 
@@ -41,16 +43,34 @@ def manifest_tables(manifest):
     return tables
 
 
+def manifest_row_hashes(manifest, tables):
+    if 'row_sha256' not in manifest and 'row_sha256_format' not in manifest:
+        return None  # Legacy archives only recorded row counts.
+    hashes = manifest.get('row_sha256')
+    if (manifest.get('row_sha256_format') != ROW_HASH_FORMAT or not isinstance(hashes, dict)
+            or hashes.keys() != tables
+            or not all(isinstance(value, str) and re.fullmatch(r'[0-9a-f]{64}', value)
+                       for value in hashes.values())):
+        raise BackupError("Контрольные суммы строк отсутствуют или имеют неподдерживаемый формат.")
+    return hashes
+
+
 def restore_check(url, archive):
-    env = test_environment(url)
     archive = Path(archive).resolve()
     allowed = (Path.home() / 'MFlow-private-backups').resolve()
     if not archive.is_relative_to(allowed) or archive.name != 'database.dump':
         raise BackupError("Выберите закрытую копию database.dump вне проекта.")
+    return restore_verified_archive(url, archive)
+
+
+def restore_verified_archive(url, archive):
+    """Verify and restore an already selected archive to the empty test DB."""
+    env = test_environment(url)
     manifest = json.loads(archive.with_name('verification.json').read_text(encoding='utf-8'))
     if manifest.get('sha256') != file_hash(archive):
         raise BackupError("Контрольная сумма копии не совпадает; восстановление отменено.")
     checked_tables = manifest_tables(manifest)
+    expected_hashes = manifest_row_hashes(manifest, checked_tables)
     restore = tool_path('pg_restore')
     archive_check(archive, restore)
     try:
@@ -70,14 +90,18 @@ def restore_check(url, archive):
                           for table in sorted(checked_tables)}
                 if counts != manifest['counts']:
                     raise BackupError("Количество записей не совпало с копией; проверка не пройдена.")
+                if expected_hashes is not None and table_row_hashes(conn, checked_tables) != expected_hashes:
+                    raise BackupError("Содержимое записей отличается от исходной базы; проверка не пройдена.")
                 invalid = conn.execute("SELECT COUNT(*) FROM pg_constraint WHERE contype IN ('f','c') AND NOT convalidated").fetchone()[0]
                 if invalid:
                     raise BackupError("Найдены непроверенные ограничения; проверка не пройдена.")
         receipt = dict(verified_utc=datetime.now(timezone.utc).isoformat(), sha256=manifest['sha256'],
                        restore_tested=True, counts_match=True, constraints_valid=True,
+                       row_contents_match=True if expected_hashes is not None else None,
                        application_scenarios_tested=False)
         with archive.with_name('restore_verified.json').open('x', encoding='utf-8') as stream:
             json.dump(receipt, stream, indent=2)
+        return receipt
     finally:
         env.pop('PGPASSWORD', None)
 
@@ -90,8 +114,12 @@ def main():
         print('Database: mflow_restore_check. Connection pooling OFF. Ввод скрыт.')
         url = getpass.getpass('Тестовый direct URL: ').strip()
         print('Проверка и восстановление... Пожалуйста, подождите.')
-        restore_check(url, sys.argv[1])
+        receipt = restore_check(url, sys.argv[1])
         print('Восстановление проверено: таблицы и количества записей совпали с копией.')
+        if receipt['row_contents_match']:
+            print('Содержимое записей совпало с исходным снимком.')
+        else:
+            print('В старой копии есть только контроль количества записей. Содержимое не сверялось.')
         print('Рабочая neondb и Render не изменены. Сценарии сайта на копии ещё не проверены.')
         return 0
     except (BackupError, DatabaseUnavailable) as error:

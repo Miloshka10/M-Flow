@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import Mock, patch
 import postgres_restore_check as restore
@@ -12,6 +15,44 @@ class RestoreGuardTests(unittest.TestCase):
         self.assertEqual(restore.manifest_tables(new), restore.REQUIRED_TABLES | {'notifications'})
         with self.assertRaises(BackupError):
             restore.manifest_tables(dict(counts={**old['counts'], 'unknown_table': 1}))
+
+    def test_row_hash_manifest_requires_all_hashes_when_format_is_present(self):
+        hashes = {table: 'a' * 64 for table in restore.REQUIRED_TABLES}
+        self.assertIsNone(restore.manifest_row_hashes({}, restore.REQUIRED_TABLES))
+        manifest = dict(row_sha256_format=restore.ROW_HASH_FORMAT, row_sha256=hashes)
+        self.assertEqual(restore.manifest_row_hashes(manifest, restore.REQUIRED_TABLES), hashes)
+        for invalid in (
+            dict(row_sha256_format=restore.ROW_HASH_FORMAT),
+            dict(manifest, row_sha256_format='unknown'),
+            dict(manifest, row_sha256={}),
+            dict(manifest, row_sha256={**hashes, 'users': 'invalid'}),
+        ):
+            with self.subTest(manifest=invalid), self.assertRaises(BackupError):
+                restore.manifest_row_hashes(invalid, restore.REQUIRED_TABLES)
+
+    def test_restore_rejects_altered_rows_with_matching_counts(self):
+        tables = sorted(restore.REQUIRED_TABLES)
+        expected_hashes = dict.fromkeys(tables, 'a' * 64)
+        with tempfile.TemporaryDirectory() as folder:
+            archive = Path(folder) / 'database.dump'
+            archive.write_bytes(b'archive')
+            manifest = dict(sha256=restore.file_hash(archive), counts=dict.fromkeys(tables, 1),
+                            row_sha256_format=restore.ROW_HASH_FORMAT, row_sha256=expected_hashes)
+            archive.with_name('verification.json').write_text(json.dumps(manifest), encoding='utf-8')
+            with (patch.object(restore, 'test_environment', return_value={}),
+                  patch.object(restore, 'tool_path'),
+                  patch.object(restore, 'archive_check'),
+                  patch.object(restore, 'run_private'),
+                  patch.object(restore, 'require_empty'),
+                  patch.object(restore.psycopg, 'connect') as connect,
+                  patch.object(restore, 'table_row_hashes',
+                               return_value={**expected_hashes, 'users': 'b' * 64})):
+                conn = connect.return_value.__enter__.return_value
+                conn.execute.return_value.__iter__.return_value = iter((table,) for table in tables)
+                conn.execute.return_value.fetchone.return_value = (1,)
+                with self.assertRaisesRegex(BackupError, 'Содержимое записей отличается'):
+                    restore.restore_verified_archive('unused-url', archive)
+            self.assertFalse(archive.with_name('restore_verified.json').exists())
 
     def test_production_url_rejected_before_connection(self):
         with patch.object(restore.psycopg, 'connect') as connect:

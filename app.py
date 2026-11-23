@@ -43,15 +43,17 @@ from teacher_supervision import (initialize_supervision, create_invite, preview_
 from auth_security import reserve_supervision_attempt
 from learning_groups import (initialize_groups, create_group, preview_code as preview_group_code,
                              join_group, change_group, own_groups, group_for, roster,
-                             render_groups, render_group)
+                             render_groups, render_group, GROUPS_PAGE_SIZE)
 from teacher_queue import WORK_KINDS, WORK_SORTS, project_matches, queue_page, render_queue
 from dashboard_view import student_dashboard
 from design_suite import cabinet_shortcuts
+import group_assignments as assignments
 import review_center
+from teacher_overview import load_teacher_projects
 from graphics import illustration
 from project_workspace import render_workspace, task_deadline
 from project_work import render_project_work
-from navigation import project_navigation, project_list_url
+from navigation import bounded_page, page_links, project_navigation, project_list_url
 from ui_components import notice
 from interface import APPEARANCE_VERSION, access_footer, access_header, appearance_assets, document_title, icon, shell_header
 from student_results import parameters as result_parameters, load_results, render_results, load_focus, load_project_states
@@ -346,6 +348,7 @@ def _prepare_database(conn):
     account_mail.initialize_mail(conn)
     initialize_supervision(conn)
     initialize_groups(conn)
+    assignments.initialize_assignments(conn)
 
     project_columns = table_columns(conn, "projects")
 
@@ -1467,6 +1470,7 @@ def index():
         result_params['home_project'] = selected
         result_rows = load_results(conn, user, result_params)
         groups = own_groups(conn, user)
+        home_assignments = assignments.student_assignments(conn, user['id'], assignments.HOME_ASSIGNMENTS_LIMIT)
         try:
             focus = load_focus(conn, user, next(p for p in projects if p['id'] == selected)) if selected else None
         except PermissionError as error:
@@ -1480,7 +1484,7 @@ def index():
                        + '<link rel="stylesheet" href="/static/student-home.css?v=20261118">'
                        + student_dashboard(projects, csrf_token(), header, messages, results, focus,
                                            any(key.startswith("result_") for key in request.args), groups=groups,
-                                           project_states=project_states, today=today))
+                                           project_states=project_states, today=today, class_assignments=home_assignments))
 
 
 # =========================================================
@@ -2787,8 +2791,28 @@ def learning_groups_page():
         except (ValueError, PermissionError) as exc:
             conn.rollback()
             error, status = str(exc), 403 if isinstance(exc, PermissionError) else 400
-        body = render_groups(own_groups(conn, user), user, csrf_token(), preview, form_open=bool(error or preview))
+        archived = int(request.method == 'GET' and request.args.get('archive') == '1')
+        page = bounded_page(request.args.get('page', '1')) if request.method == 'GET' else 1
+        groups = own_groups(conn, user, archived, GROUPS_PAGE_SIZE + 1, (page - 1) * GROUPS_PAGE_SIZE)
+        body = render_groups(groups[:GROUPS_PAGE_SIZE], user, csrf_token(), preview, form_open=bool(error or preview),
+                             archived=archived, page=page, more=len(groups) > GROUPS_PAGE_SIZE)
     return render_collaboration_page(user, 'Учебные группы', body, error=error, status=status)
+
+
+@app.get('/groups/assignments')
+@login_required
+def student_assignments_page():
+    user = get_current_user()
+    if user['role'] != 'student':
+        return render_error_page('Нет доступа', 'Этот список заданий доступен ученику.', 403)
+    page = bounded_page(request.args.get('page', '1'))
+    page_size = assignments.PAGE_SIZE
+    with closing(get_db()) as conn:
+        rows = assignments.student_assignments(conn, user['id'], page_size + 1, (page - 1) * page_size)
+    body = (assignments.STYLES + '<section class="group-panel">'
+            + assignments.student_assignment_cards(rows[:page_size])
+            + page_links('/groups/assignments', page, len(rows) > page_size) + '</section>')
+    return render_collaboration_page(user, 'Мои задания', body, back_url='/groups', back_label='К учебным группам')
 
 
 @app.route('/groups/<int:group_id>', methods=['GET', 'POST'])
@@ -2816,6 +2840,7 @@ def learning_group_page(group_id):
                     return redirect('/groups')
                 if action != 'invite':
                     flash('Запрос сопровождения создан. Откройте «Руководитель проекта» для согласования.' if action == 'propose'
+                          else 'Проект создан и выбран для группы.' if action == 'create_project'
                           else 'Выбор проекта для группы обновлён. Доступ к работам не изменён.' if action == 'select'
                           else 'Группа обновлена. Проекты и действующее руководство сохранены.')
                     return redirect(f'/groups/{group_id}')
@@ -2829,9 +2854,64 @@ def learning_group_page(group_id):
             except PermissionError:
                 return render_error_page('Нет доступа', 'Вы больше не состоите в учебной группе.', 403)
             data = roster(conn, user, group, {})
-        body = render_group(conn, user, group, data, csrf_token(), code)
+        overview = assignments.classroom_overview(conn, group) if data['teacher'] else assignments.group_assignment_section(conn, group)
+        body = render_group(conn, user, group, data, csrf_token(), code, overview)
     return render_collaboration_page(user, group['name'], body, error=error, status=status,
                                      back_url='/groups', back_label='Учебные группы')
+
+
+@app.route('/groups/<int:group_id>/assignments', methods=['GET', 'POST'])
+@app.route('/groups/<int:group_id>/assignments/<int:assignment_id>', methods=['GET', 'POST'])
+@login_required
+def group_assignments_page(group_id, assignment_id=None):
+    user = get_current_user()
+    if not valid_database_id(group_id) or (assignment_id is not None and not valid_database_id(assignment_id)):
+        return render_error_page('Некорректный адрес', 'Откройте учебную группу заново.', 400)
+    base = f'/groups/{group_id}/assignments'
+    error, status, submitted = '', 200, None
+    with closing(get_db()) as conn:
+        try:
+            group = group_for(conn, user, group_id)
+            assignment = assignments.assignment_for(conn, group_id, assignment_id) if assignment_id is not None else None
+        except PermissionError as exc:
+            return render_error_page('Нет доступа', str(exc), 403)
+        if request.method == 'POST':
+            try:
+                action = request.form.get('action')
+                if action == 'save':
+                    assignment_id = assignments.save_assignment(conn, user, group_id, request.form, assignment_id)
+                    flash('Задание сохранено.')
+                elif assignment is not None and action in ('create_project', 'link_project', 'propose'):
+                    assignments.link_project(conn, user, group_id, assignment_id, request.form)
+                    flash('Предложение сопровождения отправлено.' if action == 'propose' else 'Проект связан с заданием.')
+                else:
+                    raise ValueError('Выберите действие в актуальной форме.')
+                return redirect(f'{base}/{assignment_id}')
+            except PermissionError as exc:
+                conn.rollback()
+                return render_error_page('Нет доступа', str(exc), 403)
+            except ValueError as exc:
+                conn.rollback()
+                error, status = str(exc), 400
+                try:
+                    group = group_for(conn, user, group_id)
+                    if assignment is not None:
+                        assignment = assignments.assignment_for(conn, group_id, assignment_id)
+                except PermissionError as denied:
+                    return render_error_page('Нет доступа', str(denied), 403)
+                if action == 'save' and (assignment is None or request.form.get('revision') == str(assignment['revision'])):
+                    submitted = request.form
+        if assignment is None:
+            results = user['role'] == 'teacher' and request.args.get('mode') == 'results' and submitted is None
+            body = assignments.render_assignments(conn, user, group, csrf_token(),
+                bounded_page(request.args.get('page', '1')), submitted, results=results,
+                create=request.args.get('create') == '1')
+            title = 'Результаты класса' if results else 'Задания группы'
+            back_url, back_label = f'/groups/{group_id}', group['name']
+        else:
+            body = assignments.render_assignment(conn, user, group, assignment, csrf_token(), request.args, submitted)
+            title, back_url, back_label = assignment['title'], base, 'Задания группы'
+    return render_collaboration_page(user, title, body, error=error, status=status, back_url=back_url, back_label=back_label)
 
 
 @app.route('/supervision', methods=['GET', 'POST'])
@@ -3158,11 +3238,28 @@ def project_assessment(project_id):
         return render_error_page("Нет доступа", "Оценивать проекты может только учитель.", 403)
     token = csrf_token()
     conn = get_db()
+    class_params = ''
+    class_back = ''
+    try:
+        classroom = assignments.classroom_context(conn, user, request.args)
+        if classroom:
+            if not assignments.project_in_classroom(conn, classroom, project_id):
+                raise PermissionError('Проект не относится к выбранному классу или заданию.')
+            class_params = '&' + urlencode(classroom['params'])
+            class_back = f'<a class="action-link" href="{escape(assignments.classroom_return_url(classroom), quote=True)}">К {"заданию" if classroom["assignment"] else "классу"}</a>'
+    except (ValueError, PermissionError) as exc:
+        conn.close()
+        denied = isinstance(exc, PermissionError)
+        return render_error_page('Нет доступа' if denied else 'Некорректный фильтр', str(exc), 403 if denied else 400)
     students = conn.execute("""
         SELECT id, username FROM users WHERE role = 'student' AND (
             id IN (SELECT user_id FROM project_members WHERE project_id = ?)
             OR id = (SELECT owner_id FROM projects WHERE id = ?)) ORDER BY username
         """, (project_id, project_id)).fetchall()
+    if classroom and classroom['assignment']:
+        classroom_students = {row['student_id'] for row in assignments.progress_rows(
+            conn, classroom['group'], classroom['assignment'], user) if row['project_id'] == project_id}
+        students = [student for student in students if student['id'] in classroom_students]
     error = ""
     status = 200
     content = ""
@@ -3229,7 +3326,7 @@ def project_assessment(project_id):
                 conn.commit()
                 conn.close()
                 flash("Оценка опубликована." if action == "published" else "Черновик сохранён. Ученику он не виден.")
-                return redirect(f"/project/{project_id}/assessment?student_id={selected['id']}")
+                return redirect(f"/project/{project_id}/assessment?student_id={selected['id']}{class_params}")
             except ValueError as exc:
                 conn.rollback()
                 error = str(exc)
@@ -3241,7 +3338,8 @@ def project_assessment(project_id):
                 conn.rollback()
                 conn.close()
                 raise
-        links = " ".join(f'<a class="assessment-person" href="?student_id={s["id"]}" aria-current="{str(s["id"] == selected["id"]).lower()}">{escape(s["username"])}</a>' for s in students)
+        class_suffix = escape(class_params, quote=True)
+        links = " ".join(f'<a class="assessment-person" href="?student_id={s["id"]}{class_suffix}" aria-current="{str(s["id"] == selected["id"]).lower()}">{escape(s["username"])}</a>' for s in students)
         fields = ""
         for key, label, maximum in CRITERIA:
             options = '<option value="">Не оценено</option>' + "".join(
@@ -3250,7 +3348,7 @@ def project_assessment(project_id):
         total, grade = summarize(scores)
         state = ("Опубликована" if row["state"] == "published" else "Черновик") if row else "Ещё не сохранена"
         saved = f'{state} · {format_timestamp(row["updated_at"])}' if row else state
-        conflict = (f'<p class="assessment-conflict"><a class="action-link" href="/project/{project_id}/assessment?student_id={selected["id"]}" target="_blank" rel="noopener noreferrer">Открыть сохранённую оценку {icon("external")}</a> Сравните версии в двух вкладках и перенесите нужные изменения.</p>' if stale_assessment else '')
+        conflict = (f'<p class="assessment-conflict"><a class="action-link" href="/project/{project_id}/assessment?student_id={selected["id"]}{class_suffix}" target="_blank" rel="noopener noreferrer">Открыть сохранённую оценку {icon("external")}</a> Сравните версии в двух вкладках и перенесите нужные изменения.</p>' if stale_assessment else '')
         blocked = 'disabled' if stale_assessment else ''
         content = f"""<nav class="assessment-people">{links}</nav><section class="card">
             <h2>Оценивание: {escape(selected['username'])}</h2><p>{saved}</p>{conflict}
@@ -3288,7 +3386,7 @@ def project_assessment(project_id):
     messages = "".join(f'<p role="status">{escape(message)}</p>' for message in get_flashed_messages())
     return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/assessment.css">
         <div class="app">{render_header(user)}<main class="main-content assessment-page">
-        <a class="back" href="/project/{project_id}">{icon('arrow-left')} К обзору проекта</a>
+        <a class="back" href="/project/{project_id}">{icon('arrow-left')} К обзору проекта</a>{class_back}
         <h1>Оценивание · {escape(project_name)}</h1>{project_navigation(project_id, "assessment")}
         <p>12 критериев · максимум 45 баллов. Шкала: «5» — 39–45, «4» — 30–38, «3» — 21–29, «2» — 0–20.</p>
         {messages}<p role="alert">{escape(error)}</p>{content}</main></div>
@@ -3560,8 +3658,6 @@ def teacher_review_center():
     user = get_current_user()
     if user['role'] != 'teacher':
         return render_error_page('Нет доступа', 'Центр проверки доступен только учителю.', 403)
-    projects = build_teacher_overview(user)
-    accessible = {p['id'] for p in projects}
     params = dict(q=request.args.get('q', '').strip()[:100],
                   kind=request.args.get('kind', 'all'), sort=request.args.get('sort', 'oldest'))
     if params['kind'] not in review_center.KINDS:
@@ -3577,30 +3673,46 @@ def teacher_review_center():
             project_id = None
         if not valid_database_id(project_id):
             return render_error_page('Некорректный фильтр', 'Выберите проект из списка.', 400)
-        if project_id not in accessible:
-            return render_error_page('Нет доступа', 'Проект недоступен вашему аккаунту.', 403)
         params['project'] = project_id
     try:
         page = max(1, int(request.args.get('page', '1')))
     except ValueError:
         page = 1
     key = request.args.get('work', '')
+    selected_pid = None
     if key:
         try:
             selected_pid = review_center.work_project(key)
         except ValueError as exc:
             return render_error_page('Некорректная ссылка', str(exc), 400)
-        if selected_pid not in accessible:
-            return render_error_page('Нет доступа', 'Работа недоступна вашему аккаунту.', 403)
     error, status, submitted = '', 200, None
     with closing(get_db()) as conn:
-        metadata = review_center.submission_index(conn, user['id'])
+        try:
+            classroom = assignments.classroom_context(conn, user, request.args)
+        except ValueError as exc:
+            return render_error_page('Некорректный фильтр', str(exc), 400)
+        except PermissionError as exc:
+            return render_error_page('Нет доступа', str(exc), 403)
+        project_scope = assignments.classroom_project_scope(classroom) if classroom else None
+        params.update(classroom.get('params', {}))
+        for pid in {project_id, selected_pid} - {None}:
+            if (not valid_database_id(pid) or (classroom and not assignments.project_in_classroom(conn, classroom, pid))
+                    or not participant(conn, pid, user['id'])):
+                return render_error_page('Нет доступа', 'Работа недоступна вашему аккаунту.', 403)
+        reports = params['kind'] == 'report'
+        projects = load_teacher_projects(conn, user['id'], business_today(),
+            reports=reports or key.startswith('report-'),
+            report_project=project_id if reports and not key else selected_pid if not reports else None,
+            project_scope=project_scope)
+        metadata = (review_center.submission_index(conn, user['id'], project_scope)
+                    if not reports or (key and not key.startswith('report-')) else {})
         queue = review_center.inbox(projects, metadata, params['kind'], params['sort'], page,
                                     params['q'].casefold(), project_id)
         params['page'] = queue['page']
         # Explicit deep links stay stable even when filters or pagination change.
-        all_items = [item for p in projects for item in review_center.entries(p)]
-        selected = next((i for i in all_items if i['key'] == key), None) if key else next(iter(queue['items']), None)
+        selected = (next((item for p in projects if p['id'] == selected_pid
+                          for item in review_center.entries(p) if item['key'] == key), None)
+                    if key else next(iter(queue['items']), None))
         record, context = {}, {}
         if request.method == 'POST':
             submitted = request.form
@@ -3623,15 +3735,21 @@ def teacher_review_center():
             if not participant(conn, selected['project_id'], user['id']):
                 return render_error_page('Нет доступа', 'Доступ к проекту изменился. Работа недоступна вашему аккаунту.', 403)
             selected['submission'] = metadata.get(selected['key'])
+            if selected['kind'] == 'report':
+                report = conn.execute('SELECT body FROM task_updates WHERE id=?', (int(selected['key'].rsplit('-', 1)[-1]),)).fetchone()
+                selected['body'] = report['body'] if report else ''
             if selected['kind'] == 'stage':
                 record = next(s for s in get_stages(conn, selected['project_id']) if s['number'] == int(selected['key'].rsplit('-', 1)[-1]))
             elif selected['kind'] == 'defense':
                 record = defense_for(conn, selected['project_id'])
             if selected['kind'] != 'report':
                 context = review_center.context_for(conn, selected, record)
-        connections = review_center.connections_for(conn, user['id'])
+        connections = review_center.connections_for(conn, user['id']) if not classroom else None
+        source = (assignments.classroom_return_url(classroom),
+                  classroom['group']['name'],
+                  classroom['assignment']['title'] if classroom['assignment'] else '') if classroom else None
         body = review_center.render_center(projects, queue, selected, record, context, params,
-                                            csrf_token(), connections, bool(key), error, submitted)
+                                            csrf_token(), connections, bool(key), error, submitted, source=source)
     # If the item left the queue, keep a stale comment visible without a new form.
     if error and not selected:
         body = f'<p class="error" role="alert">{escape(error)}</p><aside class="rc-comment"><h2>Ваш комментарий не сохранён</h2><p class="rc-result">{escape(request.form.get("teacher_comment", ""))}</p></aside>' + body

@@ -1,5 +1,6 @@
 """Classroom flows on synthetic SQLite/PostgreSQL fixtures."""
 import re
+from html import unescape
 import os
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -32,6 +33,182 @@ class LearningGroupCases:
     def group_join(self, code, user=3):
         self.sign_in(user)
         return self.post('/groups', data=dict(action='join', code=code))
+
+    def assignment_create(self, gid, title='Измеряем температуру'):
+        self.sign_in(1)
+        response = self.post(f'/groups/{gid}/assignments', data=dict(
+            action='save', title=title, goal='Сравнить показания датчиков',
+            due_on='2027-01-15', materials='Три измерения', material_url='https://example.com/guide'))
+        self.assertEqual(response.status_code, 302, response.text[:200])
+        return response.headers['Location']
+
+    def test_assignment_class_progress_uses_real_submissions_and_separate_consent(self):
+        self.add_candidate()
+        gid = self.group_create()
+        code = self.group_code(gid)
+        self.group_join(code)
+        self.group_join(code, user=4)
+        path = self.assignment_create(gid)
+        self.assertIn('Не начал: 2', self.client.get(path).text)
+        self.sign_in(2)
+        self.assertEqual(self.client.get(path).status_code, 403)
+        self.sign_in(3)
+        self.assertIn('Три измерения', self.client.get(path).text)
+        self.assertNotIn('candidate-engineer', self.client.get(path).text)
+        self.assertEqual(self.post(path, data=dict(action='create_project', project_name='Проект датчиков')).status_code, 302)
+        pid = int(re.search(r'href="/project/(\d+)">Обзор проекта', self.client.get(path).text)[1])
+        before = self.database_snapshot()
+        self.assertEqual(self.post(path, data=dict(action='create_project', project_name='Дубликат')).status_code, 400)
+        self.assertEqual(self.database_snapshot(), before)
+        self.sign_in(1)
+        self.assertIn('Нужно согласовать сопровождение: 1', self.client.get(path).text)
+        self.assertEqual(self.client.get(f'/project/{pid}').status_code, 403)
+        self.sign_in(3)
+        self.assertEqual(self.post(path, data=dict(action='propose')).status_code, 302)
+        self.assertEqual(self.supervision_reply(1).status_code, 302)
+        self.sign_in(3)
+        stages = f'/project/{pid}/stages'
+        self.assertEqual(self.post(stages, data=dict(action='submit', number='1', revision='0', result='Замеры воздуха')).status_code, 302)
+        self.sign_in(1)
+        progress = self.client.get(path).text
+        self.assertIn('Ждёт проверки: 1', progress)
+        self.assertIn('Первая сдача:', progress)
+        review_link = unescape(re.search(r'href="([^"]+)">Открыть сдачу', progress)[1])
+        self.assertIn(f'group={gid}&assignment=', review_link)
+        self.assertIn(f'work=stage-{pid}-1', review_link)
+        self.assertEqual(self.client.get(review_link).status_code, 200)
+        self.assertEqual(self.center_decide(f'stage-{pid}-1', action='return', comment='Уточните методику').status_code, 302)
+        self.assertIn('На доработке: 1', self.client.get(path).text)
+
+    def test_classroom_review_is_scoped_and_team_results_are_personal(self):
+        self.add_candidate()
+        gid = self.group_create(name='Класс командного проекта')
+        code = self.group_code(gid)
+        self.group_join(code)
+        self.group_join(code, user=4)
+        path = self.assignment_create(gid, 'Проверка команды')
+        another = self.assignment_create(gid, 'Другое задание')
+        self.sign_in(3)
+        self.assertEqual(self.post(path, data=dict(action='link_project', project_id='2')).status_code, 302)
+        conn = self.module.get_db()
+        conn.execute('INSERT INTO project_members(project_id,user_id) VALUES(2,4)')
+        conn.execute("INSERT INTO project_stages(project_id,number,state,result) VALUES(2,1,'review','Работа команды')")
+        conn.commit()
+        conn.close()
+        aid = path.rsplit('/', 1)[1]
+        other_id = another.rsplit('/', 1)[1]
+        self.sign_in(4)
+        self.assertIn('Обзор проекта', self.client.get(path).text)
+        self.sign_in(1)
+        page = self.client.get(path).text
+        self.assertIn('Очередь задания: 1', page)
+        self.assertIn('Ждёт проверки: 2', page)
+        scoped = f'/teacher/review?group={gid}&assignment={aid}&class_view=review'
+        self.assertIn('Работа команды', self.client.get(scoped).text)
+        self.assertEqual(self.client.get(f'/teacher/review?group={gid}&assignment={other_id}&work=stage-2-1').status_code, 403)
+        self.sign_in(2)
+        self.assertEqual(self.client.get(scoped).status_code, 403)
+        self.sign_in(1)
+        conn = self.module.get_db()
+        conn.execute("UPDATE project_stages SET state='done' WHERE project_id=2 AND number=1")
+        conn.executemany("INSERT INTO project_stages(project_id,number,state) VALUES(2,?,'done')", [(n,) for n in range(2, 6)])
+        conn.execute("INSERT INTO project_defenses(project_id,state) VALUES(2,'accepted')")
+        conn.commit()
+        conn.close()
+        self.assertIn('К оцениванию: 2', self.client.get(path + '?view=results').text)
+        grade_url = f'/project/2/assessment?student_id=4&group={gid}&assignment={aid}&class_view=to_grade'
+        token = re.search(r'name="assessment_version" value="([^"]+)"', self.client.get(grade_url).text)[1]
+        data = {**self.assessment_data(), 'student_id': '4', 'assessment_version': token}
+        self.assertEqual(self.post(grade_url, data=data).status_code, 302)
+        page = self.client.get(path + '?view=results').text
+        self.assertIn('К оцениванию: 1', page)
+        self.assertIn('Оценка опубликована: 1', page)
+        self.sign_in(3)
+        self.assertIn('Оценка ещё не опубликована', self.client.get('/project/2/assessment').text)
+        self.sign_in(4)
+        self.assertIn('45 / 45', self.client.get('/project/2/assessment').text)
+
+    def test_assignment_links_existing_project_and_rejects_invalid_or_stale_actions(self):
+        gid = self.group_create()
+        self.group_join(self.group_code(gid))
+        first = self.assignment_create(gid)
+        second = self.assignment_create(gid, title='Другой проект')
+        fields = dict(action='save', title='Новые условия', goal='Цель', due_on='2027-01-01', revision='0')
+        self.assertEqual(self.post(first, data={**fields, 'material_url': 'javascript:invalid'}).status_code, 400)
+        self.assertEqual(self.post(first, data=fields).status_code, 302)
+        self.assertEqual(self.post(first, data=fields).status_code, 400)
+        self.sign_in(3)
+        self.assertIn('Новые условия', self.client.get(first).text)
+        self.assertEqual(self.post(first, data=fields).status_code, 403)
+        self.assertEqual(self.post(first, data=dict(action='link_project', project_id='1')).status_code, 403)
+        self.assertEqual(self.post(first, data=dict(action='link_project', project_id='2')).status_code, 302)
+        self.assertEqual(self.post(second, data=dict(action='link_project', project_id='2')).status_code, 400)
+        self.assertEqual(self.group_post(gid, action='archive').status_code, 302)
+        self.sign_in(3)
+        self.assertIn('Обзор проекта', self.client.get(first).text)
+        self.assertEqual(self.post(second, data=dict(action='create_project', project_name='Архив')).status_code, 403)
+
+    def test_student_assignment_feed_on_home_and_across_groups(self):
+        first_group = self.group_create(name='Класс проектов')
+        self.group_join(self.group_code(first_group))
+        second_group = self.group_create(name='Инженерная группа')
+        self.group_join(self.group_code(second_group))
+        hidden_group = self.group_create(name='Чужая группа')
+        first = self.assignment_create(first_group, 'Измерение <температуры>')
+        second = self.assignment_create(second_group, 'Проектирование модели')
+        hidden = self.assignment_create(hidden_group, 'Чужое задание')
+        self.assertEqual(self.client.get('/groups/assignments').status_code, 403)
+        self.sign_in(3)
+        for url in ('/', '/groups/assignments'):
+            page = self.client.get(url)
+            self.assertEqual(page.status_code, 200)
+            self.assertIn('Измерение &lt;температуры&gt;', page.text)
+            self.assertIn('Проектирование модели', page.text)
+            self.assertIn(f'href="{first}"', page.text)
+            self.assertNotIn('Чужое задание', page.text)
+        self.assertEqual(self.client.get(hidden).status_code, 403)
+        self.assertEqual(self.post(first, data=dict(action='link_project', project_id='2')).status_code, 302)
+        with patch.object(self.module.assignments, 'PAGE_SIZE', 1):
+            page = self.client.get('/groups/assignments').text
+            self.assertIn(f'href="{second}"', page)
+            self.assertIn('/groups/assignments?page=2', page)
+            page = self.client.get('/groups/assignments?page=2').text
+            self.assertIn('Проект связан', page)
+            self.assertIn(f'href="{first}"', page)
+        self.assertEqual(self.group_post(second_group, action='archive').status_code, 302)
+        self.assertEqual(self.group_post(first_group, user=3, action='leave').status_code, 302)
+        page = self.client.get('/groups/assignments').text
+        self.assertNotIn('Проектирование модели', page)
+        self.assertNotIn('Измерение', page)
+
+    def test_archive_is_paginated_and_does_not_exhaust_active_group_limit(self):
+        conn = self.module.get_db()
+        conn.executemany('INSERT INTO learning_groups(teacher_id,name,archived) VALUES(1,?,1)',
+                         [(f'Archived class {index:02}',) for index in range(50)])
+        first = conn.execute('SELECT MIN(id) FROM learning_groups').fetchone()[0]
+        conn.commit()
+        conn.close()
+        gid = self.group_create()
+        self.assertNotIn('Archived class', self.client.get('/groups').text)
+        archive = self.client.get('/groups?archive=1&page=3').text
+        self.assertIn('Archived class 00', archive)
+        self.assertNotIn('Archived class 49', archive)
+        with patch('learning_groups.MAX_GROUPS', 1):
+            self.assertEqual(self.group_post(first, action='restore').status_code, 400)
+            self.assertEqual(self.group_post(gid, action='archive').status_code, 302)
+            self.assertEqual(self.group_post(first, action='restore').status_code, 302)
+
+    def test_group_next_step_precedes_settings_and_student_can_open_submitted_defense(self):
+        gid = self.group_create()
+        self.group_join(self.group_code(gid))
+        self.assertEqual(self.group_post(gid, user=3, action='select', project_id='2').status_code, 302)
+        self.assertEqual(self.post('/project/2/defense', data=dict(action='submit', revision='0',
+            video_url='https://example.com/recording', description='Запись выступления')).status_code, 302)
+        page = self.client.get(f'/groups/{gid}').text
+        self.assertLess(page.index('Следующий шаг проекта'), page.index('id="group-project"'))
+        self.assertIn('Видеозащита ждёт проверки', page)
+        self.assertIn('Открыть видеозащиту', page)
+        self.assertNotIn('Проверить видеозащиту', page)
 
     def test_groups_consent_join_is_reusable_idempotent_and_does_not_grant_projects(self):
         self.add_candidate(discoverable=0)
@@ -341,7 +518,9 @@ class LearningGroupCases:
             return rows
         before = old_data()
         conn = self.module.get_db()
-        for table in ('learning_group_invitations', 'learning_group_members', 'learning_groups'):
+        classroom_tables = ('group_assignment_projects', 'group_assignments',
+                            'learning_group_invitations', 'learning_group_members', 'learning_groups')
+        for table in classroom_tables:
             conn.execute(f'DROP TABLE {table}')
         conn.commit()
         conn.close()
@@ -350,6 +529,6 @@ class LearningGroupCases:
             self.module.prepare_database()
         self.assertEqual(old_data(), before)
         conn = self.module.get_db()
-        for table in ('learning_group_invitations', 'learning_group_members', 'learning_groups'):
+        for table in classroom_tables:
             self.assertEqual(conn.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0], 0)
         conn.close()
