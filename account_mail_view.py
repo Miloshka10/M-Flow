@@ -1,7 +1,7 @@
 """Presentation for account access; handlers and server checks remain authoritative."""
 from html import escape
 import re
-from interface import APPEARANCE_VERSION, access_header
+from interface import access_footer, access_header
 from ui_components import state_badge
 
 ACCESS_VERSION = '20261106-access'
@@ -17,7 +17,7 @@ def password_control(input_id, name, label, autocomplete, limits='', hint=''):
 
 
 def account_assets():
-    return f'<link rel="stylesheet" href="/static/auth.css?v={APPEARANCE_VERSION}"><script src="/static/auth.js?v={ACCESS_VERSION}" defer></script><script src="/static/account-mail.js?v={ACCESS_VERSION}" defer></script>'
+    return f'<link rel="stylesheet" href="/static/auth.css?v=20261123-centered-entry"><script src="/static/auth.js?v={ACCESS_VERSION}" defer></script><script src="/static/account-mail.js?v={ACCESS_VERSION}" defer></script>'
 
 
 def token_field(value=''):
@@ -85,11 +85,11 @@ def public_form(title, intro, fields, token, button, error='', notice='', token_
         'confirm': 'Открытие ссылки само по себе ничего не меняет. При смене адреса нужны подтверждения обоих ящиков.',
     }[kind]
     retry = '<a class="action-link" href="/forgot-password">Запросить новую ссылку</a>' if kind == 'reset' and state != 'invalid' else ''
-    return f'''<script src="/static/account-mail.js?v={ACCESS_VERSION}" defer></script><div class="auth-page auth-recovery access-page" data-access-state="{escape(state, quote=True)}">{access_header(login_url)}<div class="auth-card auth-recovery-card"><main class="auth-form-side"><div class="auth-form-inner">
+    return f'''<script src="/static/account-mail.js?v={ACCESS_VERSION}" defer></script><div class="auth-page auth-recovery access-page" data-access-state="{escape(state, quote=True)}">{access_header(login_url, show_theme=False)}<div class="auth-card auth-recovery-card"><main class="auth-form-side"><div class="auth-form-inner">
         <h1>{escape(heading)}</h1><p class="auth-intro">{escape(intro)}</p><div class="auth-access-content">{feedback}{action}{form}</div>
         <details class="access-help"><summary>Что важно знать</summary><p>{explanation}</p></details>{retry}
         <nav class="auth-recovery-links" aria-label="Вернуться ко входу"><a href="/login">Вход ученика</a><a href="/teacher/login">Вход учителя</a></nav>
-        </div></main></div><footer class="auth-page-footer"><a href="/data">Данные и помощь</a></footer></div>'''
+        </div></main></div>{access_footer()}</div>'''
 
 
 def email_status(email, ready=True):

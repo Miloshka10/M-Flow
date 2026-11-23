@@ -92,9 +92,14 @@ def theme_button():
             f'<span data-theme-icon="dark">{icon("moon")}</span></button>')
 
 
-def access_header(href='/login'):
+def access_header(href='/login', *, show_theme=True):
+    theme = theme_button() if show_theme else ''
     return (f'<header class="access-topbar"><a class="brand" href="{escape(href, quote=True)}">'
-            f'M-Flow<span class="ui-brand-dot">.</span></a>{theme_button()}</header>')
+            f'M-Flow<span class="ui-brand-dot">.</span></a>{theme}</header>')
+
+
+def access_footer():
+    return f'<footer class="auth-page-footer"><a href="/data">Данные и помощь</a>{theme_button()}</footer>'
 
 
 def project_art():

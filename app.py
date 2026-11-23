@@ -53,7 +53,7 @@ from project_workspace import render_workspace, task_deadline
 from project_work import render_project_work
 from navigation import project_navigation, project_list_url
 from ui_components import notice
-from interface import APPEARANCE_VERSION, access_header, appearance_assets, document_title, icon, shell_header
+from interface import APPEARANCE_VERSION, access_footer, access_header, appearance_assets, document_title, icon, shell_header
 from student_results import parameters as result_parameters, load_results, render_results, load_focus, load_project_states
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores, assessment_version
 from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, stage_label, change_stage, render_stages, STATE_LABELS
@@ -179,7 +179,7 @@ def render_page(html, title=None):
     scenery_context = ('together' if endpoint in ('learning_groups_page', 'learning_group_page', 'teams_directory', 'project_team')
                        else 'review' if endpoint.startswith('teacher_') or
                        ('data-interface-shell="teacher"' in html) else 'workshop')
-    auth_assets = (f'<link rel="stylesheet" href="/static/auth.css?v={APPEARANCE_VERSION}">'
+    auth_assets = ('<link rel="stylesheet" href="/static/auth.css?v=20261123-centered-entry">'
                    f'<script src="/static/auth.js?v={APPEARANCE_VERSION}" defer></script>'
                    if 'class="auth-page ' in html else '')
     work_assets = '<link rel="stylesheet" href="/static/work-screens.css?v=20261106-work">' if 'data-work-screens=' in html else ''
@@ -1097,7 +1097,7 @@ def render_auth_page(mode, error=None, role="student", field=None):
     return render_page(
         f"""
         <div class="auth-page access-page auth-role-{role} auth-mode-{mode}">
-            {access_header(f'{prefix}/login')}
+            {access_header(f'{prefix}/login', show_theme=False)}
             <div class="auth-card">
                 <main class="auth-form-side">
                     <div class="auth-form-inner">
@@ -1111,12 +1111,8 @@ def render_auth_page(mode, error=None, role="student", field=None):
                     <p class="auth-footer">{switch_text} <a href="{prefix}/{switch_mode}">{switch_label}</a></p>
                     </div>
                 </main>
-                <aside class="auth-access-aside" aria-hidden="true">
-                    <div class="auth-orbit"><canvas data-access-orbit></canvas></div>
-                </aside>
             </div>
-            <footer class="auth-page-footer"><a href="/data">Данные и помощь</a></footer>
-            <script type="module" src="/static/access-orbit.js?v=20261111-orbit"></script>
+            {access_footer()}
         </div>
         """, title="Вход — M-Flow" if is_login else "Регистрация — M-Flow"
     )
