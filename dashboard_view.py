@@ -1,5 +1,6 @@
 """Presentation only: no database, roles or request mutations."""
 from html import escape
+from group_assignments import student_assignment_cards
 from datetime import timedelta
 from deadlines import business_today, deadline_text
 from interface import icon
@@ -169,7 +170,8 @@ def render_home_focus(focus):
         </section>'''
 
 
-def student_dashboard(projects, token, header, messages, results='', focus=None, results_open=False, groups=(), project_states=None, today=None):
+def student_dashboard(projects, token, header, messages, results='', focus=None, results_open=False,
+                      groups=(), project_states=None, today=None, class_assignments=()):
     project_states = project_states or {}
     selected_id = focus['project']['id'] if focus else None
     cards = []
@@ -208,11 +210,13 @@ def student_dashboard(projects, token, header, messages, results='', focus=None,
         agenda = f'''<section class="ui-agenda student-home-agenda ds-home-only" aria-labelledby="attention-title">
             <h2 id="attention-title">Состояние и сроки</h2>{reviews}
             {render_week(projects, today or business_today())}</section>'''
-    else:
+    elif not class_assignments:
         hero = '''<section class="home-focus student-home-focus ds-home-only" aria-labelledby="empty-home-title">
             <div class="student-home-current"><h2 id="empty-home-title">У тебя пока нет проектов</h2>
             <div class="student-home-actions"><a class="btn" href="#project-create" data-open-project>Создать проект</a>
             <a class="action-link" href="/groups#group-code">Ввести код группы</a></div></div></section>'''
+    else:
+        hero = ''
     projects_html = f'''<section class="workspace-projects" id="my-projects" aria-label="Мои проекты"><div class="ds-project-head"><h2>Мои проекты</h2>{create}</div>
         <nav class="project-people-links" aria-label="Участники и приглашения">
         <a class="action-link" href="/teams#people">Найти участников</a>
@@ -226,7 +230,11 @@ def student_dashboard(projects, token, header, messages, results='', focus=None,
     group_cards = ''.join(f'<a class="ui-group-teaser" href="/groups/{g["id"]}"><h3>{escape(g["name"])}</h3><p>{escape(g["teacher_name"])}</p></a>' for g in list(groups)[:3])
     groups_html = (f'<details class="ds-home-groups ds-home-only"><summary>Учебные группы</summary>{group_cards}</details>'
                    if group_cards else '')
+    class_work = (f'''<section class="ui-agenda student-home-agenda ds-home-only" aria-labelledby="class-work-title">
+        <div class="ds-project-head"><h2 id="class-work-title">Задания групп</h2>
+        <a class="action-link" href="/groups/assignments">Все задания {icon('arrow')}</a></div>
+        {student_assignment_cards(class_assignments)}</section>''' if class_assignments else '')
     secondary = f'<details class="home-details" {"open" if results_open else ""}><summary data-ui-icon="results">Мои результаты</summary>{results}</details>'
     return f'''<div class="container workspace student-workspace">{header}<main id="main-content" class="simple-home" data-suite-dashboard data-suite-view="{'results' if results_open else 'home'}">
         <h1 id="dashboard-title" tabindex="-1" data-home-title="Главная">{'Мои результаты' if results_open else 'Главная'}</h1>{messages}
-        {hero}{agenda}{projects_html}{groups_html}{secondary}</main></div>'''
+        {hero}{class_work}{agenda}{projects_html}{groups_html}{secondary}</main></div>'''

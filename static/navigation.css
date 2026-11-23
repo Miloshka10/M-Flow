@@ -75,3 +75,5 @@ body .focus-switch select { width: auto; min-width: 0; max-width: 100%; flex: 1;
   .project-navigation { gap: 2px; }
   .project-navigation a { padding-inline: 10px; }
 }
+
+.page-links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }

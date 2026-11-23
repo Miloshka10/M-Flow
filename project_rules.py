@@ -1,6 +1,21 @@
 """Shared workflow rules, independent of the project's creator role."""
 
 
+from database import insert_id
+
+
+def create_owned_project(conn, student_id, name):
+    """Create both owner records in the caller's transaction."""
+    name = name.strip()
+    if not name:
+        raise ValueError("Введите название проекта.")
+    if len(name) > 80:
+        raise ValueError("Название проекта должно быть не длиннее 80 символов.")
+    project_id = insert_id(conn, 'INSERT INTO projects(name, owner_id) VALUES (?, ?)', (name, student_id))
+    conn.execute('INSERT INTO project_members(project_id, user_id) VALUES (?, ?)', (project_id, student_id))
+    return project_id
+
+
 def has_project_teacher(conn, project_id):
     return conn.execute("""SELECT 1 FROM users u WHERE u.role='teacher' AND (
         u.id=(SELECT owner_id FROM projects WHERE id=?) OR EXISTS (

@@ -21,6 +21,7 @@ from database_backup import BackupError, REQUIRED_TABLES, OPTIONAL_TABLES, _priv
 
 
 ROOT = Path(__file__).resolve().parent
+ROW_HASH_FORMAT = "postgres-jsonb-copy-v1"
 
 
 def tool_path(name):
@@ -104,6 +105,29 @@ def file_hash(path):
     return digest.hexdigest()
 
 
+def table_row_hashes(conn, tables):
+    """Stream canonical table data inside the caller's snapshot transaction."""
+    conn.execute("SET LOCAL TIME ZONE 'UTC'")
+    conn.execute("SET LOCAL DateStyle = 'ISO, YMD'")
+    conn.execute("SET LOCAL IntervalStyle = 'iso_8601'")
+    conn.execute("SET LOCAL bytea_output = 'hex'")
+    conn.execute("SET LOCAL extra_float_digits = 3")
+    hashes = {}
+    with conn.cursor() as cursor:
+        for table in sorted(tables):
+            digest = hashlib.sha256()
+            query = sql.SQL("""COPY (
+                SELECT to_jsonb(row_data)::text COLLATE "C" AS row_text
+                FROM public.{} AS row_data
+                ORDER BY row_text
+            ) TO STDOUT (ENCODING 'UTF8')""").format(sql.Identifier(table))
+            with cursor.copy(query) as rows:
+                for block in rows:
+                    digest.update(block)
+            hashes[table] = digest.hexdigest()
+    return hashes
+
+
 def create_backup(url, directory):
     env = connection_environment(url)
     dump, restore = tool_path("pg_dump"), tool_path("pg_restore")
@@ -120,8 +144,10 @@ def create_backup(url, directory):
                 available = {row[0] for row in conn.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'")}
                 if not REQUIRED_TABLES.issubset(available):
                     raise BackupError("Источник не содержит всех таблиц M-Flow в public.")
+                tables = REQUIRED_TABLES | (OPTIONAL_TABLES & available)
                 counts = {table: conn.execute(sql.SQL("SELECT COUNT(*) FROM public.{}").format(sql.Identifier(table))).fetchone()[0]
-                          for table in sorted(REQUIRED_TABLES | (OPTIONAL_TABLES & available))}
+                          for table in sorted(tables)}
+                row_hashes = table_row_hashes(conn, tables)
                 snapshot = conn.execute("SELECT pg_export_snapshot()").fetchone()[0]
                 version = conn.info.server_version
                 if version >= 190000:
@@ -134,7 +160,8 @@ def create_backup(url, directory):
         checksum = file_hash(temporary)
         os.link(temporary, destination)  # Never overwrite another file.
         manifest = dict(created_utc=datetime.now(timezone.utc).isoformat(), server_version=version,
-                        sha256=checksum, counts=counts, archive_checked=True, restore_tested=False)
+                        sha256=checksum, counts=counts, row_sha256_format=ROW_HASH_FORMAT,
+                        row_sha256=row_hashes, archive_checked=True, restore_tested=False)
         with (folder / "verification.json").open("x", encoding="utf-8") as stream:
             json.dump(manifest, stream, ensure_ascii=False, indent=2)
         return destination

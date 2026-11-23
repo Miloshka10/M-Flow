@@ -56,3 +56,47 @@ jobs:
           node tests/test_account_mail.cjs
           node tests/test_form_guard.cjs
           node tests/test_linear_orbit.mjs
+
+  postgres-restore:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: isolated-restore-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt
+      - name: Restore a synthetic classroom
+        env:
+          M_FLOW_DRILL_SOURCE_URL: postgresql://postgres:isolated-restore-ci@127.0.0.1:5432/mflow_drill_source?sslmode=disable
+          M_FLOW_DRILL_TARGET_URL: postgresql://postgres:isolated-restore-ci@127.0.0.1:5432/mflow_restore_check?sslmode=disable
+          PGPASSWORD: isolated-restore-ci
+        run: |
+          export PATH="/usr/lib/postgresql/18/bin:$PATH"
+          createdb --host=127.0.0.1 --username=postgres --no-password mflow_drill_source
+          createdb --host=127.0.0.1 --username=postgres --no-password mflow_restore_check
+          python tests/postgres_restore_drill.py
+
+  classroom-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements.txt playwright==1.64.1
+      - run: python -m playwright install --with-deps chromium
+      - run: python tests/browser_classroom.py
