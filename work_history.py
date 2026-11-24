@@ -7,9 +7,10 @@ from html import escape
 from urllib.parse import urlencode
 from material_links import safe_web_url
 
-from database import execute_schema
+from database import execute_schema, insert_id
 from deadlines import format_timestamp
 from interface import icon
+from submission_attachments import attachment_metadata, render_attachments
 
 PAGE_SIZE = 12
 WORKS = {'all': 'Все работы', **{f'stage-{n}': f'Этап {n}' for n in range(1, 6)}, 'defense': 'Видеозащита'}
@@ -63,7 +64,7 @@ def _append(conn, pid, kind, number, event, attempt, data, actor=None):
     ids = sorted({value for value in (data.get('author_id'), data.get('reviewer_id'), actor) if value is not None})
     names = {row['id']: row['username'] for row in conn.execute(
         'SELECT id,username FROM users WHERE id IN (' + ','.join('?' for _ in ids) + ')', ids)} if ids else {}
-    conn.execute('''INSERT INTO work_history(project_id,kind,number,revision,event,attempt,state,
+    return insert_id(conn, '''INSERT INTO work_history(project_id,kind,number,revision,event,attempt,state,
         result,resource_url,comment,author_id,author_name,actor_id,actor_name,reviewer_id,reviewer_name,source_updated_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
         (pid,kind,number,data['revision'],event,attempt,data['state'],data['result'],data['resource_url'],
@@ -91,7 +92,7 @@ def record_change(conn, pid, kind, number, action, current, user):
         data.update(comment='', reviewer_id=None)
     attempt = conn.execute('SELECT COALESCE(MAX(attempt),0) AS n FROM work_history WHERE project_id=? AND kind=? AND number=?',
                            (pid,kind,number)).fetchone()['n'] + (action == 'submit')
-    _append(conn, pid, kind, number, action, attempt, data, user['id'])
+    return _append(conn, pid, kind, number, action, attempt, data, user['id'])
 
 
 def history_parameters(args):
@@ -121,6 +122,9 @@ def load_history(conn, pid, work, page):
     page = min(page, pages)
     rows = [dict(row) for row in conn.execute('SELECT * FROM work_history WHERE ' + where +
         ' ORDER BY id DESC LIMIT ? OFFSET ?', params + (PAGE_SIZE, (page-1)*PAGE_SIZE))]
+    files = attachment_metadata(conn, [row['id'] for row in rows if row['kind'] == 'stage' and row['event'] == 'submit'])
+    for row in rows:
+        row['attachments'] = files.get(row['id'], ())
     legacy = []
     if kind != 'defense':
         legacy += [dict(row) for row in conn.execute('''SELECT s.*,'stage' AS kind,
@@ -159,6 +163,7 @@ def _render_event(row):
     if row['event'] == 'accept' and not row['comment']:
         comment = '<p class="t-muted">Принято без комментария.</p>'
     resource = ''
+    files = render_attachments(row['project_id'], row['attachments']) if row.get('attachments') else ''
     if row['resource_url']:
         url = row['resource_url']
         resource = (f'<a class="action-link" href="{escape(url, quote=True)}" target="_blank" rel="noopener noreferrer">'
@@ -167,7 +172,7 @@ def _render_event(row):
         f'Точная дата отправки и содержание прошлых попыток неизвестны. Состояние: {escape({"review":"На проверке","submitted":"На проверке","done":"Принято","accepted":"Принято","progress":"В работе или на доработке","returned":"На доработке","draft":"Черновик"}.get(row["state"], row["state"]))}.</p>') if old else ''
     return f'''<article class="history-event" data-history-event="{row['event']}"><span class="eyebrow">{event_context(row)}</span>
         <h2>{EVENTS[row['event']]}</h2><p class="t-muted">{date}</p>{actor}{author}{reviewer}{explanation}
-        <details><summary data-ui-icon="history">Текст и ссылка этой записи</summary><p class="history-text" tabindex="0">{escape(row['result'] or 'Текст не указан.')}</p>{resource}</details>{comment}</article>'''
+        <details><summary data-ui-icon="history">Материалы этой записи</summary><p class="history-text" tabindex="0">{escape(row['result'] or 'Текст не указан.')}</p>{resource}{files}</details>{comment}</article>'''
 
 
 def render_history(pid, data, work):

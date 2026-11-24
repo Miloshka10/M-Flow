@@ -16,7 +16,7 @@ import time
 
 import psycopg
 from psycopg import sql
-from postgres_backup import BackupError, REQUIRED_TABLES, OPTIONAL_TABLES, file_hash
+from postgres_backup import ATTACHMENT_FINGERPRINT_ROWS, BackupError, REQUIRED_TABLES, OPTIONAL_TABLES, file_hash
 from postgres_restore_check import test_environment
 
 STEPS = {'snapshot', 'startup', 'accounts', 'project', 'tasks', 'stages',
@@ -132,7 +132,9 @@ def fingerprint(url):
                 if table in OPTIONAL_TABLES and table not in available:
                     digest.update(json.dumps([table, []], ensure_ascii=False).encode('utf-8'))
                     continue
-                cursor.execute(sql.SQL('SELECT * FROM public.{}').format(sql.Identifier(table)))
+                query = (ATTACHMENT_FINGERPRINT_ROWS if table == 'submission_attachments' else
+                         sql.SQL('SELECT * FROM public.{}').format(sql.Identifier(table)))
+                cursor.execute(query)
                 rows = sorted(json.dumps(row, default=str, ensure_ascii=False) for row in cursor)
                 digest.update(json.dumps([table, rows], ensure_ascii=False).encode('utf-8'))
     return digest.hexdigest()

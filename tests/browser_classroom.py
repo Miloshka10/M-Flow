@@ -116,12 +116,17 @@ def exercise(browser, base):
     teacher.get_by_role('button', name='Подтвердить', exact=True).click()
     student.reload()
     student.get_by_role('link', name='Подготовить результат').click()
+    student.get_by_label('Файлы для сдачи').set_input_files(
+        {'name': 'measurements.txt', 'mimeType': 'text/plain', 'buffer': b'Measurement v1'})
     submit_stage(student, 'Первый результат замеров')
 
     teacher.goto(assignment_url)
     teacher.get_by_role('link', name='Ждёт проверки: 1').click()
     teacher.get_by_role('link', name='Открыть сдачу').click()
     expect(teacher.get_by_text('Первый результат замеров', exact=True)).to_be_visible()
+    with teacher.expect_download() as event:
+        teacher.get_by_role('link', name='measurements.txt').click()
+    assert event.value.path().read_bytes() == b'Measurement v1'
     teacher.get_by_label('Комментарий ученикам').fill('Добавьте единицы измерения.')
     teacher.get_by_role('button', name='На доработку', exact=True).click()
     teacher.get_by_role('link', name='К заданию').click()
@@ -131,10 +136,14 @@ def exercise(browser, base):
     student.goto(assignment_url)
     student.get_by_role('link', name='Перейти к доработке').click()
     expect(student.get_by_text('Что исправить: Добавьте единицы измерения.')).to_be_visible()
+    student.get_by_label('Файлы для сдачи').set_input_files(
+        {'name': 'measurements.txt', 'mimeType': 'text/plain', 'buffer': b'Measurement v2'})
     submit_stage(student, 'Средняя температура 20 градусов Цельсия')
     teacher.goto(assignment_url)
     teacher.get_by_role('link', name='Открыть сдачу').click()
     expect(teacher.get_by_text('Средняя температура 20 градусов Цельсия')).to_be_visible()
+    expect(teacher.locator('[data-version="current"]').get_by_text('Изменён', exact=False)).to_be_visible()
+    assert teacher.get_by_role('link', name='measurements.txt').count() == 2
     teacher.get_by_role('button', name='Принять этап').click()
     expect(teacher.get_by_text('Этап принят. Следующий этап открыт.')).to_be_visible()
 

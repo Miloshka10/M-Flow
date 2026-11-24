@@ -9,6 +9,7 @@ from notifications import notify_project
 from teacher_supervision import participant
 from deadlines import format_timestamp
 from work_history import before_change, record_change
+from submission_attachments import LIMIT_TEXT, save_attachments
 
 STAGES = (
     (1, "Выбор темы и согласование с учителем"),
@@ -80,7 +81,7 @@ def stage_summary(stages):
     return completed, current
 
 
-def change_stage(conn, project_id, user, form):
+def change_stage(conn, project_id, user, form, *, attachments=()):
     """Caller checks project membership and CSRF. Transaction prevents lost updates."""
     begin_project_write(conn, project_id)
     try:
@@ -95,6 +96,8 @@ def change_stage(conn, project_id, user, form):
         if form.get("revision") != str(current["revision"]):
             raise ValueError("Этап уже изменён другим участником. Обновите страницу перед сохранением.")
         action = form.get("action")
+        if attachments and (user['role'] != 'student' or action != 'submit'):
+            raise ValueError('Приложить файлы можно при отправке этапа.')
         result, url, comment = current["result"], current["presentation_url"], current["teacher_comment"]
         submitted_by = current.get("submitted_by")
         reviewed_by = current.get("reviewed_by")
@@ -133,10 +136,12 @@ def change_stage(conn, project_id, user, form):
             teacher_comment=excluded.teacher_comment, submitted_by=excluded.submitted_by,
             reviewed_by=excluded.reviewed_by, revision=excluded.revision, updated_at=CAST(CURRENT_TIMESTAMP AS TEXT)""",
             (project_id, current["number"], state, result, url, comment, submitted_by, reviewed_by, current["revision"] + 1))
-        record_change(conn, project_id, 'stage', current['number'], action,
-                      dict(current, state=state, result=result, presentation_url=url,
-                           teacher_comment=comment, submitted_by=submitted_by, reviewed_by=reviewed_by), user)
+        history_id = record_change(conn, project_id, 'stage', current['number'], action,
+                                   dict(current, state=state, result=result, presentation_url=url,
+                                        teacher_comment=comment, submitted_by=submitted_by, reviewed_by=reviewed_by), user)
         if action == 'submit':
+            if attachments:
+                save_attachments(conn, history_id, attachments)
             notify_project(conn, project_id, 'teacher',
                 f'stage:{project_id}:{current["number"]}:{current["revision"] + 1}',
                 f'Этап {current["number"]} отправлен на проверку', '', f'/project/{project_id}/stages#stage-{current["number"]}')
@@ -210,7 +215,10 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
                 html += prefix + f'<label>{result_label}<textarea name="result" rows="5" maxlength="5000">{escape(values.get("result", ""))}</textarea></label>'
                 if number == 5:
                     html += f'<label>Ссылка на презентацию<input type="url" name="presentation_url" maxlength="2000" placeholder="https://…" value="{escape(values.get("presentation_url", ""), quote=True)}"></label><p>Проверьте, что учитель сможет открыть презентацию по ссылке.</p>'
-                html += f'<div class="stage-actions"><button name="action" value="save" data-ui-icon="save">Сохранить черновик</button><button name="action" value="submit" {"disabled" if not has_teacher else ""}>Отправить учителю</button></div></form>'
+                html += f'''<label>Файлы для сдачи<input type="file" name="attachments" multiple aria-describedby="attachment-help-{number}"></label>
+                    <p class="work-field-hint" id="attachment-help-{number}">{LIMIT_TEXT} Файлы сохраняются при отправке учителю.</p>
+                    <div class="stage-actions"><button name="action" value="save" data-ui-icon="save">Сохранить черновик</button>
+                    <button name="action" value="submit" formenctype="multipart/form-data" {"disabled" if not has_teacher else ""}>Отправить учителю</button></div></form>'''
                 if compact:
                     html += '</div></details>'
             elif user["role"] == "teacher" and stage["state"] == "review":

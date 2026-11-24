@@ -6,6 +6,7 @@ and M_FLOW_DRILL_TARGET_URL. The caller owns and cleans up both databases.
 """
 from contextlib import closing
 from datetime import date, timedelta
+from io import BytesIO
 import os
 from pathlib import Path
 import secrets
@@ -15,6 +16,7 @@ import tempfile
 from urllib.parse import urlsplit
 
 import psycopg
+from werkzeug.datastructures import FileStorage
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -22,9 +24,11 @@ sys.path.insert(0, str(ROOT))
 from postgres_app_check import fingerprint, phase
 from postgres_backup import create_backup, table_row_hashes
 from postgres_restore_check import require_empty, restore_verified_archive
+from submission_attachments import read_uploads, save_attachments
 
 
 PREFIX = 'classroom_drill'
+ATTACHMENT = b'mflow synthetic attachment\x00\xff'
 
 
 def validate(url, database):
@@ -59,6 +63,10 @@ def seed(url):
         aid = save_assignment(conn, teacher, gid, dict(title='Учебная проверка', goal='Проверить восстановление',
                                                        due_on=(date.today() + timedelta(days=14)).isoformat()))
         link_project(conn, student, gid, aid, {'action': 'link_project', 'project_id': str(project)})
+        submission = conn.execute("""SELECT id FROM work_history WHERE project_id=?
+            AND kind='stage' AND number=1 AND event='submit' ORDER BY revision DESC LIMIT 1""", (project,)).fetchone()
+        save_attachments(conn, submission['id'], read_uploads([FileStorage(BytesIO(ATTACHMENT), 'report.bin')]))
+        conn.commit()
 
 
 def verify(url):
@@ -74,7 +82,10 @@ def verify(url):
         work = conn.execute("""SELECT p.id,a.id AS assignment_id,a.group_id FROM projects p
             JOIN group_assignment_projects ap ON ap.project_id=p.id
             JOIN group_assignments a ON a.id=ap.assignment_id WHERE p.name=?""", (PREFIX,)).fetchone()
+        file_id = conn.execute("""SELECT a.id FROM submission_attachments a JOIN work_history h ON h.id=a.history_id
+            WHERE h.project_id=? AND a.filename='report.bin'""", (work['id'],)).fetchone()['id']
     base = f'/project/{work["id"]}'
+    file_url = f'{base}/attachments/{file_id}'
     assignment = f'/groups/{work["group_id"]}/assignments/{work["assignment_id"]}'
     for role, login_path in (('student', '/login'), ('teacher', '/teacher/login'), ('other', '/login')):
         client = app.app.test_client()
@@ -86,7 +97,9 @@ def verify(url):
         assert logged_in.status_code == 302
         if role == 'other':
             assert all(client.get(path).status_code == 403 for path in (base, assignment, base + '/assessment'))
+            assert client.get(file_url).status_code == 404
             continue
+        assert client.get(file_url).data == ATTACHMENT
         assert 'Учебная проверка' in client.get(assignment).text
         assert 'Тестовый результат' in client.get(base + '/history').text
         assert 'Защита принята' in client.get(base + '/defense').text
@@ -117,6 +130,11 @@ def verify(url):
                 ('Changed after restore', work['id'])).rowcount
             if changed != 1 or table_row_hashes(conn, tables) == original_hashes:
                 raise AssertionError('Row hashes failed to detect a modified submission.')
+            tables = {'submission_attachments'}
+            original_hashes = table_row_hashes(conn, tables)
+            conn.execute('UPDATE submission_attachments SET content=%s WHERE id=%s', (ATTACHMENT[::-1], file_id))
+            if table_row_hashes(conn, tables) == original_hashes:
+                raise AssertionError('Row hashes failed to detect modified attachment bytes.')
 
 
 def drill():

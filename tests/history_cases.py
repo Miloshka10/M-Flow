@@ -1,6 +1,9 @@
 """History regressions shared by the SQLite and isolated PostgreSQL suites."""
 from contextlib import closing
+from io import BytesIO
+import re
 from unittest.mock import patch
+from submission_attachments import FILE_SIZE
 
 
 class WorkHistoryCases:
@@ -12,6 +15,64 @@ class WorkHistoryCases:
         self.sign_in(user)
         return self.post(f'/project/{project}/stages', data=dict(
             number=str(number), revision=str(revision), action=action, **fields))
+
+    def test_submission_attachments_keep_original_versions_and_require_current_access(self):
+        initial = b'<script>example</script>'
+        revised = b'<p>Revised document</p>'
+        self.assertEqual(self.history_stage(project=2, result='First version', attachments=[
+            (BytesIO(initial), 'Отчёт.html'), (BytesIO(b'Old material'), 'extra.bin'),
+        ]).status_code, 302)
+        self.sign_in(1)
+        center = '/teacher/review?work=stage-2-1'
+        first_page = self.client.get(center).text
+        first = re.search(r'href="(/project/2/attachments/[0-9]+)">Отчёт.html', first_page)[1]
+        response = self.client.get(first)
+        self.assertEqual(response.data, initial)
+        self.assertEqual(response.mimetype, 'application/octet-stream')
+        self.assertIn('attachment;', response.headers['Content-Disposition'])
+        self.assertIn('no-store', response.headers['Cache-Control'])
+        self.assertEqual(response.headers['X-Content-Type-Options'], 'nosniff')
+        self.assertEqual(self.client.get(first.replace('/project/2/', '/project/1/')).status_code, 404)
+        self.assertEqual(self.center_decide('stage-2-1', action='return', comment='Add evidence').status_code, 302)
+        self.assertEqual(self.history_stage(project=2, revision=2, result='Second version', attachments=[
+            (BytesIO(revised), 'Отчёт.html'), (BytesIO(b'New material'), 'diagram.pdf'),
+        ]).status_code, 302)
+        history = self.client.get('/project/2/history?work=stage-1').text
+        self.assertIn('Отчёт.html', history)
+        self.assertIn('diagram.pdf', history)
+        self.assertIn(first, history)
+        self.sign_in(1)
+        page = self.client.get(center).text
+        for label in ('Удалён', 'Добавлен', 'Изменён'):
+            self.assertIn(label, page)
+        links = re.findall(r'href="(/project/2/attachments/[0-9]+)">Отчёт.html', page)
+        self.assertEqual([self.client.get(path).data for path in links], [initial, revised])
+        self.sign_in(2)
+        self.assertEqual(self.client.get(first).status_code, 404)
+        with closing(self.module.get_db()) as conn:
+            conn.execute('DELETE FROM project_members WHERE project_id=2 AND user_id=1')
+            conn.commit()
+        self.sign_in(1)
+        self.assertEqual(self.client.get(first).status_code, 404)
+
+    def test_submission_attachments_validation_and_rollback(self):
+        def uploads(content, filename='result.bin'):
+            return [(BytesIO(content), filename)]
+
+        for files in (uploads(b'x', '../result.bin'), uploads(b'x' * (FILE_SIZE + 1)),
+                      uploads(b''), uploads(b'x', 'RESULT.BIN') + uploads(b'y')):
+            response = self.history_stage(result='Ignored files', attachments=files)
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(self.history_rows(), [])
+        with patch('project_stages.save_attachments', side_effect=ValueError('Simulated save failure')):
+            response = self.history_stage(result='Still a draft', attachments=uploads(b'valid'))
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.history_rows(), [])
+        self.assertEqual(self.history_stage(action='save', result='Save draft', attachments=uploads(b'draft')).status_code, 302)
+        self.assertEqual(self.history_rows(), [])
+        self.assertEqual(self.history_stage(result='Stale tab', attachments=uploads(b'stale')).status_code, 400)
+        # A valid file over the 1 MiB default request limit is accepted only by the submission form.
+        self.assertEqual(self.history_stage(revision=1, result='With file', attachments=uploads(b'a' * FILE_SIZE)).status_code, 302)
 
     def test_history_stage_drafts_resubmission_and_decisions_keep_exact_versions(self):
         for revision in range(2):

@@ -1,5 +1,6 @@
 from flask import (
     Flask,
+    Request,
     request,
     redirect,
     session,
@@ -7,7 +8,8 @@ from flask import (
     jsonify,
     get_flashed_messages,
     g,
-    has_request_context
+    has_request_context,
+    send_file
 )
 import os
 import mimetypes
@@ -19,6 +21,7 @@ from werkzeug.security import (
     generate_password_hash
 )
 from html import escape
+from io import BytesIO
 import json
 import secrets
 import time
@@ -65,15 +68,26 @@ from teamwork import (initialize_teamwork, profile_for, save_profile, directory,
 from video_defense import initialize_defenses, defense_for, change_defense, render_defense, DEFENSE_STATES
 from defense_preparation import initialize_preparation, plan_for, save_plan, render_preparation
 from work_history import initialize_history, history_parameters, load_history, render_history
+from submission_attachments import (LIMIT_TEXT, REQUEST_SIZE, initialize_attachments, read_uploads,
+                                    readable_attachment)
 from task_board import initialize_task_board, task_fields, board_return, render_filters, create_form, task_edit_fields
 from database import (DatabaseSettings, DatabaseUnavailable, INTEGRITY_ERRORS,
                       PostgresConnection, connect_database, execute_schema_script,
                       table_columns, insert_id, begin_project_write, initialization_settings, form_database_id)
 
 
+class MFlowRequest(Request):
+    @property
+    def max_content_length(self):
+        if self.endpoint == 'project_stage_page' and self.method == 'POST' and self.mimetype == 'multipart/form-data':
+            return REQUEST_SIZE
+        return super().max_content_length
+
+
 # Windows may not have a system MIME registration for WebP.
 mimetypes.add_type('image/webp', '.webp')
 app = Flask(__name__)
+app.request_class = MFlowRequest
 DEBUG_MODE = os.environ.get("M_FLOW_DEBUG") == "1"
 
 SECRET_KEY = os.environ.get("M_FLOW_SECRET_KEY")
@@ -343,6 +357,7 @@ def _prepare_database(conn):
     initialize_defenses(conn)
     initialize_preparation(conn)
     initialize_history(conn)
+    initialize_attachments(conn)
     initialize_notifications(conn)
     initialize_auth(conn)
     account_mail.initialize_mail(conn)
@@ -3208,7 +3223,9 @@ def project_stage_page(project_id):
         return render_error_page("Нет доступа", "Вы не участвуете в этом проекте.", 403)
     with closing(get_db()) as conn:
         try:
-            message = change_stage(conn, project_id, user, request.form)
+            files = request.files.getlist('attachments')
+            attachments = read_uploads(files) if user['role'] == 'student' and request.form.get('action') == 'submit' else ()
+            message = change_stage(conn, project_id, user, request.form, attachments=attachments)
             flash(message)
             return redirect(board_return(project_id, request.form.get("return_to"), default=f"/project/{project_id}/stages"))
         except ValueError as exc:
@@ -3224,6 +3241,22 @@ def project_stage_page(project_id):
                                          work_mode=True, unsaved=unsaved))
     if response.status_code == 200:
         response.status_code = 400
+    return response
+
+
+@app.get('/project/<int:project_id>/attachments/<int:attachment_id>')
+@login_required
+def download_submission_attachment(project_id, attachment_id):
+    if not valid_database_id(project_id) or not valid_database_id(attachment_id):
+        return render_error_page('Файл недоступен', 'Откройте файл из истории сдачи.', 404)
+    with closing(get_db()) as conn:
+        row = readable_attachment(conn, project_id, attachment_id, get_current_user()['id'])
+    if row is None:
+        return render_error_page('Файл недоступен', 'Откройте файл из истории сдачи.', 404)
+    response = send_file(BytesIO(row['content']), mimetype='application/octet-stream', as_attachment=True,
+                         download_name=row['filename'], conditional=False, etag=False)
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['Content-Security-Policy'] = "sandbox; default-src 'none'"
     return response
 
 
@@ -4064,7 +4097,9 @@ def internal_server_error(error):
 def request_too_large(error):
     if request.is_json:
         return jsonify(success=False, error="Слишком большой запрос."), 413
-    return render_error_page("Слишком много данных", "Сократите текст или ссылку и повторите отправку.", 413)
+    message = LIMIT_TEXT + ' Уменьшите размер вложений и повторите отправку.' if request.endpoint == 'project_stage_page' else (
+        'Сократите текст или ссылку и повторите отправку.')
+    return render_error_page('Слишком много данных', message, 413)
 
 
 # =========================================================

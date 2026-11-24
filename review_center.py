@@ -15,6 +15,7 @@ from grading import CRITERIA, MAX_SCORE
 from interface import icon
 from material_links import safe_web_url
 from teacher_overview import visible_teacher_projects
+from submission_attachments import attachment_metadata, render_attachments
 from teacher_queue import entries, queue_page, sent_date
 
 KINDS = {'all': 'Все на проверке', 'stage': 'Этапы', 'defense': 'Видеозащиты', 'report': 'Отчёты — информация'}
@@ -42,12 +43,12 @@ def submission_index(conn, teacher_id, project_scope=None):
     """One query, current submission metadata only, scoped before transfer from DB."""
     scope, params = visible_teacher_projects(teacher_id, project_scope)
     rows = conn.execute(scope + '''
-        SELECT h.project_id,h.kind,h.number,h.attempt,h.recorded_at
+        SELECT h.id AS history_id,h.project_id,h.kind,h.number,h.attempt,h.recorded_at
         FROM work_history h JOIN visible_projects v ON v.id=h.project_id
         JOIN project_stages s ON s.project_id=h.project_id AND s.number=h.number AND s.revision=h.revision
         WHERE h.kind='stage' AND h.event='submit' AND s.state='review'
         UNION ALL
-        SELECT h.project_id,h.kind,h.number,h.attempt,h.recorded_at
+        SELECT h.id AS history_id,h.project_id,h.kind,h.number,h.attempt,h.recorded_at
         FROM work_history h JOIN visible_projects v ON v.id=h.project_id
         JOIN project_defenses d ON d.project_id=h.project_id AND d.revision=h.revision
         WHERE h.kind='defense' AND h.event='submit' AND d.state='submitted' ''', params)
@@ -88,7 +89,12 @@ def context_for(conn, item, record):
         AND revision<? AND event='submit' ORDER BY revision DESC LIMIT 1''', params).fetchone()
     decision = conn.execute('''SELECT * FROM work_history WHERE project_id=? AND kind=? AND number=?
         AND revision<? AND event='return' ORDER BY revision DESC LIMIT 1''', params).fetchone()
-    return dict(previous=dict(previous) if previous else None, decision=dict(decision) if decision else None)
+    current_id = (item.get('submission') or {}).get('history_id')
+    previous_id = previous['id'] if previous else None
+    file_ids = [id_ for id_ in (current_id, previous_id) if id_ is not None] if item['kind'] == 'stage' else []
+    files = attachment_metadata(conn, file_ids)
+    return dict(previous=dict(previous) if previous else None, decision=dict(decision) if decision else None,
+                current_files=files.get(current_id, ()), previous_files=files.get(previous_id, ()))
 
 
 def connections_for(conn, teacher_id):
@@ -176,11 +182,14 @@ def render_detail(item, record, context, params, token, explicit=False, error=''
     result = record.get('result', '') if item['kind'] == 'stage' else record.get('description', '')
     url = record.get('presentation_url', '') if item['kind'] == 'stage' else record.get('video_url', '')
     previous = context.get('previous')
+    current_files, previous_files = context.get('current_files', ()), context.get('previous_files', ())
+    current_attachments = render_attachments(pid, current_files, other_files=previous_files if previous else None)
     html += '<div class="rc-section"><h3>' + ('Сравнение отправок' if previous else 'Текущая работа') + '</h3>'
     if previous:
-        html += f'<div class="rc-comparison"><article class="rc-version" data-version="previous"><h4>Предыдущая сдача</h4><small>{format_timestamp(previous["recorded_at"])}</small><p class="rc-result">{escape(previous["result"] or "Описание не указано.")}</p>{material(previous["resource_url"], "Материал прошлой сдачи")}</article><article class="rc-version" data-version="current"><h4>Новая сдача</h4><small>{format_timestamp(date)}</small><p class="rc-result">{escape(result or "Описание не указано.")}</p>{material(url, "Открыть презентацию" if item["kind"] == "stage" else "Смотреть видеозащиту")}</article></div>'
+        previous_attachments = render_attachments(pid, previous_files, other_files=current_files, previous=True)
+        html += f'<div class="rc-comparison"><article class="rc-version" data-version="previous"><h4>Предыдущая сдача</h4><small>{format_timestamp(previous["recorded_at"])}</small><p class="rc-result">{escape(previous["result"] or "Описание не указано.")}</p>{material(previous["resource_url"], "Материал прошлой сдачи")}{previous_attachments}</article><article class="rc-version" data-version="current"><h4>Новая сдача</h4><small>{format_timestamp(date)}</small><p class="rc-result">{escape(result or "Описание не указано.")}</p>{material(url, "Открыть презентацию" if item["kind"] == "stage" else "Смотреть видеозащиту")}{current_attachments}</article></div>'
     else:
-        html += f'<p class="rc-result" data-version="current">{escape(result or "Описание не указано.")}</p>{material(url, "Открыть презентацию" if item["kind"] == "stage" else "Смотреть видеозащиту")}<p class="rc-hint">Более ранних отправок в истории нет. Черновики не считаются сдачами.</p>'
+        html += f'<p class="rc-result" data-version="current">{escape(result or "Описание не указано.")}</p>{material(url, "Открыть презентацию" if item["kind"] == "stage" else "Смотреть видеозащиту")}{current_attachments}<p class="rc-hint">Более ранних отправок в истории нет. Черновики не считаются сдачами.</p>'
     html += '</div>'
     decision = context.get('decision')
     comment = decision['comment'] if decision else record.get('teacher_comment')

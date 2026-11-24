@@ -105,6 +105,10 @@ def file_hash(path):
     return digest.hexdigest()
 
 
+ATTACHMENT_FINGERPRINT_ROWS = sql.SQL("""SELECT id,history_id,filename,size,sha256,
+    encode(pg_catalog.sha256(content),'hex') AS content_sha256 FROM public.submission_attachments""")
+
+
 def table_row_hashes(conn, tables):
     """Stream canonical table data inside the caller's snapshot transaction."""
     conn.execute("SET LOCAL TIME ZONE 'UTC'")
@@ -116,11 +120,15 @@ def table_row_hashes(conn, tables):
     with conn.cursor() as cursor:
         for table in sorted(tables):
             digest = hashlib.sha256()
+            rows_sql = sql.SQL("public.{}").format(sql.Identifier(table))
+            if table == 'submission_attachments':
+                # Verify actual file bytes without sending a second copy of them over the connection.
+                rows_sql = sql.SQL("({})").format(ATTACHMENT_FINGERPRINT_ROWS)
             query = sql.SQL("""COPY (
                 SELECT to_jsonb(row_data)::text COLLATE "C" AS row_text
-                FROM public.{} AS row_data
+                FROM {} AS row_data
                 ORDER BY row_text
-            ) TO STDOUT (ENCODING 'UTF8')""").format(sql.Identifier(table))
+            ) TO STDOUT (ENCODING 'UTF8')""").format(rows_sql)
             with cursor.copy(query) as rows:
                 for block in rows:
                     digest.update(block)
