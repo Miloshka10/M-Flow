@@ -178,7 +178,7 @@ def render_analysis(item, context, params, token):
     output = render_report(item['project_id'], report) if report else ''
     return f'''<section class="rc-section rc-analysis" id="submission-analysis" aria-labelledby="analysis-title">
         <h3 id="analysis-title">ИИ-разбор сдачи</h3>
-        <p class="rc-hint">Модель читает описание и доступный текст файлов. Решение по этапу сохраняет учитель.</p>
+        <p class="rc-hint">Модель читает описание, документы, таблицы и печатный текст на сканах. Решение по этапу сохраняет учитель.</p>
         {form}{feedback}{output}</section>'''
 
 

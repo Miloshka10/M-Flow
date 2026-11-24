@@ -62,7 +62,21 @@ def submit_stage(page, result, presentation=False):
     expect(page.get_by_text('Этап отправлен учителю на проверку.', exact=True)).to_be_visible()
 
 
+def rich_test_uploads():
+    from test_rich_attachment_text import scanned_work, text_pdf, workbook
+
+    return [
+        {'name': 'report.pdf', 'mimeType': 'application/pdf',
+         'buffer': text_pdf('Sensor A: 20.1, 20.2, 20.3 Celsius.')},
+        {'name': 'measurements.xlsx', 'mimeType': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+         'buffer': workbook('<row><c r="A1" t="inlineStr"><is><t>Датчик Б</t></is></c>'
+                            '<c r="B1"><v>23.4</v></c><c r="C1"><v>24.7</v></c><c r="D1"><v>25.1</v></c></row>')},
+        {'name': 'scan.png', 'mimeType': 'image/png', 'buffer': scanned_work('PNG')},
+    ]
+
+
 def exercise(browser, base):
+    real_analysis = os.environ.get('M_FLOW_TEST_OLLAMA') == '1'
     teacher = browser.new_page()
     student = browser.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
     outsider = browser.new_page()
@@ -82,7 +96,8 @@ def exercise(browser, base):
     code = teacher.get_by_label('Код группы', exact=True).input_value()
     teacher.get_by_role('link', name='Выдать задание').click()
     teacher.get_by_label('Название задания').fill('Метеостанция')
-    teacher.get_by_label('Цель', exact=True).fill('Сравнить показания двух датчиков')
+    teacher.get_by_label('Цель', exact=True).fill('Проверьте три показания датчика A в report.pdf.'
+                                               if real_analysis else 'Сравнить показания двух датчиков')
     teacher.get_by_label('Срок сдачи').fill((date.today() + timedelta(days=14)).isoformat())
     teacher.get_by_label('Материалы и инструкции').fill('Три измерения на каждом датчике')
     teacher.get_by_role('button', name='Выдать задание').click()
@@ -136,16 +151,38 @@ def exercise(browser, base):
     student.goto(assignment_url)
     student.get_by_role('link', name='Перейти к доработке').click()
     expect(student.get_by_text('Что исправить: Добавьте единицы измерения.')).to_be_visible()
-    student.get_by_label('Файлы для сдачи').set_input_files(
-        {'name': 'measurements.txt', 'mimeType': 'text/plain', 'buffer': b'Measurement v2'})
+    files = [{'name': 'measurements.txt', 'mimeType': 'text/plain', 'buffer': b'Measurement v2'}]
+    if real_analysis:
+        files.extend(rich_test_uploads())
+    student.get_by_label('Файлы для сдачи').set_input_files(files)
     submit_stage(student, 'Средняя температура 20 градусов Цельсия')
     teacher.goto(assignment_url)
     teacher.get_by_role('link', name='Открыть сдачу').click()
     expect(teacher.get_by_text('Средняя температура 20 градусов Цельсия')).to_be_visible()
     expect(teacher.locator('[data-version="current"]').get_by_text('Изменён', exact=False)).to_be_visible()
     assert teacher.get_by_role('link', name='measurements.txt').count() == 2
+    if real_analysis:
+        teacher.get_by_role('button', name='Запустить ИИ-разбор').click(timeout=150_000)
+        report = teacher.locator('#submission-analysis')
+        expect(report.get_by_text('Критерии и цитаты')).to_be_visible()
+        coverage = report.locator('details').filter(has_text='Что удалось прочитать')
+        for filename in ('report.pdf', 'measurements.xlsx', 'scan.png'):
+            item = coverage.get_by_role('listitem').filter(has_text=filename)
+            expect(item).to_contain_text('распознан' if filename == 'scan.png' else 'прочитан')
+        source = report.get_by_role('listitem').filter(has=teacher.locator('blockquote', has_text='20.1'))
+        with teacher.expect_download() as event:
+            source.get_by_role('link', name='report.pdf', exact=True).click()
+        assert event.value.path().read_bytes() == files[1]['buffer']
+        review_path = teacher.url
     teacher.get_by_role('button', name='Принять этап').click()
     expect(teacher.get_by_text('Этап принят. Следующий этап открыт.')).to_be_visible()
+    if real_analysis:
+        teacher.goto(base + project_path + '/history')
+        report = teacher.get_by_text('Мой ИИ-разбор этой сдачи')
+        report.click()
+        expect(teacher.get_by_text('Критерии и цитаты')).to_be_visible()
+        student.goto(base + project_path + '/history')
+        expect(student.get_by_text('Мой ИИ-разбор этой сдачи')).to_have_count(0)
 
     for stage in range(2, 6):
         student.goto(assignment_url)
@@ -187,6 +224,9 @@ def exercise(browser, base):
     login(outsider, base + '/teacher/login', 'outside-smoke')
     for path in (urlsplit(assignment_url).path, project_path, project_path + '/history', project_path + '/assessment'):
         assert outsider.goto(base + path).status == 403, path
+    if real_analysis:
+        assert outsider.goto(review_path).status == 403
+        print('PASS: real Ollama report, PDF original download, XLSX and OCR coverage, private report history.')
     print('PASS: class assignment, consent, five stages, return and resubmission, defense, grade and outsider isolation.')
 
 

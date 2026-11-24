@@ -1,13 +1,19 @@
 """Read bounded text from classroom files without opening external resources."""
 from io import BytesIO
-from pathlib import PurePosixPath
+import json
+from pathlib import Path, PurePosixPath
 import re
+import subprocess
+import sys
 from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
 from zlib import error as ZipDataError
 
 OFFICE = frozenset({'docx', 'pptx'})
 PLAIN = frozenset('txt md csv tsv py js ts jsx tsx html css json xml sql java c h cpp ino'.split())
+RICH = frozenset({'pdf', 'xlsx', 'png', 'jpg', 'jpeg', 'webp', 'tif', 'tiff'})
+SUPPORTED_EXTENSIONS = OFFICE | PLAIN | RICH
+FULL_TEXT = 'Текст прочитан'
 EXCERPT_SIZE = 1200
 XML_LIMIT = 768 * 1024
 SLIDE = re.compile(r'ppt/slides/slide([1-9][0-9]{0,2})\.xml\Z')
@@ -17,6 +23,12 @@ DRAWING = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
 
 def extension(filename):
     return PurePosixPath(filename).suffix.lower().lstrip('.')
+
+
+def safe_xml(xml):
+    if b'\0' in xml or re.search(rb'<!\s*(DOCTYPE|ENTITY)\b', xml, re.I):
+        raise ValueError('Неподдерживаемая структура документа.')
+    return ElementTree.fromstring(xml.decode('utf-8-sig'))
 
 
 def office_text(content, kind):
@@ -40,9 +52,9 @@ def office_text(content, kind):
             with archive.open(item) as source:
                 xml = source.read(remaining + 1)
             remaining -= len(xml)
-            if remaining < 0 or b'\0' in xml or re.search(rb'<!\s*(DOCTYPE|ENTITY)\b', xml, re.I):
+            if remaining < 0:
                 raise ValueError('Неподдерживаемая структура документа.')
-            root = ElementTree.fromstring(xml.decode('utf-8-sig'))
+            root = safe_xml(xml)
             for paragraph in root.iter(namespace + 'p'):
                 line = ''.join(node.text or '' for node in paragraph.iter(namespace + 't')).strip()
                 if line:
@@ -50,10 +62,25 @@ def office_text(content, kind):
     return '\n'.join(paragraphs)
 
 
+def rich_excerpt(kind, content):
+    worker = Path(__file__).with_name('rich_document_reader.py')
+    try:
+        reply = subprocess.run([sys.executable, str(worker), kind], input=content, capture_output=True, timeout=32,
+                               creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0), check=True)
+        result = json.loads(reply.stdout)
+        return result['text'], result['coverage']
+    except subprocess.TimeoutExpired:
+        return '', 'Превышено время извлечения текста'
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError):
+        return '', 'Текст извлечь не удалось'
+
+
 def extract_excerpt(filename, content):
     kind = extension(filename)
-    if kind not in OFFICE | PLAIN:
+    if kind not in SUPPORTED_EXTENSIONS:
         return '', 'Формат доступен для скачивания'
+    if kind in RICH:
+        return rich_excerpt(kind, content)
     try:
         text = office_text(content, kind) if kind in OFFICE else content.decode('utf-8-sig')
     except (BadZipFile, RuntimeError, EOFError, NotImplementedError, ValueError, ElementTree.ParseError,
@@ -62,4 +89,4 @@ def extract_excerpt(filename, content):
     text = text.replace('\r\n', '\n').replace('\r', '\n').strip()
     if not text or '\0' in text:
         return '', 'Нет доступного текста'
-    return text[:EXCERPT_SIZE], 'Прочитан фрагмент текста' if len(text) > EXCERPT_SIZE else 'Текст прочитан'
+    return text[:EXCERPT_SIZE], 'Прочитан фрагмент текста' if len(text) > EXCERPT_SIZE else FULL_TEXT

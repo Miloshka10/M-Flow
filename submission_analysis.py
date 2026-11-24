@@ -6,7 +6,7 @@ import os
 import re
 from threading import BoundedSemaphore
 
-from attachment_text import OFFICE, PLAIN, extension, extract_excerpt
+from attachment_text import FULL_TEXT, SUPPORTED_EXTENSIONS, extension, extract_excerpt
 from database import execute_schema
 from deadlines import format_timestamp
 
@@ -81,7 +81,7 @@ def assignment_terms(conn, project_id, teacher_id):
 
 
 def file_inputs(conn, history_id, metadata):
-    ids = [row['id'] for row in metadata if extension(row['filename']) in OFFICE | PLAIN]
+    ids = [row['id'] for row in metadata if extension(row['filename']) in SUPPORTED_EXTENSIONS]
     content = {}
     if ids:
         marks = ','.join('?' for _ in ids)
@@ -146,27 +146,27 @@ def analyze(model, submission, attachment_inputs, stage, instructions, terms):
     sources = []
     files = []
     limited = len(result) > 3000
-    for file_id, name, content in attachment_inputs:
-        excerpt, coverage = extract_excerpt(name, content)
-        files.append(dict(id=file_id, name=name, coverage=coverage))
-        limited |= coverage != 'Текст прочитан'
-        if excerpt:
-            sources.append(dict(id=f'file-{file_id}', label=name, text=excerpt, attachment=file_id))
-    sources.append(dict(id='description', label='Описание этапа', text=result[:3000]))
-    data = dict(stage=stage, stage_goal=instructions, teacher_comment=clip(submission['teacher_comment'], 750),
-                assignment={key: clip(terms[key], limit) for key, limit in (
-                    ('title', 150), ('goal', 1200), ('materials', 900))} if terms else {},
-                coverage=[{'file': row['name'], 'status': row['coverage']} for row in files],
-                limited=limited, sources=sources)
-    options = {'think': False} if 'qwen3' in model.lower() else {}
-    body = json.dumps(dict(model=model, stream=False, format=SCHEMA, keep_alive='5m', **options,
-                           messages=[dict(role='system', content=SYSTEM_PROMPT),
-                                     dict(role='user', content=json.dumps(data, ensure_ascii=False))],
-                           options=dict(temperature=0, num_ctx=8192, num_predict=1000)), ensure_ascii=False).encode()
     if not MODEL_LOCK.acquire(blocking=False):
         raise AnalysisUnavailable('Модель выполняет другой анализ. Повторите чуть позже.')
     connection = HTTPConnection('127.0.0.1', port, timeout=80)
     try:
+        for file_id, name, content in attachment_inputs:
+            excerpt, coverage = extract_excerpt(name, content)
+            files.append(dict(id=file_id, name=name, coverage=coverage))
+            limited |= coverage != FULL_TEXT
+            if excerpt:
+                sources.append(dict(id=f'file-{file_id}', label=name, text=excerpt, attachment=file_id))
+        sources.append(dict(id='description', label='Описание этапа', text=result[:3000]))
+        data = dict(stage=stage, stage_goal=instructions, teacher_comment=clip(submission['teacher_comment'], 750),
+                    assignment={key: clip(terms[key], limit) for key, limit in (
+                        ('title', 150), ('goal', 1200), ('materials', 900))} if terms else {},
+                    coverage=[{'file': row['name'], 'status': row['coverage']} for row in files],
+                    limited=limited, sources=sources)
+        options = {'think': False} if 'qwen3' in model.lower() else {}
+        body = json.dumps(dict(model=model, stream=False, format=SCHEMA, keep_alive='5m', **options,
+                               messages=[dict(role='system', content=SYSTEM_PROMPT),
+                                         dict(role='user', content=json.dumps(data, ensure_ascii=False))],
+                               options=dict(temperature=0, num_ctx=8192, num_predict=1000)), ensure_ascii=False).encode()
         connection.request('POST', '/api/chat', body, {'Content-Type': 'application/json'})
         with connection.getresponse() as response:
             if response.status == 404:

@@ -30,7 +30,7 @@ class SubmissionAnalysisTests(TestCase):
             transport.return_value.getresponse.return_value = response
             report = submission_analysis.analyze(
                 'qwen3:8b', {'result': 'Провели опыт', 'teacher_comment': ''},
-                [(16, 'report.docx', raw), (17, 'scan.png', b'raw')], 'Этап', 'Проверить замеры', None)
+                [(16, 'report.docx', raw), (17, 'plan.dwg', b'raw')], 'Этап', 'Проверить замеры', None)
         transport.assert_called_once_with('127.0.0.1', 11435, timeout=80)
         method, route, request_body, _ = transport.return_value.request.call_args.args
         self.assertEqual((method, route), ('POST', '/api/chat'))
