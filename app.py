@@ -61,7 +61,8 @@ from ui_components import notice
 from interface import APPEARANCE_VERSION, access_footer, access_header, appearance_assets, document_title, icon, shell_header
 from student_results import parameters as result_parameters, load_results, render_results, load_focus, load_project_states
 from grading import CRITERIA, MAX_SCORE, RUBRIC_VERSION, parse_scores, summarize, load_scores, assessment_version
-from project_stages import initialize_stages, get_stages, stages_from_rows, stage_summary, stage_label, change_stage, render_stages, STATE_LABELS
+from project_stages import (initialize_stages, get_stages, stages_from_rows, stage_summary, stage_label,
+                            change_stage, render_stages, STAGE_DESCRIPTIONS, STATE_LABELS)
 from teamwork import (initialize_teamwork, profile_for, save_profile, directory, invite_student,
                       respond_to_invitation, change_team, render_profile as render_skill_profile,
                       render_directory, render_team)
@@ -70,6 +71,7 @@ from defense_preparation import initialize_preparation, plan_for, save_plan, ren
 from work_history import initialize_history, history_parameters, load_history, render_history
 from submission_attachments import (LIMIT_TEXT, REQUEST_SIZE, initialize_attachments, read_uploads,
                                     readable_attachment)
+import submission_analysis
 from task_board import initialize_task_board, task_fields, board_return, render_filters, create_form, task_edit_fields
 from database import (DatabaseSettings, DatabaseUnavailable, INTEGRITY_ERRORS,
                       PostgresConnection, connect_database, execute_schema_script,
@@ -358,6 +360,7 @@ def _prepare_database(conn):
     initialize_preparation(conn)
     initialize_history(conn)
     initialize_attachments(conn)
+    submission_analysis.initialize_analysis(conn)
     initialize_notifications(conn)
     initialize_auth(conn)
     account_mail.initialize_mail(conn)
@@ -3150,7 +3153,11 @@ def project_work_history(project_id):
         return render_error_page('История работ', str(exc), 400)
     conn = get_db()
     try:
-        body = render_history(project_id, load_history(conn, project_id, work, page), work)
+        history = load_history(conn, project_id, work, page)
+        if user['role'] == 'teacher':
+            ids = [row['id'] for row in history['items'] if row['kind'] == 'stage' and row['event'] == 'submit']
+            history['analyses'] = submission_analysis.saved_reports(conn, ids, user['id'])
+        body = render_history(project_id, history, work)
     finally:
         conn.close()
     return render_collaboration_page(user, f'История работ · {name}', body, project_id)
@@ -3720,6 +3727,9 @@ def teacher_review_center():
         except ValueError as exc:
             return render_error_page('Некорректная ссылка', str(exc), 400)
     error, status, submitted = '', 200, None
+    analyze_request = request.method == 'POST' and request.form.get('action') == 'analyze'
+    model = submission_analysis.configured_model()
+    analysis_inputs = None
     with closing(get_db()) as conn:
         try:
             classroom = assignments.classroom_context(conn, user, request.args)
@@ -3748,7 +3758,7 @@ def teacher_review_center():
                           for item in review_center.entries(p) if item['key'] == key), None)
                     if key else next(iter(queue['items']), None))
         record, context = {}, {}
-        if request.method == 'POST':
+        if request.method == 'POST' and not analyze_request:
             submitted = request.form
             if not key or selected is None or selected['kind'] == 'report':
                 error, status = 'Работа больше не ожидает решения. Обновите очередь; комментарий не сохранён.', 400
@@ -3778,17 +3788,54 @@ def teacher_review_center():
                 record = defense_for(conn, selected['project_id'])
             if selected['kind'] != 'report':
                 context = review_center.context_for(conn, selected, record)
+            history_id = (selected['submission'] or {}).get('history_id') if selected['kind'] == 'stage' else None
+            if history_id:
+                context['analysis_history_id'] = history_id
+                context['analysis_model'] = model
+                context['analysis_report'] = submission_analysis.saved_reports(conn, (history_id,), user['id']).get(history_id)
+        if analyze_request:
+            if not key or not selected or selected['kind'] != 'stage' or not context.get('analysis_history_id'):
+                return render_error_page('Сдача изменилась', 'Откройте актуальный этап в очереди проверки.', 409)
+            if request.form.get('analysis_version') != str(history_id):
+                return render_error_page('Сдача изменилась', 'Откройте актуальную отправку и повторите анализ.', 409)
+            if model:
+                snapshot = submission_analysis.current_submission(conn, history_id, user['id'])
+                if not snapshot:
+                    return render_error_page('Сдача изменилась', 'Откройте актуальный этап в очереди проверки.', 409)
+                materials = submission_analysis.file_inputs(conn, history_id, context['current_files'])
+                terms = submission_analysis.assignment_terms(conn, selected['project_id'], user['id'])
+                analysis_inputs = (snapshot, materials, record['title'], STAGE_DESCRIPTIONS[record['number']], terms)
+            else:
+                status, context['analysis_error'] = 503, 'Локальная модель пока не настроена.'
         connections = review_center.connections_for(conn, user['id']) if not classroom else None
         source = (assignments.classroom_return_url(classroom),
                   classroom['group']['name'],
                   classroom['assignment']['title'] if classroom['assignment'] else '') if classroom else None
-        body = review_center.render_center(projects, queue, selected, record, context, params,
-                                            csrf_token(), connections, bool(key), error, submitted, source=source)
+    if analysis_inputs:
+        report = None
+        try:
+            report = submission_analysis.analyze(model, *analysis_inputs)
+        except submission_analysis.AnalysisUnavailable as exc:
+            status, context['analysis_error'] = 503, str(exc)
+        with closing(get_db()) as conn:
+            if report is not None:
+                begin_project_write(conn, selected['project_id'])
+            if (not participant(conn, selected['project_id'], user['id'])
+                    or (classroom and not assignments.project_in_classroom(conn, classroom, selected['project_id']))):
+                return render_error_page('Нет доступа', 'Доступ к работе изменился.', 403)
+            if not submission_analysis.current_submission(conn, history_id, user['id']):
+                return render_error_page('Сдача изменилась', 'Откройте актуальную отправку и повторите анализ.', 409)
+            if report is not None:
+                submission_analysis.save_report(conn, history_id, user['id'], model, report)
+                conn.commit()
+                return redirect(review_center.center_url(params, key) + '#submission-analysis')
+    body = review_center.render_center(projects, queue, selected, record, context, params,
+                                      csrf_token(), connections, bool(key), error, submitted, source=source)
     # If the item left the queue, keep a stale comment visible without a new form.
     if error and not selected:
         body = f'<p class="error" role="alert">{escape(error)}</p><aside class="rc-comment"><h2>Ваш комментарий не сохранён</h2><p class="rc-result">{escape(request.form.get("teacher_comment", ""))}</p></aside>' + body
     messages = ''.join(f'<div class="{escape(category, quote=True)}" role="status">{escape(text)}</div>' for category, text in get_flashed_messages(with_categories=True))
-    return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/review-center.css?v=20261115-cabinet">'
+    return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/review-center.css?v=submission-analysis">'
                        + f'<div class="container workspace">{render_header(user)}<main class="review-center">{messages}{body}</main></div>',
                        title='Центр проверки · M-Flow'), status
 

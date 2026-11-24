@@ -25,6 +25,7 @@ from postgres_app_check import fingerprint, phase
 from postgres_backup import create_backup, table_row_hashes
 from postgres_restore_check import require_empty, restore_verified_archive
 from submission_attachments import read_uploads, save_attachments
+from submission_analysis import save_report
 
 
 PREFIX = 'classroom_drill'
@@ -66,6 +67,8 @@ def seed(url):
         submission = conn.execute("""SELECT id FROM work_history WHERE project_id=?
             AND kind='stage' AND number=1 AND event='submit' ORDER BY revision DESC LIMIT 1""", (project,)).fetchone()
         save_attachments(conn, submission['id'], read_uploads([FileStorage(BytesIO(ATTACHMENT), 'report.bin')]))
+        save_report(conn, submission['id'], teacher['id'], 'synthetic', dict(
+            summary='Итог тестового разбора', recommendation='Сверить оригинал', suggestions=[], checks=[], files=[]))
         conn.commit()
 
 
@@ -104,6 +107,7 @@ def verify(url):
         assert 'Тестовый результат' in client.get(base + '/history').text
         assert 'Защита принята' in client.get(base + '/defense').text
         if role == 'student':
+            assert 'Итог тестового разбора' not in client.get(base + '/history?work=stage-1').text
             assert '45 / 45' in client.get(base + '/assessment').text
             with client.session_transaction() as session:
                 token = session['csrf_token']
@@ -119,6 +123,7 @@ def verify(url):
             assert new_name in client.get(f'/project/{new_project["id"]}').text
         else:
             assert 'Этапы и защита приняты: 1' in client.get(assignment).text
+            assert 'Итог тестового разбора' in client.get(base + '/history?work=stage-1').text
 
     # Change a synthetic submission without adding or removing a row.
     with psycopg.connect(url, autocommit=True, connect_timeout=5) as conn:

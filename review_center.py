@@ -16,6 +16,7 @@ from interface import icon
 from material_links import safe_web_url
 from teacher_overview import visible_teacher_projects
 from submission_attachments import attachment_metadata, render_attachments
+from submission_analysis import render_report
 from teacher_queue import entries, queue_page, sent_date
 
 KINDS = {'all': 'Все на проверке', 'stage': 'Этапы', 'defense': 'Видеозащиты', 'report': 'Отчёты — информация'}
@@ -159,6 +160,28 @@ def render_inbox(result, params, selected, explicit, reset):
     return html + '</aside>'
 
 
+def render_analysis(item, context, params, token):
+    model = context.get('analysis_model')
+    report = context.get('analysis_report')
+    error = context.get('analysis_error')
+    if not (model or report or error):
+        return ''
+    form = ''
+    if model:
+        action = escape(center_url(params, item['key']) + '#submission-analysis', quote=True)
+        form = f'''<form method="post" action="{action}">
+            <input type="hidden" name="csrf_token" value="{escape(token, quote=True)}">
+            <input type="hidden" name="analysis_version" value="{context['analysis_history_id']}">
+            <button class="secondary" name="action" value="analyze">{"Обновить ИИ-разбор" if report else "Запустить ИИ-разбор"}</button>
+            </form>'''
+    feedback = f'<p role="alert">{escape(error)}</p>' if error else ''
+    output = render_report(item['project_id'], report) if report else ''
+    return f'''<section class="rc-section rc-analysis" id="submission-analysis" aria-labelledby="analysis-title">
+        <h3 id="analysis-title">ИИ-разбор сдачи</h3>
+        <p class="rc-hint">Модель читает описание и доступный текст файлов. Решение по этапу сохраняет учитель.</p>
+        {form}{feedback}{output}</section>'''
+
+
 def render_detail(item, record, context, params, token, explicit=False, error='', submitted=None):
     back = f'<a class="action-link rc-mobile-back" href="{escape(center_url(params), quote=True)}">{icon("arrow-left")} К списку работ</a>'
     html = f'<section class="rc-detail" id="review-detail" tabindex="-1" aria-labelledby="detail-title" data-mobile-hidden="{str(not explicit).lower()}">{back}'
@@ -198,6 +221,7 @@ def render_detail(item, record, context, params, token, explicit=False, error=''
     html += f'<div class="rc-detail-links"><a class="action-link" href="/project/{pid}/history?work={work}">{icon("history")} Вся история этой работы</a></div>'
     criteria = ''.join(f'<li>{escape(label)} <span>до {maximum}</span></li>' for _, label, maximum in CRITERIA)
     html += f'<details class="rc-history"><summary>Критерии итоговой оценки</summary><p class="rc-hint">Ориентир для обратной связи. Итоговые баллы каждого ученика выставляются отдельно, максимум {MAX_SCORE}.</p><ul class="rc-criteria">{criteria}</ul><a class="action-link" href="/project/{pid}/assessment">Перейти к личным оценкам {icon("arrow")}</a></details>'
+    html += render_analysis(item, context, params, token)
     editable = record['state'] in ('review', 'submitted')
     same_version = submitted is None or submitted.get('revision') == str(record['revision'])
     if error:

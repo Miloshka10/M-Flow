@@ -22,7 +22,7 @@ REQUIRED_TABLES = frozenset((
 OPTIONAL_TABLES = frozenset(('notifications', 'auth_limits', 'auth_sessions', 'teacher_invitations', 'supervision_requests',
                              'learning_groups', 'learning_group_members', 'learning_group_invitations',
                              'group_assignments', 'group_assignment_projects',
-                             'work_history_sources', 'work_history', 'submission_attachments',
+                             'work_history_sources', 'work_history', 'submission_attachments', 'submission_analyses',
                              'project_defense_plans', 'account_emails', 'account_email_tokens'))
 PUBLIC_DIRECTORIES = frozenset(("static", "public", "www", "wwwroot", "htdocs"))
 

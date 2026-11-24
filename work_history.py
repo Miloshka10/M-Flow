@@ -11,6 +11,7 @@ from database import execute_schema, insert_id
 from deadlines import format_timestamp
 from interface import icon
 from submission_attachments import attachment_metadata, render_attachments
+from submission_analysis import render_report
 
 PAGE_SIZE = 12
 WORKS = {'all': 'Все работы', **{f'stage-{n}': f'Этап {n}' for n in range(1, 6)}, 'defense': 'Видеозащита'}
@@ -153,7 +154,7 @@ def event_context(row):
     return f'{work} · Отправка №{row["attempt"]}' if row['attempt'] else work
 
 
-def _render_event(row):
+def _render_event(row, analysis=None):
     old = row['event'] == 'legacy'
     date = ('Последнее известное обновление: ' + format_timestamp(row['source_updated_at'])) if old else format_timestamp(row['recorded_at'])
     actor = f'<p class="t-muted">{escape(row["actor_name"])}</p>' if row['actor_name'] else ''
@@ -164,6 +165,8 @@ def _render_event(row):
         comment = '<p class="t-muted">Принято без комментария.</p>'
     resource = ''
     files = render_attachments(row['project_id'], row['attachments']) if row.get('attachments') else ''
+    report = (f'<details><summary>Мой ИИ-разбор этой сдачи</summary>{render_report(row["project_id"], analysis)}</details>'
+              if analysis else '')
     if row['resource_url']:
         url = row['resource_url']
         resource = (f'<a class="action-link" href="{escape(url, quote=True)}" target="_blank" rel="noopener noreferrer">'
@@ -172,7 +175,7 @@ def _render_event(row):
         f'Точная дата отправки и содержание прошлых попыток неизвестны. Состояние: {escape({"review":"На проверке","submitted":"На проверке","done":"Принято","accepted":"Принято","progress":"В работе или на доработке","returned":"На доработке","draft":"Черновик"}.get(row["state"], row["state"]))}.</p>') if old else ''
     return f'''<article class="history-event" data-history-event="{row['event']}"><span class="eyebrow">{event_context(row)}</span>
         <h2>{EVENTS[row['event']]}</h2><p class="t-muted">{date}</p>{actor}{author}{reviewer}{explanation}
-        <details><summary data-ui-icon="history">Материалы этой записи</summary><p class="history-text" tabindex="0">{escape(row['result'] or 'Текст не указан.')}</p>{resource}{files}</details>{comment}</article>'''
+        <details><summary data-ui-icon="history">Материалы этой записи</summary><p class="history-text" tabindex="0">{escape(row['result'] or 'Текст не указан.')}</p>{resource}{files}</details>{report}{comment}</article>'''
 
 
 def render_history(pid, data, work):
@@ -181,7 +184,8 @@ def render_history(pid, data, work):
         Номера отправок учитывают только новые сдачи после включения истории. Ранее перезаписанные версии восстановить нельзя.</p>
         <form class="history-filters" method="get"><label>Работа<select name="work">{options}</select></label><button data-ui-icon="filter">Показать</button></form>
         <p class="t-muted">Записей: {data['total']} · Страница {data['page']} из {data['pages']}. Новые события сверху.</p>'''
-    html += ''.join(_render_event(row) for row in data['items']) or '<p>Новых отправок и решений пока нет. Они появятся после отправки работы учителю.</p>'
+    analyses = data.get('analyses', {})
+    html += ''.join(_render_event(row, analyses.get(row['id'])) for row in data['items']) or '<p>Новых отправок и решений пока нет. Они появятся после отправки работы учителю.</p>'
     if data['pages'] > 1:
         html += '<nav class="history-pages" aria-label="Страницы истории">'
         for page, label in ((data['page']-1, 'Новее'), (data['page']+1, 'Ранее')):
