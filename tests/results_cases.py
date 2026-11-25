@@ -248,7 +248,10 @@ class StudentResultsCases:
     def test_results_notifications_link_to_specific_stage_without_backfill_or_read(self):
         self.stage_post(3)
         self.stage_post(1,revision=1,action='return',teacher_comment='Замечание')
-        self.assertTrue(all(r['target'].endswith('/stages#stage-1') for r in self.notification_rows()))
+        targets = [r['target'] for r in self.notification_rows()]
+        self.assertTrue(any(target.endswith('/stages#stage-1') for target in targets))
+        self.assertTrue(any(re.search(r'/history\?work=stage-1&entry=\d+#history-event-\d+$', target)
+                            for target in targets))
         with closing(self.module.get_db()) as conn:
             conn.execute("UPDATE notifications SET target='/project/1/stages'")
             conn.commit()

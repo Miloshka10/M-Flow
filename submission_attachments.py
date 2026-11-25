@@ -40,8 +40,10 @@ def read_uploads(files):
         names.add(name.casefold())
         content = upload.read(min(FILE_SIZE, TOTAL_SIZE - total) + 1)
         total += len(content)
-        if len(content) > FILE_SIZE or total > TOTAL_SIZE:
-            raise ValueError(LIMIT_TEXT)
+        if total > TOTAL_SIZE:
+            raise ValueError('Суммарный размер файлов превышает 6 МБ.')
+        if len(content) > FILE_SIZE:
+            raise ValueError(f'Файл «{name}» превышает 2 МБ.')
         if not content:
             raise ValueError('В списке вложений есть пустой файл.')
         results.append((name, len(content), sha256(content).hexdigest(), content))

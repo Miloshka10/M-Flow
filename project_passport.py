@@ -110,6 +110,10 @@ def render(project_id, data, token, student, history, page, saved=None):
                'Открыть презентацию</a>' if safe_web_url(presentation) else '')
     if saved:
         primary += f'<a class="action-link" href="{base}">Открыть текущий паспорт</a>'
+        primary += f'''<div class="passport-share" data-passport-share="{base}/{saved["id"]}">
+            <button type="button" class="secondary" hidden>Скопировать ссылку</button>
+            <label hidden>Ссылка на версию<input type="url" readonly></label>
+            <span role="status"></span></div><script src="/static/passport-share.js?v=1" defer></script>'''
     elif student and stages:
         primary += f'<form method="post" action="{base}">{hidden_token(token)}<button name="action" value="save">Сохранить версию для защиты</button></form>'
     cards = []

@@ -4,6 +4,29 @@ document.addEventListener('DOMContentLoaded', () => {
   const board = document.querySelector('[data-workspace="1"]');
   if (!board) return;
   for (const upload of board.querySelectorAll('input[name="attachments"]')) {
+    const message = upload.form.querySelector('.attachment-error');
+    upload.form.addEventListener('submit', event => {
+      if (event.submitter?.value !== 'submit') return;
+      const files = [...upload.files];
+      const oversized = files.find(file => file.size > Number(upload.dataset.fileLimit));
+      const empty = files.find(file => file.size === 0);
+      let error = '';
+      if (files.length > Number(upload.dataset.fileCount)) error = 'Выберите не больше четырёх файлов.';
+      else if (oversized) error = `Файл «${oversized.name}» превышает 2 МБ. Замените или уменьшите его.`;
+      else if (empty) error = `Файл «${empty.name}» пуст. Выберите другой файл.`;
+      else if (files.reduce((size, file) => size + file.size, 0) > Number(upload.dataset.totalLimit)) {
+        error = 'Суммарный размер файлов превышает 6 МБ. Уменьшите вложения.';
+      }
+      if (!error) return;
+      event.preventDefault();
+      message.hidden = false;
+      message.textContent = error;
+      upload.focus();
+    });
+    upload.addEventListener('change', () => {
+      message.hidden = true;
+      message.textContent = '';
+    });
     const criteria = [...upload.form.querySelectorAll('[data-criterion-upload]')];
     if (!criteria.length) continue;
     const syncFiles = () => {

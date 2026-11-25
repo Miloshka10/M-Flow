@@ -40,6 +40,13 @@ class ProjectCriteriaCases:
                                            **{evidence_note: 'Сняли два показания'}).status_code, 302)
         draft = self.client.get(project + '/stages?view_stage=2').text
         self.assertIn('Сняли два показания', draft)
+        failed = self.history_stage(project=pid, number=2, revision=1, result='Два показания',
+                                    attachments=[(BytesIO(bytes(2 * 1024 * 1024 + 1)), 'large.pdf')],
+                                    **{evidence_note: 'Введённое пояснение', evidence_file: '1'})
+        self.assertEqual(failed.status_code, 400)
+        self.assertIn('Файл «large.pdf» превышает 2 МБ.', failed.text)
+        self.assertIn('Выберите заново для критерия: <strong>large.pdf</strong>', failed.text)
+        self.assertIn('>Введённое пояснение</textarea>', failed.text)
         self.assertEqual(self.history_stage(project=pid, number=2, revision=1, result='Два показания',
                                           attachments=[(BytesIO(early_pdf), 'отчёт.pdf')],
                                           **{evidence_file: '3'}).status_code, 400)
@@ -59,6 +66,11 @@ class ProjectCriteriaCases:
         self.sign_in(3)
         overview = self.client.get(project).text
         self.assertIn('Добавьте третий кабинет &lt;script&gt;', overview)
+        entry = self.history_rows(pid)[-1]['id']
+        direct_remark = f'{project}/history?work=stage-2&entry={entry}'
+        self.assertIn(f'entry={entry}#history-event-{entry}', self.client.get('/notifications').text)
+        self.assertIn(f'entry={entry}#history-event-{entry}', overview)
+        self.assertEqual(self.client.get(f'/project/1/history?entry={entry}').status_code, 404)
         self.assertNotIn('Два показания', self.client.get(passport).text)
         self.assertEqual(self.history_stage(project=pid, number=2, revision=3, result='Замеры трёх кабинетов',
                                            attachments=[(BytesIO(late_pdf), 'отчёт.pdf'), (BytesIO(sheet), 'замеры.xlsx')],
@@ -89,6 +101,11 @@ class ProjectCriteriaCases:
         history = self.client.get(project + '/history?work=stage-2').text
         self.assertIn('Критерии и комментарии этой версии', history)
         self.assertIn('Добавьте третий кабинет &lt;script&gt;', history)
+        remark = self.client.get(direct_remark).text
+        self.assertIn(f'id="history-event-{entry}"', remark)
+        self.assertIn('<details open><summary>Критерии и комментарии этой версии</summary>', remark)
+        self.assertIn('Отправка №1', remark)
+        self.assertNotIn('Добавили кабинет C', remark)
         self.assertEqual(self.client.get(f'{project}/attachments/{second_file}').data, sheet)
         v2 = self.post(passport, data=dict(action='save')).location
         self.assertNotEqual(v1, v2)

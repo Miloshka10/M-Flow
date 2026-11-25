@@ -3,6 +3,7 @@ from contextlib import closing, contextmanager
 from datetime import date, timedelta
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 from threading import Thread
@@ -157,13 +158,24 @@ def exercise(browser, base):
     assert urlsplit(teacher.url).query == 'view=review'
     expect(teacher.get_by_role('link', name='На доработке: 1')).to_be_visible()
 
-    student.goto(assignment_url)
-    student.get_by_role('link', name='Перейти к доработке').click()
+    student.goto(base + '/notifications')
+    student.locator('.notifications-page').get_by_role('link', name=re.compile('К замечанию')).click()
+    notice_target = urlsplit(student.url).fragment
+    remark = student.locator('#' + notice_target)
+    expect(remark.get_by_text('Добавьте два замера и единицы измерения.', exact=True)).to_be_visible()
+    expect(remark.get_by_text('Отправка №1', exact=False)).to_be_visible()
+    remark.get_by_role('link', name='К результату этапа').click()
     expect(student.get_by_role('dialog').get_by_text('Добавьте два замера и единицы измерения.', exact=False)).to_be_visible()
+    note = 'Добавили три показания датчика A, единицы указаны в PDF.'
+    student.get_by_label('Пояснение', exact=True).fill(note)
+    student.get_by_label('Файлы для сдачи').set_input_files(
+        {'name': 'too-large.pdf', 'mimeType': 'application/pdf', 'buffer': bytes(2 * 1024 * 1024 + 1)})
+    student.get_by_role('button', name='Отправить учителю').click()
+    expect(student.get_by_role('alert').filter(has_text='too-large.pdf')).to_be_visible()
+    expect(student.get_by_label('Пояснение', exact=True)).to_have_value(note)
     files = [{'name': 'measurements.txt', 'mimeType': 'text/plain', 'buffer': b'Measurement v2'}]
     files.extend(rich_test_uploads() if real_analysis else rich_test_uploads()[:2])
     student.get_by_label('Файлы для сдачи').set_input_files(files)
-    student.get_by_label('Пояснение', exact=True).fill('Добавили три показания датчика A, единицы указаны в PDF.')
     student.get_by_label('Файл для критерия').select_option(label='report.pdf')
     submit_stage(student, 'Средняя температура 20 градусов Цельсия')
     teacher.goto(assignment_url)
@@ -204,6 +216,16 @@ def exercise(browser, base):
     student.get_by_role('button', name='Сохранить версию для защиты').click()
     first_passport = student.url
     expect(student.locator('.passport-cover').get_by_text('Версия 1', exact=False)).to_be_visible()
+    student.evaluate("""() => Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {
+        writeText: async text => {window.copiedPassport = text;}
+    }})""")
+    copy = student.get_by_role('button', name='Скопировать ссылку')
+    copy.click()
+    expect(student.get_by_text('Ссылка скопирована.', exact=True)).to_be_visible()
+    assert student.evaluate('window.copiedPassport') == first_passport
+    student.evaluate("() => Object.defineProperty(navigator, 'clipboard', {value: undefined})")
+    copy.click()
+    expect(student.get_by_label('Ссылка на версию')).to_have_value(first_passport)
     if real_analysis:
         teacher.goto(base + project_path + '/history')
         report = teacher.get_by_text('Мой ИИ-разбор этой сдачи')
