@@ -12,6 +12,7 @@ from deadlines import format_timestamp
 from interface import icon
 from submission_attachments import attachment_metadata, render_attachments
 from submission_analysis import render_report
+from project_criteria import STYLE as CRITERIA_STYLE, render_history_notes
 
 PAGE_SIZE = 12
 WORKS = {'all': 'Все работы', **{f'stage-{n}': f'Этап {n}' for n in range(1, 6)}, 'defense': 'Видеозащита'}
@@ -140,7 +141,7 @@ def load_history(conn, pid, work, page):
             LEFT JOIN users a ON a.id=d.author_id LEFT JOIN users r ON r.id=d.reviewer_id
             WHERE d.project_id=? AND NOT EXISTS
             (SELECT 1 FROM work_history_sources h WHERE h.project_id=d.project_id AND h.kind='defense' AND h.number=0)''', (pid,))]
-    snapshots = [dict(_snapshot(row, row['kind']), kind=row['kind'], number=row['number'], event='legacy', attempt=0,
+    snapshots = [dict(_snapshot(row, row['kind']), project_id=pid, kind=row['kind'], number=row['number'], event='legacy', attempt=0,
                       author_name=row.get('author_name') or '', reviewer_name=row.get('reviewer_name') or '', actor_name='') for row in legacy]
     return dict(items=rows, legacy=snapshots, total=total, page=page, pages=pages)
 
@@ -154,7 +155,7 @@ def event_context(row):
     return f'{work} · Отправка №{row["attempt"]}' if row['attempt'] else work
 
 
-def _render_event(row, analysis=None):
+def _render_event(row, analysis=None, criteria=()):
     old = row['event'] == 'legacy'
     date = ('Последнее известное обновление: ' + format_timestamp(row['source_updated_at'])) if old else format_timestamp(row['recorded_at'])
     actor = f'<p class="t-muted">{escape(row["actor_name"])}</p>' if row['actor_name'] else ''
@@ -175,17 +176,19 @@ def _render_event(row, analysis=None):
         f'Точная дата отправки и содержание прошлых попыток неизвестны. Состояние: {escape({"review":"На проверке","submitted":"На проверке","done":"Принято","accepted":"Принято","progress":"В работе или на доработке","returned":"На доработке","draft":"Черновик"}.get(row["state"], row["state"]))}.</p>') if old else ''
     return f'''<article class="history-event" data-history-event="{row['event']}"><span class="eyebrow">{event_context(row)}</span>
         <h2>{EVENTS[row['event']]}</h2><p class="t-muted">{date}</p>{actor}{author}{reviewer}{explanation}
-        <details><summary data-ui-icon="history">Материалы этой записи</summary><p class="history-text" tabindex="0">{escape(row['result'] or 'Текст не указан.')}</p>{resource}{files}</details>{report}{comment}</article>'''
+        <details><summary data-ui-icon="history">Материалы этой записи</summary><p class="history-text" tabindex="0">{escape(row['result'] or 'Текст не указан.')}</p>{resource}{files}</details>
+        {render_history_notes(row['project_id'], criteria)}{report}{comment}</article>'''
 
 
 def render_history(pid, data, work):
     options = ''.join(f'<option value="{key}" {"selected" if key == work else ""}>{label}</option>' for key,label in WORKS.items())
-    html = f'''<link rel="stylesheet" href="/static/work-history.css?v=20261019"><p class="history-intro">Здесь сохраняются отправленные версии и решения учителя. Изменения черновиков не записываются.
+    html = f'''{CRITERIA_STYLE}<link rel="stylesheet" href="/static/work-history.css?v=20261019"><p class="history-intro">Здесь сохраняются отправленные версии и решения учителя. Изменения черновиков не записываются.
         Номера отправок учитывают только новые сдачи после включения истории. Ранее перезаписанные версии восстановить нельзя.</p>
         <form class="history-filters" method="get"><label>Работа<select name="work">{options}</select></label><button data-ui-icon="filter">Показать</button></form>
         <p class="t-muted">Записей: {data['total']} · Страница {data['page']} из {data['pages']}. Новые события сверху.</p>'''
     analyses = data.get('analyses', {})
-    html += ''.join(_render_event(row, analyses.get(row['id'])) for row in data['items']) or '<p>Новых отправок и решений пока нет. Они появятся после отправки работы учителю.</p>'
+    criteria = data.get('criterion_notes', {})
+    html += ''.join(_render_event(row, analyses.get(row['id']), criteria.get(row['id'], ())) for row in data['items']) or '<p>Новых отправок и решений пока нет. Они появятся после отправки работы учителю.</p>'
     if data['pages'] > 1:
         html += '<nav class="history-pages" aria-label="Страницы истории">'
         for page, label in ((data['page']-1, 'Новее'), (data['page']+1, 'Ранее')):

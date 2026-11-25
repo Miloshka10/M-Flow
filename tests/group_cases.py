@@ -1,5 +1,6 @@
 """Classroom flows on synthetic SQLite/PostgreSQL fixtures."""
 import re
+from contextlib import closing
 from html import unescape
 import os
 from types import SimpleNamespace
@@ -7,6 +8,61 @@ from unittest.mock import patch
 
 
 class LearningGroupCases:
+    def test_class_analysis_queue_batch_restart_and_version_change(self):
+        import class_analysis
+        from submission_analysis import AnalysisUnavailable
+
+        gid = self.group_create()
+        path = self.assignment_create(gid)
+        aid = int(path.rsplit('/', 1)[1])
+        with closing(self.module.get_db()) as conn:
+            for pid in range(100, 130):
+                conn.execute("INSERT INTO users(id,username,password,role) VALUES(?,?,?,'student')",
+                             (pid, f'queue-{pid}', self.password))
+                conn.execute("INSERT INTO projects(id,name,owner_id) VALUES(?,?,?)", (pid, 'Замеры', pid))
+                conn.execute('INSERT INTO project_members(project_id,user_id) VALUES(?,1)', (pid,))
+                conn.execute('INSERT INTO learning_group_members(group_id,student_id) VALUES(?,?)', (gid, pid))
+                conn.execute('INSERT INTO group_assignment_projects(assignment_id,student_id,project_id) VALUES(?,?,?)',
+                             (aid, pid, pid))
+                conn.execute("INSERT INTO project_stages(project_id,number,state) VALUES(?,1,'review')", (pid,))
+                conn.execute("""INSERT INTO work_history(project_id,kind,number,revision,event,attempt,state)
+                    VALUES(?,'stage',1,1,'submit',1,'review')""", (pid,))
+            conn.commit()
+        with patch.dict(os.environ, M_FLOW_OLLAMA_MODEL='qwen3:4b'):
+            ids = re.findall(r'name="history_id"\s+value="(\d+)"', self.client.get(path).text)
+            self.assertEqual(len(ids), 30)
+            form = dict(action='queue_analysis', history_id=ids)
+            self.assertEqual(self.client.post(path, data=form).status_code, 400)
+            self.sign_in(2)
+            self.assertEqual(self.post(path, data=form).status_code, 403)
+            self.sign_in(1)
+            self.assertEqual(self.post(path, data=dict(action='queue_analysis', history_id=[ids[0],'999999'])).status_code, 400)
+            for _ in range(2):
+                self.assertEqual(self.post(path, data=form).status_code, 302)
+            with closing(self.module.get_db()) as conn:
+                self.assertEqual(conn.execute('SELECT COUNT(*) FROM class_analysis_jobs').fetchone()[0], 30)
+                interrupted = class_analysis.claim(conn)
+                conn.execute('UPDATE class_analysis_jobs SET expires=0 WHERE id=?', (interrupted['id'],))
+                conn.commit()
+            with patch('submission_analysis.analyze', side_effect=AnalysisUnavailable()):
+                self.assertTrue(class_analysis.work_once(self.module.get_db))
+            self.assertIn('Ошибка разбора', self.client.get(path).text)
+            self.assertEqual(self.post(path, data=form).status_code, 302)
+
+        def finish_while_student_resubmits(*args, **kwargs):
+            with closing(self.module.get_db()) as changed:
+                changed.execute("UPDATE project_stages SET revision=2 WHERE project_id=100")
+                changed.commit()
+            return {'summary': 'Проверено'}
+
+        with patch('submission_analysis.analyze', side_effect=finish_while_student_resubmits):
+            while class_analysis.work_once(self.module.get_db):
+                pass
+        with closing(self.module.get_db()) as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM class_analysis_jobs WHERE state='done'").fetchone()[0], 29)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM class_analysis_jobs WHERE state='stale'").fetchone()[0], 1)
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM submission_analyses').fetchone()[0], 29)
+
     def group_create(self, teacher=1, name='10А — исследовательские проекты'):
         self.sign_in(teacher)
         response = self.post('/groups', data=dict(action='create', name=name, description='Работаем над школьными проектами.'))

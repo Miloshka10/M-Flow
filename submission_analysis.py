@@ -137,7 +137,7 @@ def normalize_report(payload, sources):
     return dict(summary=summary, checks=checks, suggestions=suggestions)
 
 
-def analyze(model, submission, attachment_inputs, stage, instructions, terms):
+def analyze(model, submission, attachment_inputs, stage, instructions, terms, *, stage_criteria=()):
     try:
         port = int(os.environ.get('M_FLOW_OLLAMA_PORT', '11434'))
         if not 1 <= port <= 65535:
@@ -164,9 +164,14 @@ def analyze(model, submission, attachment_inputs, stage, instructions, terms):
                         ('title', 150), ('goal', 1200), ('materials', 900))} if terms else {},
                     coverage=[{'file': row['name'], 'status': row['coverage']} for row in files],
                     limited=limited, sources=sources)
+        prompt = SYSTEM_PROMPT
+        if stage_criteria:
+            data['stage_criteria'] = list(stage_criteria)
+            prompt += ('\nЕсли передан stage_criteria, проверь каждый из заданных критериев отдельно. '
+                       'Перенеси его название в criterion дословно, даже если подтверждение частичное.')
         options = {'think': False} if 'qwen3' in model.lower() else {}
         body = json.dumps(dict(model=model, stream=False, format=SCHEMA, keep_alive='5m', **options,
-                               messages=[dict(role='system', content=SYSTEM_PROMPT),
+                               messages=[dict(role='system', content=prompt),
                                          dict(role='user', content=json.dumps(data, ensure_ascii=False))],
                                options=dict(temperature=0, num_ctx=8192, num_predict=1000)), ensure_ascii=False).encode()
         connection.request('POST', '/api/chat', body, {'Content-Type': 'application/json'})

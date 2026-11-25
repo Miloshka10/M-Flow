@@ -77,6 +77,7 @@ def rich_test_uploads():
 
 def exercise(browser, base):
     real_analysis = os.environ.get('M_FLOW_TEST_OLLAMA') == '1'
+    criterion = 'В PDF приведены три показания датчика A'
     teacher = browser.new_page()
     student = browser.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
     outsider = browser.new_page()
@@ -129,10 +130,17 @@ def exercise(browser, base):
     expect(teacher.get_by_role('link', name='Нужно согласовать сопровождение: 1')).to_be_visible()
     teacher.goto(base + '/supervision')
     teacher.get_by_role('button', name='Подтвердить', exact=True).click()
+    teacher.goto(base + project_path)
+    teacher.get_by_role('link', name='Задать критерии').click()
+    teacher.get_by_label('Что должен подтвердить результат').fill(criterion)
+    teacher.get_by_role('button', name='Добавить критерий').click()
+    expect(teacher.get_by_text(criterion, exact=True)).to_be_visible()
     student.reload()
     student.get_by_role('link', name='Подготовить результат').click()
     student.get_by_label('Файлы для сдачи').set_input_files(
         {'name': 'measurements.txt', 'mimeType': 'text/plain', 'buffer': b'Measurement v1'})
+    student.get_by_label('Пояснение', exact=True).fill('Пока есть один замер.')
+    student.get_by_label('Файл для критерия').select_option(label='measurements.txt')
     submit_stage(student, 'Первый результат замеров')
 
     teacher.goto(assignment_url)
@@ -140,9 +148,10 @@ def exercise(browser, base):
     teacher.get_by_role('link', name='Открыть сдачу').click()
     expect(teacher.get_by_text('Первый результат замеров', exact=True)).to_be_visible()
     with teacher.expect_download() as event:
-        teacher.get_by_role('link', name='measurements.txt').click()
+        teacher.locator('.submission-attachments').get_by_role('link', name='measurements.txt').click()
     assert event.value.path().read_bytes() == b'Measurement v1'
-    teacher.get_by_label('Комментарий ученикам').fill('Добавьте единицы измерения.')
+    teacher.get_by_label('Решение по критерию').select_option('revise')
+    teacher.get_by_label('Комментарий к критерию').fill('Добавьте два замера и единицы измерения.')
     teacher.get_by_role('button', name='На доработку', exact=True).click()
     teacher.get_by_role('link', name='К заданию').click()
     assert urlsplit(teacher.url).query == 'view=review'
@@ -150,19 +159,28 @@ def exercise(browser, base):
 
     student.goto(assignment_url)
     student.get_by_role('link', name='Перейти к доработке').click()
-    expect(student.get_by_text('Что исправить: Добавьте единицы измерения.')).to_be_visible()
+    expect(student.get_by_role('dialog').get_by_text('Добавьте два замера и единицы измерения.', exact=False)).to_be_visible()
     files = [{'name': 'measurements.txt', 'mimeType': 'text/plain', 'buffer': b'Measurement v2'}]
-    if real_analysis:
-        files.extend(rich_test_uploads())
+    files.extend(rich_test_uploads() if real_analysis else rich_test_uploads()[:2])
     student.get_by_label('Файлы для сдачи').set_input_files(files)
+    student.get_by_label('Пояснение', exact=True).fill('Добавили три показания датчика A, единицы указаны в PDF.')
+    student.get_by_label('Файл для критерия').select_option(label='report.pdf')
     submit_stage(student, 'Средняя температура 20 градусов Цельсия')
     teacher.goto(assignment_url)
-    teacher.get_by_role('link', name='Открыть сдачу').click()
-    expect(teacher.get_by_text('Средняя температура 20 градусов Цельсия')).to_be_visible()
-    expect(teacher.locator('[data-version="current"]').get_by_text('Изменён', exact=False)).to_be_visible()
-    assert teacher.get_by_role('link', name='measurements.txt').count() == 2
     if real_analysis:
-        teacher.get_by_role('button', name='Запустить ИИ-разбор').click(timeout=150_000)
+        import subprocess
+        teacher.get_by_role('checkbox', name='Разобрать · student-smoke').check()
+        teacher.get_by_role('button', name='Разобрать выбранные сдачи').click()
+        expect(teacher.get_by_text('В очереди', exact=True)).to_be_visible()
+        subprocess.run([sys.executable, str(ROOT / 'class_analysis.py'), '--once'], check=True, timeout=180)
+        teacher.get_by_role('link', name='Обновить статусы').click()
+        expect(teacher.get_by_text('Разбор готов', exact=True)).to_be_visible()
+    teacher.get_by_role('link', name='Открыть сдачу').click()
+    expect(teacher.locator('[data-version="current"]').get_by_text('Средняя температура 20 градусов Цельсия')).to_be_visible()
+    expect(teacher.locator('[data-version="current"]').get_by_text('Изменён', exact=False)).to_be_visible()
+    expect(teacher.get_by_text('Пояснение изменено · Файл изменён')).to_be_visible()
+    assert teacher.locator('.submission-attachments').get_by_role('link', name='measurements.txt').count() == 2
+    if real_analysis:
         report = teacher.locator('#submission-analysis')
         expect(report.get_by_text('Критерии и цитаты')).to_be_visible()
         coverage = report.locator('details').filter(has_text='Что удалось прочитать')
@@ -174,8 +192,18 @@ def exercise(browser, base):
             source.get_by_role('link', name='report.pdf', exact=True).click()
         assert event.value.path().read_bytes() == files[1]['buffer']
         review_path = teacher.url
+    teacher.get_by_label('Решение по критерию').select_option('confirmed')
     teacher.get_by_role('button', name='Принять этап').click()
     expect(teacher.get_by_text('Этап принят. Следующий этап открыт.')).to_be_visible()
+    student.goto(base + project_path)
+    expect(student.get_by_text('Подтверждено 1 из 1')).to_be_visible()
+    student.get_by_role('link', name='Паспорт проекта').click()
+    expect(student.get_by_text(criterion, exact=True)).to_be_visible()
+    expect(student.locator('.passport-cover').get_by_text('Средняя температура 20 градусов Цельсия')).to_be_visible()
+    assert student.evaluate('document.documentElement.scrollWidth <= window.innerWidth + 1')
+    student.get_by_role('button', name='Сохранить версию для защиты').click()
+    first_passport = student.url
+    expect(student.locator('.passport-cover').get_by_text('Версия 1', exact=False)).to_be_visible()
     if real_analysis:
         teacher.goto(base + project_path + '/history')
         report = teacher.get_by_text('Мой ИИ-разбор этой сдачи')
@@ -192,6 +220,13 @@ def exercise(browser, base):
         teacher.get_by_role('link', name='Открыть сдачу').click()
         expect(teacher.get_by_text(f'Готовый результат этапа {stage}', exact=True)).to_be_visible()
         teacher.get_by_role('button', name='Принять этап').click()
+
+    student.goto(base + project_path + '/passport')
+    expect(student.get_by_role('link', name='Открыть презентацию')).to_have_attribute('href', 'https://example.com/slides')
+    student.get_by_role('button', name='Сохранить версию для защиты').click()
+    expect(student.locator('.passport-cover').get_by_text('Версия 2', exact=False)).to_be_visible()
+    student.goto(first_passport)
+    expect(student.get_by_role('link', name='Открыть презентацию')).to_have_count(0)
 
     student.goto(assignment_url)
     student.get_by_role('link', name='Подготовить видеозащиту').click()
@@ -222,11 +257,13 @@ def exercise(browser, base):
     expect(student.get_by_text('Итого: 45 / 45 · Оценка: 5')).to_be_visible()
 
     login(outsider, base + '/teacher/login', 'outside-smoke')
+    assert outsider.goto(first_passport).status == 403
     for path in (urlsplit(assignment_url).path, project_path, project_path + '/history', project_path + '/assessment'):
         assert outsider.goto(base + path).status == 403, path
     if real_analysis:
         assert outsider.goto(review_path).status == 403
         print('PASS: real Ollama report, PDF original download, XLSX and OCR coverage, private report history.')
+    print('PASS: criteria, revised evidence in the teacher review, mobile passport, saved versions and presentation.')
     print('PASS: class assignment, consent, five stages, return and resubmission, defense, grade and outsider isolation.')
 
 

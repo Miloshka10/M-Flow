@@ -14,6 +14,7 @@ from deadlines import format_timestamp
 from grading import CRITERIA, MAX_SCORE
 from interface import icon
 from material_links import safe_web_url
+import project_criteria
 from teacher_overview import visible_teacher_projects
 from submission_attachments import attachment_metadata, render_attachments
 from submission_analysis import render_report
@@ -191,10 +192,12 @@ def render_detail(item, record, context, params, token, explicit=False, error=''
         return html + '<div class="rc-empty">' + icon('review') + '<h2 id="detail-title">' + ('Работа уже не в очереди' if explicit else 'Всё готово к новой проверке') + f'</h2><p>{explanation}</p><a class="action-link" href="{escape(center_url(params), quote=True)}">Открыть список</a></div></section>'
     pid = item['project_id']
     work = f'stage-{record["number"]}' if item['kind'] == 'stage' else 'defense'
+    criteria_url = f'/project/{pid}/criteria?stage={record["number"]}#criterion-add' if item['kind'] == 'stage' else ''
     html += f'''<div class="rc-detail-head"><span class="eyebrow">{"ИНФОРМАЦИОННЫЙ ОТЧЁТ" if item['kind'] == 'report' else "ПРОВЕРКА РЕЗУЛЬТАТА"}</span>
         <h2 id="detail-title">{escape(item['project_name'])}</h2><p>{escape(item['title'])}</p></div>
         <div class="rc-detail-links"><a class="action-link" href="/project/{pid}">{icon('folder')} Проект</a>
-        <a class="action-link" href="{item['href']}">Открыть в проекте {icon('arrow')}</a></div>'''
+        <a class="action-link" href="{item['href']}">Открыть в проекте {icon('arrow')}</a>
+        {f'<a class="action-link" href="{criteria_url}">Критерии этапа</a>' if criteria_url else ''}</div>'''
     if item['kind'] == 'report':
         return html + f'<p class="rc-hint">Отчёт о задаче — информация о ходе работы. Его прочтение не принимает этап и не выставляет оценку.</p><p class="rc-hint">{escape(item["author"] or "Автор не указан")} · {format_timestamp(item["sent"])}</p><p class="rc-result">{escape(item["body"])}</p></section>'
     meta = item.get('submission')
@@ -234,7 +237,11 @@ def render_detail(item, record, context, params, token, explicit=False, error=''
             <h3>Ваше решение</h3><input type="hidden" name="csrf_token" value="{escape(token, quote=True)}"><input type="hidden" name="revision" value="{record['revision']}">'''
         if item['kind'] == 'stage':
             html += f'<input type="hidden" name="number" value="{record["number"]}">'
-        html += f'''<label for="review-comment">Комментарий ученикам</label><p class="rc-hint" id="comment-hint">Для возврата напишите, что исправить. Для принятия комментарий необязателен. До 2000 символов.</p>
+        fields = project_criteria.review_fields(pid, context.get('criteria', ()), current_files,
+                                                submitted if same_version else None, context.get('analysis_report'))
+        hint = ('Для возврата достаточно замечания к критерию или общего комментария.' if fields
+                else 'Для возврата напишите, что исправить. Для принятия комментарий необязателен. До 2000 символов.')
+        html += f'''{fields}<label for="review-comment">Комментарий ученикам</label><p class="rc-hint" id="comment-hint">{hint}</p>
             <textarea id="review-comment" name="teacher_comment" rows="4" maxlength="2000" aria-describedby="comment-hint" placeholder="Что получилось и что нужно улучшить">{escape(value)}</textarea>
             <div class="rc-decision-actions"><button name="action" value="accept" data-ui-icon="check">Принять {"этап" if item['kind'] == 'stage' else 'видеозащиту'}</button><button class="secondary" name="action" value="return" data-ui-icon="return">На доработку</button></div>
             <p class="rc-hint">Решение сохраняется в истории, ученики получат уведомление. Личные оценки не изменятся.</p></form>'''

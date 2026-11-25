@@ -79,7 +79,7 @@ class ReviewCenterCases:
         path = '/teacher/review?work=stage-2-1'
         from project_stages import change_stage
 
-        def model_finishes_after_the_decision(*args):
+        def model_finishes_after_the_decision(*args, **kwargs):
             with closing(self.module.get_db()) as conn:
                 change_stage(conn, 2, {'id': 1, 'role': 'teacher'}, {
                     'action': 'accept', 'number': '1', 'revision': '1'})

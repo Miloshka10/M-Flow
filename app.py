@@ -70,8 +70,11 @@ from video_defense import initialize_defenses, defense_for, change_defense, rend
 from defense_preparation import initialize_preparation, plan_for, save_plan, render_preparation
 from work_history import initialize_history, history_parameters, load_history, render_history
 from submission_attachments import (LIMIT_TEXT, REQUEST_SIZE, initialize_attachments, read_uploads,
-                                    readable_attachment)
+                                    readable_attachment, attachment_metadata)
 import submission_analysis
+import class_analysis
+import project_criteria
+import project_passport
 from task_board import initialize_task_board, task_fields, board_return, render_filters, create_form, task_edit_fields
 from database import (DatabaseSettings, DatabaseUnavailable, INTEGRITY_ERRORS,
                       PostgresConnection, connect_database, execute_schema_script,
@@ -360,6 +363,8 @@ def _prepare_database(conn):
     initialize_preparation(conn)
     initialize_history(conn)
     initialize_attachments(conn)
+    project_criteria.initialize(conn)
+    project_passport.initialize(conn)
     submission_analysis.initialize_analysis(conn)
     initialize_notifications(conn)
     initialize_auth(conn)
@@ -367,6 +372,7 @@ def _prepare_database(conn):
     initialize_supervision(conn)
     initialize_groups(conn)
     assignments.initialize_assignments(conn)
+    class_analysis.initialize(conn)
 
     project_columns = table_columns(conn, "projects")
 
@@ -698,17 +704,22 @@ def add_project(name):
     return project_id
 
 
-def get_project_details(project_id, *, connection=None):
+def get_project_details(project_id, *, connection=None, workspace=False):
 
     user = get_current_user()
 
     if user is None:
         return None
 
+    columns = """, COALESCE(d.state,'draft') AS defense_state, COALESCE(d.revision,0) AS defense_revision,
+                 COALESCE(d.teacher_comment,'') AS defense_comment, plan.goal""" if workspace else ''
+    joins = '''LEFT JOIN project_defenses d ON d.project_id=projects.id
+               LEFT JOIN project_defense_plans plan ON plan.project_id=projects.id''' if workspace else ''
     with (closing(get_db()) if connection is None else nullcontext(connection)) as conn:
-        return conn.execute("""
-            SELECT projects.id, projects.name, projects.owner_id
+        return conn.execute(f"""
+            SELECT projects.id, projects.name, projects.owner_id{columns}
             FROM projects
+            {joins}
             WHERE projects.id = ?
             AND (
                 projects.owner_id = ?
@@ -1566,14 +1577,25 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
 
     current_user = get_current_user()
     with closing(get_db()) as conn:
-        details = get_project_details(project_id, connection=conn)
+        details = get_project_details(project_id, connection=conn, workspace=True)
         if details is None:
             return render_error_page('Нет доступа', 'Проект не найден или вы не участвуете в нём.', 403)
         all_tasks = get_tasks(project_id, connection=conn)
         task_update_history = get_task_update_history(project_id, connection=conn)
         members = get_project_members(project_id, connection=conn)
         stages = get_stages(conn, project_id)
-        defense = defense_for(conn, project_id)
+        defense = dict(state=details['defense_state'], revision=details['defense_revision'],
+                       teacher_comment=details['defense_comment'])
+        criteria = project_criteria.load(conn, project_id)
+        accepted_topic = stages[0]['result'] if stages[0]['state'] == 'done' else ''
+        goal, goal_label = project_passport.goal_fields(details['goal'], accepted_topic)
+        criterion_files = []
+        if current_user['role'] == 'teacher':
+            _, current = stage_summary(stages)
+            if current and current['state'] == 'review' and (current_criteria := criteria.get(current['number'])):
+                item = current_criteria[0]
+                history_id = item['submission_id'] if item['submission_revision'] == current['revision'] else None
+                criterion_files = attachment_metadata(conn, [history_id]).get(history_id, ()) if history_id else ()
         assessment_column = 'teacher_id' if current_user['role'] == 'teacher' else 'student_id'
         published_assessments = conn.execute(f'''SELECT a.scores_json, u.username AS teacher_name
             FROM project_assessments a JOIN users u ON u.id=a.teacher_id
@@ -2070,18 +2092,23 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
         messages += f'<div data-project-feedback>{notice(text, error=category == "error")}</div>'
 
 
+    criteria_html = project_criteria.overview(project_id, criteria, goal, goal_label, current_user['role'] == 'teacher',
+                                              sum(s['state'] == 'done' for s in stages))
     workspace_html = render_workspace(project_id, project_name, current_user, owner, members,
                                       stages, defense, published_assessments, all_tasks,
                                       completed_tasks, progress, overdue_count, today=deadline_today,
-                                      active='tasks' if work_mode else 'overview')
+                                      active='tasks' if work_mode else 'overview', criteria_html=criteria_html)
     work_html, selected_stage = render_project_work(project_id, current_user, owner, members,
         stages, defense, published_assessments, tasks, all_tasks, render_task_card,
-        filters_html + '<details class="board-deadlines"><summary data-ui-icon="calendar">Ближайшие сроки</summary>' + hot_html + '</details>', add_task_section, board_state, csrf_token(), stage_submitted, stage_error, unsaved)
+        filters_html + '<details class="board-deadlines"><summary data-ui-icon="calendar">Ближайшие сроки</summary>' + hot_html + '</details>',
+        add_task_section, board_state, csrf_token(), stage_submitted, stage_error, unsaved,
+        criteria_by_stage=criteria, criterion_files=criterion_files)
     return render_page(
         PAGE_STYLE
         + f"""
         <link rel="stylesheet" href="/static/project-workspace.css?v=20261118-home-settings">
-        <link rel="stylesheet" href="/static/task-board.css?v=20261118-home-settings"><link rel="stylesheet" href="/static/project-work.css?v=20261115-cabinet"><script src="/static/project-work.js?v=20261115-cabinet" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
+        {project_criteria.STYLE}
+        <link rel="stylesheet" href="/static/task-board.css?v=20261118-home-settings"><link rel="stylesheet" href="/static/project-work.css?v=20261115-cabinet"><script src="/static/project-work.js?v=20261125-criteria" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
         <div class="container">
             {render_header(current_user, notification_data)}
             <main class="project-workspace" data-work-screens="project" data-project-views data-work-default="{int(work_mode)}">
@@ -2900,6 +2927,13 @@ def group_assignments_page(group_id, assignment_id=None):
                 if action == 'save':
                     assignment_id = assignments.save_assignment(conn, user, group_id, request.form, assignment_id)
                     flash('Задание сохранено.')
+                elif assignment is not None and action == 'queue_analysis':
+                    if user['role'] != 'teacher' or group['teacher_id'] != user['id']:
+                        raise PermissionError('Проверка доступна учителю этой группы.')
+                    class_analysis.enqueue(conn, assignment_id, user['id'], request.form.getlist('history_id'),
+                                           submission_analysis.configured_model())
+                    flash('Выбранные сдачи поставлены в очередь разбора.')
+                    return redirect(f'{base}/{assignment_id}?view=review#class-progress')
                 elif assignment is not None and action in ('create_project', 'link_project', 'propose'):
                     assignments.link_project(conn, user, group_id, assignment_id, request.form)
                     flash('Предложение сопровождения отправлено.' if action == 'propose' else 'Проект связан с заданием.')
@@ -3017,14 +3051,14 @@ def render_unsaved_result(form, user, target, defense=False):
         <a href="{target}">Открыть актуальную версию {icon('arrow')}</a></aside>'''
 
 
-def render_collaboration_page(user, title, body, project_id=None, error="", status=200, back_url=None, back_label=None):
+def render_collaboration_page(user, title, body, project_id=None, error="", status=200, back_url=None, back_label=None, *, active=None):
     messages = ''.join(notice(message) for message in get_flashed_messages())
     back = f'<a class="back" href="/project/{project_id}">{icon('arrow-left')} К обзору проекта</a>' if project_id else f'<a class="back" href="{project_list_url(user['role'])}">{icon('arrow-left')} К моим проектам</a>'
     if back_url:
         back = f'<a class="back" href="{escape(back_url, quote=True)}">{icon('arrow-left')} {escape(back_label or "Назад")}</a>'
     error_html = notice(error, error=True) if error else ''
     return render_page(PAGE_STYLE + f'''<link rel="stylesheet" href="/static/teamwork.css"><div class="container">{render_header(user)}
-        <main class="team-page">{back}<h1>{escape(title)}</h1>{project_navigation(project_id, request.path.rsplit('/', 1)[-1]) if project_id else ""}{messages}{error_html}{body}</main></div>'''), status
+        <main class="team-page">{back}<h1>{escape(title)}</h1>{project_navigation(project_id, active or request.path.rsplit('/', 1)[-1]) if project_id else ""}{messages}{error_html}{body}</main></div>'''), status
 
 
 @app.route('/skills', methods=['GET','POST'])
@@ -3157,10 +3191,80 @@ def project_work_history(project_id):
         if user['role'] == 'teacher':
             ids = [row['id'] for row in history['items'] if row['kind'] == 'stage' and row['event'] == 'submit']
             history['analyses'] = submission_analysis.saved_reports(conn, ids, user['id'])
+        history['criterion_notes'] = project_criteria.history_notes(conn, [row['id'] for row in history['items']])
         body = render_history(project_id, history, work)
     finally:
         conn.close()
     return render_collaboration_page(user, f'История работ · {name}', body, project_id)
+
+
+@app.route('/project/<int:project_id>/criteria', methods=['GET', 'POST'])
+@login_required
+def project_criteria_page(project_id):
+    user = get_current_user()
+    if not valid_database_id(project_id):
+        return render_error_page('Проект недоступен', 'Откройте проект из своего кабинета.', 404)
+    error, status = '', 200
+    base = f'/project/{project_id}/criteria'
+    with closing(get_db()) as conn:
+        project_row = get_project_details(project_id, connection=conn)
+        if project_row is None:
+            return render_error_page('Нет доступа', 'Вы не участвуете в этом проекте.', 403)
+        if request.method == 'POST':
+            try:
+                project_criteria.configure(conn, project_id, user, request.form)
+                flash('Критерии проекта обновлены.')
+                return redirect(f'{base}?stage={request.form["number"]}')
+            except PermissionError as exc:
+                return render_error_page('Нет доступа', str(exc), 403)
+            except ValueError as exc:
+                error, status = str(exc), 400
+        selected = request.values.get('number' if request.method == 'POST' else 'stage', '')
+        stages = get_stages(conn, project_id)
+        _, current = stage_summary(stages)
+        if current and current['state'] == 'review':
+            current['tracked_submission'] = project_criteria.submitted_history_id(conn, project_id, current)
+        number = int(selected) if selected in ('1', '2', '3', '4', '5') else current['number'] if current else 5
+        body = project_criteria.render_manage(project_id, project_criteria.load(conn, project_id), stages,
+                                               user['role'] == 'teacher', csrf_token(), number)
+    return render_collaboration_page(user, 'Критерии проекта', body, project_id, error, status)
+
+
+@app.route('/project/<int:project_id>/passport', methods=['GET', 'POST'])
+@app.get('/project/<int:project_id>/passport/<int:passport_id>')
+@login_required
+def project_passport_page(project_id, passport_id=None):
+    user = get_current_user()
+    if not valid_database_id(project_id):
+        return render_error_page('Проект недоступен', 'Откройте проект из своего кабинета.', 404)
+    error, status = '', 200
+    with closing(get_db()) as conn:
+        project_row = get_project_details(project_id, connection=conn)
+        if project_row is None:
+            return render_error_page('Нет доступа', 'Вы не участвуете в этом проекте.', 403)
+        if request.method == 'POST':
+            try:
+                if request.form.get('action') != 'save':
+                    raise ValueError('Выберите действие в паспорте проекта.')
+                version_id, created = project_passport.save(conn, project_id, user)
+                flash('Версия для защиты сохранена.' if created else 'Такая версия уже сохранена.')
+                return redirect(f'/project/{project_id}/passport/{version_id}')
+            except PermissionError as exc:
+                return render_error_page('Нет доступа', str(exc), 403)
+            except ValueError as exc:
+                error, status = str(exc), 400
+        saved, history = None, ()
+        page = bounded_page(request.args.get('page', '1'))
+        if passport_id is None:
+            data = project_passport.assemble(conn, project_id, project_row['name'])
+            history = project_passport.versions(conn, project_id, page)
+        else:
+            saved = project_passport.saved_version(conn, project_id, passport_id) if valid_database_id(passport_id) else None
+            if saved is None:
+                return render_error_page('Версия недоступна', 'Откройте список версий паспорта проекта.', 404)
+            data = json.loads(saved['snapshot'])
+        body = project_passport.render(project_id, data, csrf_token(), user['role'] == 'student', history, page, saved)
+    return render_collaboration_page(user, 'Паспорт проекта', body, project_id, error, status, active='passport')
 
 
 @app.route('/project/<int:project_id>/preparation', methods=['GET', 'POST'])
@@ -3788,6 +3892,8 @@ def teacher_review_center():
                 record = defense_for(conn, selected['project_id'])
             if selected['kind'] != 'report':
                 context = review_center.context_for(conn, selected, record)
+            if selected['kind'] == 'stage':
+                context['criteria'] = project_criteria.load(conn, selected['project_id']).get(record['number'], ())
             history_id = (selected['submission'] or {}).get('history_id') if selected['kind'] == 'stage' else None
             if history_id:
                 context['analysis_history_id'] = history_id
@@ -3814,7 +3920,8 @@ def teacher_review_center():
     if analysis_inputs:
         report = None
         try:
-            report = submission_analysis.analyze(model, *analysis_inputs)
+            titles = tuple(row['title'] for row in context['criteria'])
+            report = submission_analysis.analyze(model, *analysis_inputs, stage_criteria=titles)
         except submission_analysis.AnalysisUnavailable as exc:
             status, context['analysis_error'] = 503, str(exc)
         with closing(get_db()) as conn:
@@ -3835,7 +3942,7 @@ def teacher_review_center():
     if error and not selected:
         body = f'<p class="error" role="alert">{escape(error)}</p><aside class="rc-comment"><h2>Ваш комментарий не сохранён</h2><p class="rc-result">{escape(request.form.get("teacher_comment", ""))}</p></aside>' + body
     messages = ''.join(f'<div class="{escape(category, quote=True)}" role="status">{escape(text)}</div>' for category, text in get_flashed_messages(with_categories=True))
-    return render_page(PAGE_STYLE + '<link rel="stylesheet" href="/static/review-center.css?v=submission-analysis">'
+    return render_page(PAGE_STYLE + project_criteria.STYLE + '<link rel="stylesheet" href="/static/review-center.css?v=submission-analysis">'
                        + f'<div class="container workspace">{render_header(user)}<main class="review-center">{messages}{body}</main></div>',
                        title='Центр проверки · M-Flow'), status
 

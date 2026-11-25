@@ -6,6 +6,7 @@ from material_links import safe_web_url
 from project_rules import has_project_teacher, TEACHER_REQUIRED
 from database import execute_schema, begin_project_write
 from notifications import notify_project
+import project_criteria
 from teacher_supervision import participant
 from deadlines import format_timestamp
 from work_history import before_change, record_change
@@ -96,6 +97,8 @@ def change_stage(conn, project_id, user, form, *, attachments=()):
         if form.get("revision") != str(current["revision"]):
             raise ValueError("Этап уже изменён другим участником. Обновите страницу перед сохранением.")
         action = form.get("action")
+        criteria = project_criteria.for_stage(conn, project_id, current['number'])
+        responses, decisions = [], []
         if attachments and (user['role'] != 'student' or action != 'submit'):
             raise ValueError('Приложить файлы можно при отправке этапа.')
         result, url, comment = current["result"], current["presentation_url"], current["teacher_comment"]
@@ -115,12 +118,17 @@ def change_stage(conn, project_id, user, form, *, attachments=()):
                 raise ValueError("Для проверки заполните результат этапа; на пятом этапе нужны описание и ссылка на презентацию.")
             if action == "submit" and not has_project_teacher(conn, project_id):
                 raise ValueError(TEACHER_REQUIRED)
+            responses = project_criteria.response_values(form, criteria, attachments, action)
             state = "review" if action == "submit" else "progress"
             submitted_by = user["id"]
         elif user["role"] == "teacher":
             if action not in ("accept", "return") or current["state"] != "review":
                 raise ValueError("Учитель может принять или вернуть только этап, отправленный на проверку.")
             comment = form.get("teacher_comment", "").strip()
+            submission_id = project_criteria.submitted_history_id(conn, project_id, current) if criteria else None
+            decisions = project_criteria.decision_values(conn, form, criteria, submission_id, action)
+            if not comment and action == 'return' and any(d[2] == 'revise' for d in decisions):
+                comment = 'Откройте замечания по критериям этапа.'
             if len(comment) > 2000 or (action == "return" and not comment):
                 raise ValueError("При возврате укажите, что исправить. Комментарий — до 2000 символов.")
             reviewed_by = user["id"]
@@ -139,13 +147,17 @@ def change_stage(conn, project_id, user, form, *, attachments=()):
         history_id = record_change(conn, project_id, 'stage', current['number'], action,
                                    dict(current, state=state, result=result, presentation_url=url,
                                         teacher_comment=comment, submitted_by=submitted_by, reviewed_by=reviewed_by), user)
+        if action == 'save':
+            project_criteria.save_responses(conn, None, responses)
         if action == 'submit':
             if attachments:
                 save_attachments(conn, history_id, attachments)
+            project_criteria.save_responses(conn, history_id, responses)
             notify_project(conn, project_id, 'teacher',
                 f'stage:{project_id}:{current["number"]}:{current["revision"] + 1}',
                 f'Этап {current["number"]} отправлен на проверку', '', f'/project/{project_id}/stages#stage-{current["number"]}')
         elif action in ('accept', 'return'):
+            project_criteria.save_decisions(conn, history_id, decisions)
             notify_project(conn, project_id, 'student',
                 f'stage:{project_id}:{current["number"]}:{current["revision"] + 1}',
                 f'Этап {current["number"]}: ' + ('принят' if action == 'accept' else 'нужна доработка'),
@@ -159,7 +171,7 @@ def change_stage(conn, project_id, user, form, *, attachments=()):
 
 
 def render_stages(stages, user, token, submitted=None, has_teacher=True, project_id=None,
-                  only_number=None, compact=False, return_to=None):
+                  only_number=None, compact=False, return_to=None, criteria_by_stage=None, criterion_files=()):
     completed, current = stage_summary(stages)
     current_number = current["number"] if current else None
     html = '' if compact else f'<p class="stage-summary">Принято {completed} из 5 этапов · {completed * 20}%</p><div class="stage-timeline">'
@@ -169,6 +181,7 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
         number = stage["number"]
         if only_number is not None and number != only_number:
             continue
+        criteria = (criteria_by_stage or {}).get(number, ())
         locked = current_number is not None and number > current_number
         label = stage_label(stage, current_number)
         explanation = f'Откроется после принятия этапа {number - 1} учителем.' if locked else STAGE_DESCRIPTIONS[number]
@@ -197,6 +210,9 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
             html += reviewer + comment_html
         if stage['state'] == 'done':
             html += f'<p>Этап {number} принят учителем. {"Все пять этапов приняты." if number == 5 else "Можно продолжить маршрут проекта."} <a href="/project/{stage["project_id"]}">Посмотреть следующий шаг {icon('arrow')}</a></p>'
+        pid = stage.get('project_id', project_id)
+        if user['role'] == 'student' or stage['state'] != 'review':
+            html += project_criteria.current_summary(pid, criteria)
         if number == current_number:
             values = submitted or stage
             pid = stage.get('project_id', project_id)
@@ -217,13 +233,17 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
                     html += f'<label>Ссылка на презентацию<input type="url" name="presentation_url" maxlength="2000" placeholder="https://…" value="{escape(values.get("presentation_url", ""), quote=True)}"></label><p>Проверьте, что учитель сможет открыть презентацию по ссылке.</p>'
                 html += f'''<label>Файлы для сдачи<input type="file" name="attachments" multiple aria-describedby="attachment-help-{number}"></label>
                     <p class="work-field-hint" id="attachment-help-{number}">{LIMIT_TEXT} Файлы сохраняются при отправке учителю.</p>
+                    {project_criteria.student_fields(criteria, submitted)}
                     <div class="stage-actions"><button name="action" value="save" data-ui-icon="save">Сохранить черновик</button>
                     <button name="action" value="submit" formenctype="multipart/form-data" {"disabled" if not has_teacher else ""}>Отправить учителю</button></div></form>'''
                 if compact:
                     html += '</div></details>'
             elif user["role"] == "teacher" and stage["state"] == "review":
                 comment = submitted.get('teacher_comment', '') if submitted is not None else ''
-                html += '<h4 class="work-decision-heading">Решение по этапу</h4>' + prefix + f'<label>Комментарий учителя<textarea name="teacher_comment" rows="3" maxlength="2000" aria-describedby="review-comment-hint-{number}">{escape(comment)}</textarea></label><p class="work-field-hint" id="review-comment-hint-{number}">Для возврата на доработку комментарий обязателен.</p><div class="stage-actions"><button name="action" value="accept">{"Согласовать тему" if number == 1 else "Принять этап"}</button><button name="action" value="return" data-ui-icon="return">Вернуть на доработку</button></div></form>'
+                fields = project_criteria.review_fields(pid, criteria, criterion_files, submitted)
+                hint = ('Укажите замечание к критерию или общий комментарий для возврата.' if fields
+                        else 'Для возврата на доработку комментарий обязателен.')
+                html += '<h4 class="work-decision-heading">Решение по этапу</h4>' + prefix + fields + f'<label>Комментарий учителя<textarea name="teacher_comment" rows="3" maxlength="2000" aria-describedby="review-comment-hint-{number}">{escape(comment)}</textarea></label><p class="work-field-hint" id="review-comment-hint-{number}">{hint}</p><div class="stage-actions"><button name="action" value="accept">{"Согласовать тему" if number == 1 else "Принять этап"}</button><button name="action" value="return" data-ui-icon="return">Вернуть на доработку</button></div></form>'
             else:
                 html += f'<p>{"Ожидается проверка учителя. Пока результат менять нельзя." if stage["state"] == "review" else "Ожидается результат от учеников проекта."}</p>'
         pid = stage.get('project_id', project_id)
