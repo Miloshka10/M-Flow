@@ -57,6 +57,10 @@ html body.mf-v2 .review-center .rc-detail-links { display:flex; flex-wrap:wrap; 
 html body.mf-v2 .review-center .rc-detail-links a { display:inline-flex; align-items:center; gap:5px; min-height:44px; font-size:12px; }
 html body.mf-v2 .review-center .rc-section { margin:24px 0; padding:0; }
 html body.mf-v2 .review-center .rc-section h3 { font-size:15px; margin:0 0 12px; }
+html body.mf-v2 .review-center .rc-analysis { padding:18px; border:1px solid var(--mf-line); border-radius:11px; background:var(--mf-panel); overflow-wrap:anywhere; }
+html body.mf-v2 .review-center .rc-analysis form { margin:0 0 14px; }
+html body.mf-v2 .review-center .rc-analysis summary { cursor:pointer; }
+html body.mf-v2 .review-center .rc-analysis blockquote { margin:8px 0; padding-inline-start:12px; border-inline-start:2px solid var(--mf-line); }
 html body.mf-v2 .review-center .rc-result { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; font-size:13px; line-height:1.75; color:var(--mf-text); margin:10px 0; max-width:100%; }
 html body.mf-v2 .review-center .rc-material { display:inline-flex; align-items:center; gap:6px; min-height:44px; font-size:12px; }
 html body.mf-v2 .review-center .rc-comparison { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:14px 0; }

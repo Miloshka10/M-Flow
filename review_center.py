@@ -14,7 +14,10 @@ from deadlines import format_timestamp
 from grading import CRITERIA, MAX_SCORE
 from interface import icon
 from material_links import safe_web_url
+import project_criteria
 from teacher_overview import visible_teacher_projects
+from submission_attachments import attachment_metadata, render_attachments
+from submission_analysis import render_report
 from teacher_queue import entries, queue_page, sent_date
 
 KINDS = {'all': 'Все на проверке', 'stage': 'Этапы', 'defense': 'Видеозащиты', 'report': 'Отчёты — информация'}
@@ -42,12 +45,12 @@ def submission_index(conn, teacher_id, project_scope=None):
     """One query, current submission metadata only, scoped before transfer from DB."""
     scope, params = visible_teacher_projects(teacher_id, project_scope)
     rows = conn.execute(scope + '''
-        SELECT h.project_id,h.kind,h.number,h.attempt,h.recorded_at
+        SELECT h.id AS history_id,h.project_id,h.kind,h.number,h.attempt,h.recorded_at
         FROM work_history h JOIN visible_projects v ON v.id=h.project_id
         JOIN project_stages s ON s.project_id=h.project_id AND s.number=h.number AND s.revision=h.revision
         WHERE h.kind='stage' AND h.event='submit' AND s.state='review'
         UNION ALL
-        SELECT h.project_id,h.kind,h.number,h.attempt,h.recorded_at
+        SELECT h.id AS history_id,h.project_id,h.kind,h.number,h.attempt,h.recorded_at
         FROM work_history h JOIN visible_projects v ON v.id=h.project_id
         JOIN project_defenses d ON d.project_id=h.project_id AND d.revision=h.revision
         WHERE h.kind='defense' AND h.event='submit' AND d.state='submitted' ''', params)
@@ -88,7 +91,12 @@ def context_for(conn, item, record):
         AND revision<? AND event='submit' ORDER BY revision DESC LIMIT 1''', params).fetchone()
     decision = conn.execute('''SELECT * FROM work_history WHERE project_id=? AND kind=? AND number=?
         AND revision<? AND event='return' ORDER BY revision DESC LIMIT 1''', params).fetchone()
-    return dict(previous=dict(previous) if previous else None, decision=dict(decision) if decision else None)
+    current_id = (item.get('submission') or {}).get('history_id')
+    previous_id = previous['id'] if previous else None
+    file_ids = [id_ for id_ in (current_id, previous_id) if id_ is not None] if item['kind'] == 'stage' else []
+    files = attachment_metadata(conn, file_ids)
+    return dict(previous=dict(previous) if previous else None, decision=dict(decision) if decision else None,
+                current_files=files.get(current_id, ()), previous_files=files.get(previous_id, ()))
 
 
 def connections_for(conn, teacher_id):
@@ -153,6 +161,28 @@ def render_inbox(result, params, selected, explicit, reset):
     return html + '</aside>'
 
 
+def render_analysis(item, context, params, token):
+    model = context.get('analysis_model')
+    report = context.get('analysis_report')
+    error = context.get('analysis_error')
+    if not (model or report or error):
+        return ''
+    form = ''
+    if model:
+        action = escape(center_url(params, item['key']) + '#submission-analysis', quote=True)
+        form = f'''<form method="post" action="{action}">
+            <input type="hidden" name="csrf_token" value="{escape(token, quote=True)}">
+            <input type="hidden" name="analysis_version" value="{context['analysis_history_id']}">
+            <button class="secondary" name="action" value="analyze">{"Обновить ИИ-разбор" if report else "Запустить ИИ-разбор"}</button>
+            </form>'''
+    feedback = f'<p role="alert">{escape(error)}</p>' if error else ''
+    output = render_report(item['project_id'], report) if report else ''
+    return f'''<section class="rc-section rc-analysis" id="submission-analysis" aria-labelledby="analysis-title">
+        <h3 id="analysis-title">ИИ-разбор сдачи</h3>
+        <p class="rc-hint">Модель читает описание, документы, таблицы и печатный текст на сканах. Решение по этапу сохраняет учитель.</p>
+        {form}{feedback}{output}</section>'''
+
+
 def render_detail(item, record, context, params, token, explicit=False, error='', submitted=None):
     back = f'<a class="action-link rc-mobile-back" href="{escape(center_url(params), quote=True)}">{icon("arrow-left")} К списку работ</a>'
     html = f'<section class="rc-detail" id="review-detail" tabindex="-1" aria-labelledby="detail-title" data-mobile-hidden="{str(not explicit).lower()}">{back}'
@@ -162,10 +192,12 @@ def render_detail(item, record, context, params, token, explicit=False, error=''
         return html + '<div class="rc-empty">' + icon('review') + '<h2 id="detail-title">' + ('Работа уже не в очереди' if explicit else 'Всё готово к новой проверке') + f'</h2><p>{explanation}</p><a class="action-link" href="{escape(center_url(params), quote=True)}">Открыть список</a></div></section>'
     pid = item['project_id']
     work = f'stage-{record["number"]}' if item['kind'] == 'stage' else 'defense'
+    criteria_url = f'/project/{pid}/criteria?stage={record["number"]}#criterion-add' if item['kind'] == 'stage' else ''
     html += f'''<div class="rc-detail-head"><span class="eyebrow">{"ИНФОРМАЦИОННЫЙ ОТЧЁТ" if item['kind'] == 'report' else "ПРОВЕРКА РЕЗУЛЬТАТА"}</span>
         <h2 id="detail-title">{escape(item['project_name'])}</h2><p>{escape(item['title'])}</p></div>
         <div class="rc-detail-links"><a class="action-link" href="/project/{pid}">{icon('folder')} Проект</a>
-        <a class="action-link" href="{item['href']}">Открыть в проекте {icon('arrow')}</a></div>'''
+        <a class="action-link" href="{item['href']}">Открыть в проекте {icon('arrow')}</a>
+        {f'<a class="action-link" href="{criteria_url}">Критерии этапа</a>' if criteria_url else ''}</div>'''
     if item['kind'] == 'report':
         return html + f'<p class="rc-hint">Отчёт о задаче — информация о ходе работы. Его прочтение не принимает этап и не выставляет оценку.</p><p class="rc-hint">{escape(item["author"] or "Автор не указан")} · {format_timestamp(item["sent"])}</p><p class="rc-result">{escape(item["body"])}</p></section>'
     meta = item.get('submission')
@@ -176,11 +208,14 @@ def render_detail(item, record, context, params, token, explicit=False, error=''
     result = record.get('result', '') if item['kind'] == 'stage' else record.get('description', '')
     url = record.get('presentation_url', '') if item['kind'] == 'stage' else record.get('video_url', '')
     previous = context.get('previous')
+    current_files, previous_files = context.get('current_files', ()), context.get('previous_files', ())
+    current_attachments = render_attachments(pid, current_files, other_files=previous_files if previous else None)
     html += '<div class="rc-section"><h3>' + ('Сравнение отправок' if previous else 'Текущая работа') + '</h3>'
     if previous:
-        html += f'<div class="rc-comparison"><article class="rc-version" data-version="previous"><h4>Предыдущая сдача</h4><small>{format_timestamp(previous["recorded_at"])}</small><p class="rc-result">{escape(previous["result"] or "Описание не указано.")}</p>{material(previous["resource_url"], "Материал прошлой сдачи")}</article><article class="rc-version" data-version="current"><h4>Новая сдача</h4><small>{format_timestamp(date)}</small><p class="rc-result">{escape(result or "Описание не указано.")}</p>{material(url, "Открыть презентацию" if item["kind"] == "stage" else "Смотреть видеозащиту")}</article></div>'
+        previous_attachments = render_attachments(pid, previous_files, other_files=current_files, previous=True)
+        html += f'<div class="rc-comparison"><article class="rc-version" data-version="previous"><h4>Предыдущая сдача</h4><small>{format_timestamp(previous["recorded_at"])}</small><p class="rc-result">{escape(previous["result"] or "Описание не указано.")}</p>{material(previous["resource_url"], "Материал прошлой сдачи")}{previous_attachments}</article><article class="rc-version" data-version="current"><h4>Новая сдача</h4><small>{format_timestamp(date)}</small><p class="rc-result">{escape(result or "Описание не указано.")}</p>{material(url, "Открыть презентацию" if item["kind"] == "stage" else "Смотреть видеозащиту")}{current_attachments}</article></div>'
     else:
-        html += f'<p class="rc-result" data-version="current">{escape(result or "Описание не указано.")}</p>{material(url, "Открыть презентацию" if item["kind"] == "stage" else "Смотреть видеозащиту")}<p class="rc-hint">Более ранних отправок в истории нет. Черновики не считаются сдачами.</p>'
+        html += f'<p class="rc-result" data-version="current">{escape(result or "Описание не указано.")}</p>{material(url, "Открыть презентацию" if item["kind"] == "stage" else "Смотреть видеозащиту")}{current_attachments}<p class="rc-hint">Более ранних отправок в истории нет. Черновики не считаются сдачами.</p>'
     html += '</div>'
     decision = context.get('decision')
     comment = decision['comment'] if decision else record.get('teacher_comment')
@@ -189,6 +224,7 @@ def render_detail(item, record, context, params, token, explicit=False, error=''
     html += f'<div class="rc-detail-links"><a class="action-link" href="/project/{pid}/history?work={work}">{icon("history")} Вся история этой работы</a></div>'
     criteria = ''.join(f'<li>{escape(label)} <span>до {maximum}</span></li>' for _, label, maximum in CRITERIA)
     html += f'<details class="rc-history"><summary>Критерии итоговой оценки</summary><p class="rc-hint">Ориентир для обратной связи. Итоговые баллы каждого ученика выставляются отдельно, максимум {MAX_SCORE}.</p><ul class="rc-criteria">{criteria}</ul><a class="action-link" href="/project/{pid}/assessment">Перейти к личным оценкам {icon("arrow")}</a></details>'
+    html += render_analysis(item, context, params, token)
     editable = record['state'] in ('review', 'submitted')
     same_version = submitted is None or submitted.get('revision') == str(record['revision'])
     if error:
@@ -201,7 +237,11 @@ def render_detail(item, record, context, params, token, explicit=False, error=''
             <h3>Ваше решение</h3><input type="hidden" name="csrf_token" value="{escape(token, quote=True)}"><input type="hidden" name="revision" value="{record['revision']}">'''
         if item['kind'] == 'stage':
             html += f'<input type="hidden" name="number" value="{record["number"]}">'
-        html += f'''<label for="review-comment">Комментарий ученикам</label><p class="rc-hint" id="comment-hint">Для возврата напишите, что исправить. Для принятия комментарий необязателен. До 2000 символов.</p>
+        fields = project_criteria.review_fields(pid, context.get('criteria', ()), current_files,
+                                                submitted if same_version else None, context.get('analysis_report'))
+        hint = ('Для возврата достаточно замечания к критерию или общего комментария.' if fields
+                else 'Для возврата напишите, что исправить. Для принятия комментарий необязателен. До 2000 символов.')
+        html += f'''{fields}<label for="review-comment">Комментарий ученикам</label><p class="rc-hint" id="comment-hint">{hint}</p>
             <textarea id="review-comment" name="teacher_comment" rows="4" maxlength="2000" aria-describedby="comment-hint" placeholder="Что получилось и что нужно улучшить">{escape(value)}</textarea>
             <div class="rc-decision-actions"><button name="action" value="accept" data-ui-icon="check">Принять {"этап" if item['kind'] == 'stage' else 'видеозащиту'}</button><button class="secondary" name="action" value="return" data-ui-icon="return">На доработку</button></div>
             <p class="rc-hint">Решение сохраняется в истории, ученики получат уведомление. Личные оценки не изменятся.</p></form>'''

@@ -11,7 +11,7 @@ SHORT_NAMES = ('Тема проекта', 'Работа · 1', 'Работа · 
 
 def render_project_work(pid, user, owner, members, stages, defense, assessments,
                         tasks, all_tasks, render_task, filters, create, state,
-                        token, submitted=None, error='', unsaved=''):
+                        token, submitted=None, error='', unsaved='', *, criteria_by_stage=None, criterion_files=()):
     completed, current = stage_summary(stages)
     current_number = current['number'] if current else 5
     selected = int(state.get('view_stage') or (state.get('stage') if state.get('stage') in ('1', '2', '3', '4', '5') else current_number))
@@ -65,7 +65,8 @@ def render_project_work(pid, user, owner, members, stages, defense, assessments,
         rows = [t for t in tasks if t['stage_number'] == number]
         values = submitted if submitted is not None and submitted.get('number') == str(number) else None
         result = render_stages(stages, user, token, values, has_teacher, pid,
-                               only_number=number, compact=True, return_to=location(number, f'stage-{number}-result').replace('&amp;', '&'))
+                               only_number=number, compact=True, return_to=location(number, f'stage-{number}-result').replace('&amp;', '&'),
+                               criteria_by_stage=criteria_by_stage, criterion_files=criterion_files)
         default_view = 'result' if s['state'] in ('done', 'review') or kind == 'returned' or s['result'].strip() or (error and number == current_number) else 'tasks'
         panels.append(f'''<section class="pw-stage pw-stage-{kind}" id="stage-{number}" data-work-panel="{number}" data-default-view="{default_view}" data-review-role="{user['role']}">
             <header class="pw-stage-heading"><span class="eyebrow">ЭТАП {number} / 5{' · ТЕКУЩИЙ' if current and number == current['number'] else ''}</span>

@@ -1,0 +1,111 @@
+.criterion-overview, .criterion-panel, .passport-cover, .passport-stage {
+    background: var(--mf-card, var(--bg-panel));
+    border: 1px solid var(--mf-line);
+    border-radius: 18px;
+    padding: clamp(14px, 3vw, 28px);
+    margin-block: 16px;
+    overflow-wrap: anywhere;
+}
+
+.criterion-overview header, .passport-stage header, .criterion-line, .criterion-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 18px;
+}
+
+.criterion-overview h2, .passport-cover h2, .passport-stage h3 {
+    margin: 4px 0 8px;
+    line-height: 1.2;
+}
+
+.criterion-overview header p, .criterion-overview small, .passport-cover small, .passport-stage small {
+    color: var(--mf-muted);
+}
+
+.criterion-overview footer, .criterion-goal { margin-top: 16px; }
+.criterion-overview footer { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+
+.criterion-overview ul, .criterion-list {
+    margin: 16px 0;
+    padding: 0;
+    list-style: none;
+}
+
+.criterion-overview-item, .criterion-list > li {
+    padding: 12px 0;
+    border-top: 1px solid var(--mf-line);
+    overflow-wrap: anywhere;
+}
+
+.criterion-overview-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 12px;
+    align-items: start;
+}
+
+.criterion-overview-item > div > small {
+    display: block;
+    margin-bottom: 2px;
+}
+
+.criterion-overview-item > .criterion-note, .criterion-source { grid-column: 1 / -1; }
+
+.criterion-state {
+    border: 1px solid currentColor;
+    border-radius: 20px;
+    padding: 3px 9px;
+    font-size: .8rem;
+    width: fit-content;
+}
+
+.criterion-state[data-criterion-state="confirmed"] { color: var(--ui-success, #258659); }
+.criterion-state[data-criterion-state="revise"] { color: var(--ui-danger, #b34c43); }
+.criterion-state[data-criterion-state="review"] { color: var(--mf-text); }
+
+.criterion-note { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.criterion-form { margin-block: 16px; display: grid; gap: 10px; }
+.criterion-form h4, .criterion-form > p { margin: 0; }
+
+.criterion-fields {
+    min-inline-size: 0;
+    margin: 0;
+    border-radius: 12px;
+    border: 1px solid var(--mf-line);
+    padding: 12px;
+    overflow-wrap: anywhere;
+}
+
+.criterion-fields legend { padding-inline: 4px; font-weight: 650; }
+.criterion-fields label, .criterion-panel form label { display: grid; gap: 5px; margin: 8px 0; }
+.criterion-fields textarea, .criterion-fields select, .criterion-panel form input, .criterion-panel form select {
+    width: 100%;
+    max-width: 100%;
+}
+
+.criterion-stage { margin-top: 16px; }
+.criterion-actions { justify-content: start; align-items: center; }
+.criterion-actions:empty { display: none; }
+.passport-cover h2 { font-size: clamp(1.8rem, 5vw, 3.1rem); }
+.passport-cover > section { margin-block: 20px; }
+.passport-stage header { margin-bottom: 8px; }
+
+@media (max-width: 560px) {
+    .criterion-overview-item { grid-template-columns: minmax(0, 1fr); }
+    .criterion-overview header > a { width: 100%; }
+}
+
+@media print {
+    body:has(.passport-cover) { background: #fff; color: #151515; }
+    .team-page:has(.passport-cover) :is(.back, .project-navigation, .project-context-actions, .ui-finish-navigation,
+                                    .criterion-actions, #passport-versions) { display: none; }
+    .passport-cover, .passport-stage {
+        background: #fff;
+        color: #151515;
+        border-color: #ddd;
+        break-inside: avoid;
+    }
+    .passport-cover small, .passport-stage small { color: #444; }
+}

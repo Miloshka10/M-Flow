@@ -6,6 +6,7 @@ and M_FLOW_DRILL_TARGET_URL. The caller owns and cleans up both databases.
 """
 from contextlib import closing
 from datetime import date, timedelta
+from io import BytesIO
 import os
 from pathlib import Path
 import secrets
@@ -15,16 +16,23 @@ import tempfile
 from urllib.parse import urlsplit
 
 import psycopg
+from werkzeug.datastructures import FileStorage
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from postgres_app_check import fingerprint, phase
+from database import insert_id
 from postgres_backup import create_backup, table_row_hashes
 from postgres_restore_check import require_empty, restore_verified_archive
+from project_criteria import save_responses, save_decisions
+from project_passport import save as save_passport
+from submission_attachments import read_uploads, save_attachments
+from submission_analysis import save_report
 
 
 PREFIX = 'classroom_drill'
+ATTACHMENT = b'mflow synthetic attachment\x00\xff'
 
 
 def validate(url, database):
@@ -59,6 +67,23 @@ def seed(url):
         aid = save_assignment(conn, teacher, gid, dict(title='Учебная проверка', goal='Проверить восстановление',
                                                        due_on=(date.today() + timedelta(days=14)).isoformat()))
         link_project(conn, student, gid, aid, {'action': 'link_project', 'project_id': str(project)})
+        submission = conn.execute("""SELECT id,attempt FROM work_history WHERE project_id=?
+            AND kind='stage' AND number=1 AND event='submit' ORDER BY revision DESC LIMIT 1""", (project,)).fetchone()
+        save_attachments(conn, submission['id'], read_uploads([FileStorage(BytesIO(ATTACHMENT), 'report.bin')]))
+        save_report(conn, submission['id'], teacher['id'], 'synthetic', dict(
+            summary='Итог тестового разбора', recommendation='Сверить оригинал', suggestions=[], checks=[], files=[]))
+        criterion_id = insert_id(conn, 'INSERT INTO project_criteria(project_id,number,title) VALUES(?,1,?)',
+                                 (project, 'Приложен исходный отчёт'))
+        save_responses(conn, submission['id'], [(criterion_id, 'Отчёт в приложении', 'report.bin')])
+        file_id = conn.execute('SELECT id FROM submission_attachments WHERE history_id=?',
+                               (submission['id'],)).fetchone()['id']
+        accepted = conn.execute("""SELECT id FROM work_history WHERE project_id=? AND kind='stage' AND number=1
+            AND attempt=? AND event='accept'""", (project, submission['attempt'])).fetchone()['id']
+        save_decisions(conn, accepted, [(criterion_id, submission['id'], 'confirmed', '', file_id)])
+        conn.execute("""INSERT INTO class_analysis_jobs(assignment_id,teacher_id,history_id,model,state)
+            VALUES(?,?,?,'synthetic','done')""", (aid, teacher['id'], submission['id']))
+        conn.commit()
+        save_passport(conn, project, student)
 
 
 def verify(url):
@@ -74,7 +99,15 @@ def verify(url):
         work = conn.execute("""SELECT p.id,a.id AS assignment_id,a.group_id FROM projects p
             JOIN group_assignment_projects ap ON ap.project_id=p.id
             JOIN group_assignments a ON a.id=ap.assignment_id WHERE p.name=?""", (PREFIX,)).fetchone()
+        file_id = conn.execute("""SELECT a.id FROM submission_attachments a JOIN work_history h ON h.id=a.history_id
+            WHERE h.project_id=? AND a.filename='report.bin'""", (work['id'],)).fetchone()['id']
+        passport_id = conn.execute('SELECT id FROM project_passports WHERE project_id=? AND version=1',
+                                   (work['id'],)).fetchone()['id']
+        assert conn.execute('SELECT state FROM class_analysis_jobs WHERE assignment_id=?',
+                            (work['assignment_id'],)).fetchone()['state'] == 'done'
     base = f'/project/{work["id"]}'
+    file_url = f'{base}/attachments/{file_id}'
+    passport_url = f'{base}/passport/{passport_id}'
     assignment = f'/groups/{work["group_id"]}/assignments/{work["assignment_id"]}'
     for role, login_path in (('student', '/login'), ('teacher', '/teacher/login'), ('other', '/login')):
         client = app.app.test_client()
@@ -85,12 +118,18 @@ def verify(url):
             password=os.environ['MF_CHECK_PASSWORD'], csrf_token=token))
         assert logged_in.status_code == 302
         if role == 'other':
-            assert all(client.get(path).status_code == 403 for path in (base, assignment, base + '/assessment'))
+            assert all(client.get(path).status_code == 403 for path in (base, assignment, base + '/assessment', passport_url))
+            assert client.get(file_url).status_code == 404
             continue
+        assert client.get(file_url).data == ATTACHMENT
+        passport = client.get(passport_url)
+        assert passport.status_code == 200 and 'Приложен исходный отчёт' in passport.text
+        assert file_url in passport.text
         assert 'Учебная проверка' in client.get(assignment).text
         assert 'Тестовый результат' in client.get(base + '/history').text
         assert 'Защита принята' in client.get(base + '/defense').text
         if role == 'student':
+            assert 'Итог тестового разбора' not in client.get(base + '/history?work=stage-1').text
             assert '45 / 45' in client.get(base + '/assessment').text
             with client.session_transaction() as session:
                 token = session['csrf_token']
@@ -106,6 +145,7 @@ def verify(url):
             assert new_name in client.get(f'/project/{new_project["id"]}').text
         else:
             assert 'Этапы и защита приняты: 1' in client.get(assignment).text
+            assert 'Итог тестового разбора' in client.get(base + '/history?work=stage-1').text
 
     # Change a synthetic submission without adding or removing a row.
     with psycopg.connect(url, autocommit=True, connect_timeout=5) as conn:
@@ -117,6 +157,11 @@ def verify(url):
                 ('Changed after restore', work['id'])).rowcount
             if changed != 1 or table_row_hashes(conn, tables) == original_hashes:
                 raise AssertionError('Row hashes failed to detect a modified submission.')
+            tables = {'submission_attachments'}
+            original_hashes = table_row_hashes(conn, tables)
+            conn.execute('UPDATE submission_attachments SET content=%s WHERE id=%s', (ATTACHMENT[::-1], file_id))
+            if table_row_hashes(conn, tables) == original_hashes:
+                raise AssertionError('Row hashes failed to detect modified attachment bytes.')
 
 
 def drill():
@@ -139,7 +184,7 @@ def drill():
         subprocess.run([*script, 'verify'], env=dict(env, DATABASE_URL=target, DATABASE_URL_UNPOOLED=target,
                                                        MF_CHECK_FINGERPRINT=expected), check=True)
     print('PASS: dump, restore, row verification, altered submission detection, application restart, '
-          'assignment, history, defense, personal grade, access, new project creation.')
+          'assignment, history, defense, personal grade, criterion evidence, passport, queue, access, new project creation.')
 
 
 if __name__ == '__main__':

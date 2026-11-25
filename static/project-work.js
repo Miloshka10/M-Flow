@@ -3,6 +3,25 @@ document.addEventListener('DOMContentLoaded', () => {
   'use strict';
   const board = document.querySelector('[data-workspace="1"]');
   if (!board) return;
+  for (const upload of board.querySelectorAll('input[name="attachments"]')) {
+    const criteria = [...upload.form.querySelectorAll('[data-criterion-upload]')];
+    if (!criteria.length) continue;
+    const syncFiles = () => {
+      for (const select of criteria) {
+        const prior = select.value;
+        while (select.options.length > 1) select.remove(1);
+        [...upload.files].filter(file => file.name).forEach((file, index) => {
+          select.add(new Option(file.name, String(index + 1)));
+        });
+        select.value = [...select.options].some(option => option.value === prior) ? prior : '';
+      }
+    };
+    upload.addEventListener('change', () => {
+      for (const select of criteria) select.value = '';
+      syncFiles();
+    });
+    syncFiles();
+  }
   board.classList.add('pw-enhanced');
   const panels = [...board.querySelectorAll('[data-work-panel]')];
   const tools = board.querySelector('[data-work-tools]');

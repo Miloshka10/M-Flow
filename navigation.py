@@ -36,7 +36,7 @@ def project_navigation(project_id, active='overview'):
     base = f'/project/{project_id}'
     links = [('overview', base, 'Обзор'), ('tasks', base + '/stages', 'Работа над проектом'), ('team', base + '/team', 'Команда'),
              ('finish', base + '/preparation', 'Защита и результат')]
-    section = 'finish' if active in ('preparation', 'defense', 'assessment') else 'tasks' if active == 'stages' else active
+    section = 'finish' if active in ('preparation', 'defense', 'assessment', 'passport') else 'tasks' if active == 'stages' else 'overview' if active == 'criteria' else active
     history = (f'<div class="project-context-actions"><a class="ui-project-history" href="{base}/history"'
                + (' aria-current="page"' if active == 'history' else '')
                + f'>{icon("history")}<span>История работ и решений</span></a></div>')
@@ -48,5 +48,5 @@ def project_navigation(project_id, active='overview'):
     if section == 'finish':
         nav += '<nav class="ui-finish-navigation" aria-label="Завершение проекта">' + ''.join(
             f'<a href="{base}/{key}"' + (' aria-current="page"' if active == key else '') + f'>{icon("tasks" if key == "preparation" else "video" if key == "defense" else "assessment")}{label}</a>'
-            for key,label in [('preparation','Подготовка'),('defense','Видеозащита'),('assessment','Оценивание')]) + '</nav>'
+            for key,label in [('passport','Паспорт проекта'),('preparation','Подготовка'),('defense','Видеозащита'),('assessment','Оценивание')]) + '</nav>'
     return nav

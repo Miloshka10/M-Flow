@@ -2,8 +2,10 @@
 from contextlib import closing
 from html import unescape
 from html.parser import HTMLParser
+from io import BytesIO
 import re
 import time
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 
@@ -36,6 +38,60 @@ class CenterForms(HTMLParser):
 
 
 class ReviewCenterCases:
+    def test_submission_analysis_keeps_a_private_report_on_the_exact_version(self):
+        self.assertEqual(self.history_stage(project=2, result='Отчёт приложен',
+            attachments=[(BytesIO(b'reading: 22'), 'measure.txt')]).status_code, 302)
+        self.sign_in(1)
+        path = '/teacher/review?work=stage-2-1'
+        data = dict(summary='<script>Summary</script>', recommendation='Сверить оригинал', suggestions=['Сверить замеры'],
+                    checks=[dict(criterion='Замер', status='found', quote='reading: 22', label='measure.txt', attachment=1)],
+                    files=[dict(id=1, name='measure.txt', coverage='Текст прочитан')])
+        with patch.dict('os.environ', {'M_FLOW_OLLAMA_MODEL': 'qwen3:8b'}), \
+                patch('submission_analysis.analyze', return_value=data) as run:
+            page = self.client.get(path)
+            version = re.search(r'name="analysis_version" value="([0-9]+)"', page.text)[1]
+            run.assert_not_called()
+            self.assertEqual(self.post(path, data=dict(action='analyze', analysis_version='0')).status_code, 409)
+            self.assertEqual(self.client.post(path, data=dict(action='analyze', analysis_version=version)).status_code, 400)
+            posted = self.post(path, data=dict(action='analyze', analysis_version=version))
+            self.assertEqual(posted.status_code, 302)
+            self.assertIn('#submission-analysis', posted.location)
+            _, snapshot, files, *_ = run.call_args.args
+            self.assertEqual(snapshot['result'], 'Отчёт приложен')
+            self.assertEqual(files[0][1:], ('measure.txt', b'reading: 22'))
+        refreshed = self.client.get(path).text
+        self.assertIn('reading: 22', refreshed)
+        self.assertIn('&lt;script&gt;Summary', refreshed)
+        self.assertNotIn('<script>Summary', refreshed)
+        self.assertEqual(self.history_rows(2)[-1]['event'], 'submit')
+        self.assertEqual(self.center_decide('stage-2-1', action='return', comment='Проверьте единицы').status_code, 302)
+        self.assertIn('Мой ИИ-разбор этой сдачи', self.client.get('/project/2/history').text)
+        self.assertEqual(self.history_stage(project=2, revision=2, result='Новая версия').status_code, 302)
+        self.sign_in(1)
+        self.assertNotIn('reading: 22', self.client.get(path).text)
+        self.sign_in(3)
+        self.assertNotIn('Мой ИИ-разбор этой сдачи', self.client.get('/project/2/history').text)
+        self.assertEqual(self.post(path, data=dict(action='analyze', analysis_version=version)).status_code, 403)
+
+    def test_submission_analysis_does_not_save_a_report_after_the_stage_changes(self):
+        self.assertEqual(self.history_stage(project=2, result='Проверка').status_code, 302)
+        self.sign_in(1)
+        path = '/teacher/review?work=stage-2-1'
+        from project_stages import change_stage
+
+        def model_finishes_after_the_decision(*args, **kwargs):
+            with closing(self.module.get_db()) as conn:
+                change_stage(conn, 2, {'id': 1, 'role': 'teacher'}, {
+                    'action': 'accept', 'number': '1', 'revision': '1'})
+            return {}
+
+        with patch.dict('os.environ', {'M_FLOW_OLLAMA_MODEL': 'qwen3:8b'}), \
+                patch('submission_analysis.analyze', side_effect=model_finishes_after_the_decision):
+            version = re.search(r'name="analysis_version" value="([0-9]+)"', self.client.get(path).text)[1]
+            self.assertEqual(self.post(path, data=dict(action='analyze', analysis_version=version)).status_code, 409)
+        with closing(self.module.get_db()) as conn:
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM submission_analyses').fetchone()[0], 0)
+
     @staticmethod
     def center_work_keys(page):
         return re.findall(r'data-work-key="([^"]+)"', page)

@@ -7,9 +7,12 @@ from html import escape
 from urllib.parse import urlencode
 from material_links import safe_web_url
 
-from database import execute_schema
+from database import execute_schema, insert_id
 from deadlines import format_timestamp
 from interface import icon
+from submission_attachments import attachment_metadata, render_attachments
+from submission_analysis import render_report
+from project_criteria import STYLE as CRITERIA_STYLE, render_history_notes
 
 PAGE_SIZE = 12
 WORKS = {'all': 'Все работы', **{f'stage-{n}': f'Этап {n}' for n in range(1, 6)}, 'defense': 'Видеозащита'}
@@ -63,7 +66,7 @@ def _append(conn, pid, kind, number, event, attempt, data, actor=None):
     ids = sorted({value for value in (data.get('author_id'), data.get('reviewer_id'), actor) if value is not None})
     names = {row['id']: row['username'] for row in conn.execute(
         'SELECT id,username FROM users WHERE id IN (' + ','.join('?' for _ in ids) + ')', ids)} if ids else {}
-    conn.execute('''INSERT INTO work_history(project_id,kind,number,revision,event,attempt,state,
+    return insert_id(conn, '''INSERT INTO work_history(project_id,kind,number,revision,event,attempt,state,
         result,resource_url,comment,author_id,author_name,actor_id,actor_name,reviewer_id,reviewer_name,source_updated_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
         (pid,kind,number,data['revision'],event,attempt,data['state'],data['result'],data['resource_url'],
@@ -91,7 +94,7 @@ def record_change(conn, pid, kind, number, action, current, user):
         data.update(comment='', reviewer_id=None)
     attempt = conn.execute('SELECT COALESCE(MAX(attempt),0) AS n FROM work_history WHERE project_id=? AND kind=? AND number=?',
                            (pid,kind,number)).fetchone()['n'] + (action == 'submit')
-    _append(conn, pid, kind, number, action, attempt, data, user['id'])
+    return _append(conn, pid, kind, number, action, attempt, data, user['id'])
 
 
 def history_parameters(args):
@@ -121,6 +124,9 @@ def load_history(conn, pid, work, page):
     page = min(page, pages)
     rows = [dict(row) for row in conn.execute('SELECT * FROM work_history WHERE ' + where +
         ' ORDER BY id DESC LIMIT ? OFFSET ?', params + (PAGE_SIZE, (page-1)*PAGE_SIZE))]
+    files = attachment_metadata(conn, [row['id'] for row in rows if row['kind'] == 'stage' and row['event'] == 'submit'])
+    for row in rows:
+        row['attachments'] = files.get(row['id'], ())
     legacy = []
     if kind != 'defense':
         legacy += [dict(row) for row in conn.execute('''SELECT s.*,'stage' AS kind,
@@ -135,7 +141,7 @@ def load_history(conn, pid, work, page):
             LEFT JOIN users a ON a.id=d.author_id LEFT JOIN users r ON r.id=d.reviewer_id
             WHERE d.project_id=? AND NOT EXISTS
             (SELECT 1 FROM work_history_sources h WHERE h.project_id=d.project_id AND h.kind='defense' AND h.number=0)''', (pid,))]
-    snapshots = [dict(_snapshot(row, row['kind']), kind=row['kind'], number=row['number'], event='legacy', attempt=0,
+    snapshots = [dict(_snapshot(row, row['kind']), project_id=pid, kind=row['kind'], number=row['number'], event='legacy', attempt=0,
                       author_name=row.get('author_name') or '', reviewer_name=row.get('reviewer_name') or '', actor_name='') for row in legacy]
     return dict(items=rows, legacy=snapshots, total=total, page=page, pages=pages)
 
@@ -149,7 +155,7 @@ def event_context(row):
     return f'{work} · Отправка №{row["attempt"]}' if row['attempt'] else work
 
 
-def _render_event(row):
+def _render_event(row, analysis=None, criteria=()):
     old = row['event'] == 'legacy'
     date = ('Последнее известное обновление: ' + format_timestamp(row['source_updated_at'])) if old else format_timestamp(row['recorded_at'])
     actor = f'<p class="t-muted">{escape(row["actor_name"])}</p>' if row['actor_name'] else ''
@@ -159,6 +165,9 @@ def _render_event(row):
     if row['event'] == 'accept' and not row['comment']:
         comment = '<p class="t-muted">Принято без комментария.</p>'
     resource = ''
+    files = render_attachments(row['project_id'], row['attachments']) if row.get('attachments') else ''
+    report = (f'<details><summary>Мой ИИ-разбор этой сдачи</summary>{render_report(row["project_id"], analysis)}</details>'
+              if analysis else '')
     if row['resource_url']:
         url = row['resource_url']
         resource = (f'<a class="action-link" href="{escape(url, quote=True)}" target="_blank" rel="noopener noreferrer">'
@@ -167,16 +176,19 @@ def _render_event(row):
         f'Точная дата отправки и содержание прошлых попыток неизвестны. Состояние: {escape({"review":"На проверке","submitted":"На проверке","done":"Принято","accepted":"Принято","progress":"В работе или на доработке","returned":"На доработке","draft":"Черновик"}.get(row["state"], row["state"]))}.</p>') if old else ''
     return f'''<article class="history-event" data-history-event="{row['event']}"><span class="eyebrow">{event_context(row)}</span>
         <h2>{EVENTS[row['event']]}</h2><p class="t-muted">{date}</p>{actor}{author}{reviewer}{explanation}
-        <details><summary data-ui-icon="history">Текст и ссылка этой записи</summary><p class="history-text" tabindex="0">{escape(row['result'] or 'Текст не указан.')}</p>{resource}</details>{comment}</article>'''
+        <details><summary data-ui-icon="history">Материалы этой записи</summary><p class="history-text" tabindex="0">{escape(row['result'] or 'Текст не указан.')}</p>{resource}{files}</details>
+        {render_history_notes(row['project_id'], criteria)}{report}{comment}</article>'''
 
 
 def render_history(pid, data, work):
     options = ''.join(f'<option value="{key}" {"selected" if key == work else ""}>{label}</option>' for key,label in WORKS.items())
-    html = f'''<link rel="stylesheet" href="/static/work-history.css?v=20261019"><p class="history-intro">Здесь сохраняются отправленные версии и решения учителя. Изменения черновиков не записываются.
+    html = f'''{CRITERIA_STYLE}<link rel="stylesheet" href="/static/work-history.css?v=20261019"><p class="history-intro">Здесь сохраняются отправленные версии и решения учителя. Изменения черновиков не записываются.
         Номера отправок учитывают только новые сдачи после включения истории. Ранее перезаписанные версии восстановить нельзя.</p>
         <form class="history-filters" method="get"><label>Работа<select name="work">{options}</select></label><button data-ui-icon="filter">Показать</button></form>
         <p class="t-muted">Записей: {data['total']} · Страница {data['page']} из {data['pages']}. Новые события сверху.</p>'''
-    html += ''.join(_render_event(row) for row in data['items']) or '<p>Новых отправок и решений пока нет. Они появятся после отправки работы учителю.</p>'
+    analyses = data.get('analyses', {})
+    criteria = data.get('criterion_notes', {})
+    html += ''.join(_render_event(row, analyses.get(row['id']), criteria.get(row['id'], ())) for row in data['items']) or '<p>Новых отправок и решений пока нет. Они появятся после отправки работы учителю.</p>'
     if data['pages'] > 1:
         html += '<nav class="history-pages" aria-label="Страницы истории">'
         for page, label in ((data['page']-1, 'Новее'), (data['page']+1, 'Ранее')):

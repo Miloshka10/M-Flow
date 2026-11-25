@@ -104,7 +104,8 @@ def render_team_map(project_id, name, members, tasks, today):
         <ul class="project-team-nodes">{''.join(nodes)}</ul></section>'''
 
 
-def render_workspace(project_id, name, user, owner, members, stages, defense, assessments, tasks, completed_tasks, progress, overdue, today=None, active='overview'):
+def render_workspace(project_id, name, user, owner, members, stages, defense, assessments, tasks,
+                     completed_tasks, progress, overdue, today=None, active='overview', criteria_html=''):
     done, current = stage_summary(stages)
     has_teacher = any(member['role'] == 'teacher' for member in members)
     step = next_step(stages, user['role'], owner, has_teacher, defense, bool(assessments))
@@ -182,7 +183,7 @@ def render_workspace(project_id, name, user, owner, members, stages, defense, as
         <section class="project-supervisor" aria-labelledby="supervisor-title"><h2 id="supervisor-title">Руководитель проекта</h2>
             <p>{escape(', '.join(m['username'] for m in members if m['role'] == 'teacher')) if has_teacher else 'Учитель пока не подключён. Черновики можно готовить уже сейчас.'}</p>
             <a class="action-link" href="/supervision?project={project_id}">Подключение и согласования {icon('arrow')}</a></section></aside></div>
-        {team_map}<details class="journey-route"><summary data-ui-icon="stages">Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
+        {criteria_html}{team_map}<details class="journey-route"><summary data-ui-icon="stages">Маршрут из пяти этапов <span>Принято {done} / 5</span></summary>
             <p class="journey-explanation">Задачи помогают выполнять работу. Этап принимается только после решения учителя; защита и оценки проверяются отдельно.</p><ol>{route}</ol></details>
         <section class="project-finish" aria-labelledby="finish-title"><h2 id="finish-title">Завершение проекта</h2>
             <p>Подготовьте выступление, отправьте видеозащиту и посмотрите итоговую оценку. Открыть эти разделы можно в любое время.</p>

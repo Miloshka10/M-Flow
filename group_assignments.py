@@ -1,5 +1,7 @@
 """Class assignments reuse project submissions and require separate teacher consent."""
 from collections import Counter
+import class_analysis
+import submission_analysis
 from html import escape
 import time
 from urllib.parse import urlencode
@@ -409,7 +411,7 @@ def student_assignment(conn, user, group, assignment, row, token):
         <p>Учитель увидит название проекта. Доступ к работам появится после согласования сопровождения.</p></section>'''
 
 
-def teacher_progress(group, assignment, rows, view, page):
+def teacher_progress(group, assignment, rows, view, page, analysis_rows, token, model):
     counts = Counter(row['status'] for row in rows)
     base = f'/groups/{group["id"]}/assignments/{assignment["id"]}'
     published = [row for row in rows if assessment_state(row) == 'published']
@@ -429,6 +431,8 @@ def teacher_progress(group, assignment, rows, view, page):
     filtered = results[view] if view in results else [row for row in rows if view == 'all' or row['status'] == view]
     start = (page - 1) * ROSTER_SIZE
     students = []
+    selectable = False
+    has_status = False
     review_count = len({row['work'] for row in rows if row['work']})
     for row in filtered[start:start + ROSTER_SIZE]:
         name = escape(row['project_name'] or 'Проект не выбран')
@@ -440,6 +444,16 @@ def teacher_progress(group, assignment, rows, view, page):
             grade = row['assessment']
             if row['work']:
                 actions.append(f'<a href="{review_url}&amp;work={row["work"]}#review-detail">Открыть сдачу</a>')
+                job = analysis_rows.get(row['work'])
+                if job:
+                    state = job['state']
+                    if state:
+                        has_status = True
+                        actions.append(f'<span>{class_analysis.LABELS[state]}</span>')
+                    if model and state in (None, 'failed', 'stale'):
+                        selectable = True
+                        actions.append(f'<label><input form="class-analysis" type="checkbox" name="history_id" '
+                                       f'value="{job["history_id"]}"> Разобрать · {escape(row["username"])}</label>')
             if grade and grade['state'] == 'published':
                 total, mark = summarize(load_scores(grade))
                 grade_label = f'Опубликована · {total} / {MAX_SCORE}' + (f' · оценка {mark}' if mark is not None else '')
@@ -463,6 +477,11 @@ def teacher_progress(group, assignment, rows, view, page):
                      + '</tr>' for cells in students)
     table = (f'<div class="group-table-wrap"><table class="group-table"><thead><tr>{header}</tr></thead><tbody>{roster}'
              '</tbody></table></div>') if roster else '<p>По этому фильтру пока нет результатов.</p>'
+    if selectable or has_status:
+        refresh = f'<a href="{base}?view={view}&amp;page={page}#class-progress">Обновить статусы</a>'
+        submit = ('<button name="action" value="queue_analysis">Разобрать выбранные сдачи</button>'
+                  if selectable else '')
+        table += f'<form method="post" id="class-analysis">{hidden_token(token)}{submit} {refresh}</form>'
     return (f'<section class="group-panel" id="class-progress"><h2>Прогресс класса</h2>'
             f'<a class="action-link" href="{review_url}">Очередь задания: {review_count}</a>'
             f'<nav class="group-actions" aria-label="Статус работы">{groups}</nav>'
@@ -484,7 +503,10 @@ def render_assignment(conn, user, group, assignment, token, args, submitted=None
         return body + student_assignment(conn, user, group, assignment, rows[0] if rows else None, token)
     view = args.get('view', 'all')
     view = view if view in PROGRESS or view in RESULTS else 'all'
-    body += teacher_progress(group, assignment, rows, view, bounded_page(args.get('page', '1')))
+    jobs = class_analysis.available(conn, assignment['id'], user['id'])
+    jobs_by_work = {f'stage-{pid}-{number}': job for (pid, number), job in jobs.items()}
+    body += teacher_progress(group, assignment, rows, view, bounded_page(args.get('page', '1')),
+                             jobs_by_work, token, submission_analysis.configured_model())
     if not group['archived']:
         opened = ' open' if submitted is not None else ''
         body += (f'<details class="group-panel"{opened}><summary>Изменить задание</summary>'
