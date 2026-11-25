@@ -6,11 +6,12 @@ from material_links import safe_web_url
 from project_rules import has_project_teacher, TEACHER_REQUIRED
 from database import execute_schema, begin_project_write
 from notifications import notify_project
+from navigation import stage_feedback_url
 import project_criteria
 from teacher_supervision import participant
 from deadlines import format_timestamp
 from work_history import before_change, record_change
-from submission_attachments import LIMIT_TEXT, save_attachments
+from submission_attachments import FILE_COUNT, FILE_SIZE, LIMIT_TEXT, TOTAL_SIZE, save_attachments
 
 STAGES = (
     (1, "Выбор темы и согласование с учителем"),
@@ -158,10 +159,12 @@ def change_stage(conn, project_id, user, form, *, attachments=()):
                 f'Этап {current["number"]} отправлен на проверку', '', f'/project/{project_id}/stages#stage-{current["number"]}')
         elif action in ('accept', 'return'):
             project_criteria.save_decisions(conn, history_id, decisions)
+            target = (stage_feedback_url(project_id, current['number'], history_id) if action == 'return'
+                      else f'/project/{project_id}/stages#stage-{current["number"]}')
             notify_project(conn, project_id, 'student',
                 f'stage:{project_id}:{current["number"]}:{current["revision"] + 1}',
                 f'Этап {current["number"]}: ' + ('принят' if action == 'accept' else 'нужна доработка'),
-                comment, f'/project/{project_id}/stages#stage-{current["number"]}')
+                comment, target)
         conn.commit()
         return {"save": "Результат этапа сохранён.", "submit": "Этап отправлен учителю на проверку.",
                 "accept": "Этап принят. Следующий этап открыт.", "return": "Этап возвращён на доработку."}[action] if not (action == "accept" and current["number"] == 5) else "Все пять этапов проекта приняты!"
@@ -171,7 +174,7 @@ def change_stage(conn, project_id, user, form, *, attachments=()):
 
 
 def render_stages(stages, user, token, submitted=None, has_teacher=True, project_id=None,
-                  only_number=None, compact=False, return_to=None, criteria_by_stage=None, criterion_files=()):
+                  only_number=None, compact=False, return_to=None, criteria_by_stage=None, criterion_files=(), upload_names=()):
     completed, current = stage_summary(stages)
     current_number = current["number"] if current else None
     html = '' if compact else f'<p class="stage-summary">Принято {completed} из 5 этапов · {completed * 20}%</p><div class="stage-timeline">'
@@ -231,9 +234,14 @@ def render_stages(stages, user, token, submitted=None, has_teacher=True, project
                 html += prefix + f'<label>{result_label}<textarea name="result" rows="5" maxlength="5000">{escape(values.get("result", ""))}</textarea></label>'
                 if number == 5:
                     html += f'<label>Ссылка на презентацию<input type="url" name="presentation_url" maxlength="2000" placeholder="https://…" value="{escape(values.get("presentation_url", ""), quote=True)}"></label><p>Проверьте, что учитель сможет открыть презентацию по ссылке.</p>'
-                html += f'''<label>Файлы для сдачи<input type="file" name="attachments" multiple aria-describedby="attachment-help-{number}"></label>
+                names = ', '.join(escape(name) for name in upload_names[:FILE_COUNT])
+                reselect = (f'<p>Выберите вложения заново: {names}.</p>' if names else '')
+                html += f'''<label>Файлы для сдачи<input type="file" name="attachments" multiple
+                    aria-describedby="attachment-help-{number} attachment-error-{number}"
+                    data-file-count="{FILE_COUNT}" data-file-limit="{FILE_SIZE}" data-total-limit="{TOTAL_SIZE}"></label>
                     <p class="work-field-hint" id="attachment-help-{number}">{LIMIT_TEXT} Файлы сохраняются при отправке учителю.</p>
-                    {project_criteria.student_fields(criteria, submitted)}
+                    <p class="attachment-error error" id="attachment-error-{number}" role="alert" hidden></p>
+                    {reselect}{project_criteria.student_fields(criteria, submitted, upload_names)}
                     <div class="stage-actions"><button name="action" value="save" data-ui-icon="save">Сохранить черновик</button>
                     <button name="action" value="submit" formenctype="multipart/form-data" {"disabled" if not has_teacher else ""}>Отправить учителю</button></div></form>'''
                 if compact:

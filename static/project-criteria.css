@@ -91,6 +91,9 @@
 .passport-cover h2 { font-size: clamp(1.8rem, 5vw, 3.1rem); }
 .passport-cover > section { margin-block: 20px; }
 .passport-stage header { margin-bottom: 8px; }
+.passport-share { display: grid; gap: 6px; min-width: 0; }
+.passport-share [hidden], .attachment-error[hidden] { display: none; }
+.passport-share input { width: 100%; }
 
 @media (max-width: 560px) {
     .criterion-overview-item { grid-template-columns: minmax(0, 1fr); }

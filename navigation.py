@@ -32,6 +32,10 @@ def stage_result_target(target):
     return target + '-result' if target and re.fullmatch(r'(?:/project/[0-9]+/)?stages#stage-[1-5]', target) else target
 
 
+def stage_feedback_url(project_id, number, decision_id):
+    return f'/project/{project_id}/history?work=stage-{number}&entry={decision_id}#history-event-{decision_id}'
+
+
 def project_navigation(project_id, active='overview'):
     base = f'/project/{project_id}'
     links = [('overview', base, 'Обзор'), ('tasks', base + '/stages', 'Работа над проектом'), ('team', base + '/team', 'Команда'),

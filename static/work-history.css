@@ -2,6 +2,7 @@
 .history-filters, .history-pages { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 24px 0; }
 .history-filters label { display: grid; gap: 6px; }
 .history-event { padding: 24px; margin: 18px 0; border: 1px solid var(--mf-line); border-radius: 20px; background: var(--mf-card); overflow-wrap: anywhere; }
+.history-event:target { scroll-margin-top: 84px; border-color: var(--mf-action); }
 .history-event h2 { font-size: 22px; margin: 8px 0; }
 .history-event summary { min-height: 44px; padding-block: 10px; cursor: pointer; }
 .history-text, .history-comment p { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow-y: auto; }

@@ -1573,7 +1573,7 @@ def create_project():
     "/project/<int:project_id>"
 )
 @login_required
-def project(project_id, stage_submitted=None, stage_error="", work_mode=False, unsaved=""):
+def project(project_id, stage_submitted=None, stage_error="", work_mode=False, unsaved="", upload_names=()):
 
     current_user = get_current_user()
     with closing(get_db()) as conn:
@@ -2102,13 +2102,13 @@ def project(project_id, stage_submitted=None, stage_error="", work_mode=False, u
         stages, defense, published_assessments, tasks, all_tasks, render_task_card,
         filters_html + '<details class="board-deadlines"><summary data-ui-icon="calendar">Ближайшие сроки</summary>' + hot_html + '</details>',
         add_task_section, board_state, csrf_token(), stage_submitted, stage_error, unsaved,
-        criteria_by_stage=criteria, criterion_files=criterion_files)
+        criteria_by_stage=criteria, criterion_files=criterion_files, upload_names=upload_names)
     return render_page(
         PAGE_STYLE
         + f"""
         <link rel="stylesheet" href="/static/project-workspace.css?v=20261118-home-settings">
         {project_criteria.STYLE}
-        <link rel="stylesheet" href="/static/task-board.css?v=20261118-home-settings"><link rel="stylesheet" href="/static/project-work.css?v=20261115-cabinet"><script src="/static/project-work.js?v=20261125-criteria" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
+        <link rel="stylesheet" href="/static/task-board.css?v=20261118-home-settings"><link rel="stylesheet" href="/static/project-work.css?v=20261115-cabinet"><script src="/static/project-work.js?v=20261125-uploads" defer></script><script src="/static/task-board.js?v=20261031" defer></script>
         <div class="container">
             {render_header(current_user, notification_data)}
             <main class="project-workspace" data-work-screens="project" data-project-views data-work-default="{int(work_mode)}">
@@ -3035,6 +3035,10 @@ def render_unsaved_result(form, user, target, defense=False):
     fields = [('teacher_comment', 'Комментарий учителя', 2000)] if user['role'] == 'teacher' else (
         [('video_url', 'Ссылка на запись', 2000), ('description', 'Описание выступления', 2000)] if defense else
         [('result', 'Результат этапа', 5000), ('presentation_url', 'Ссылка на презентацию', 2000)])
+    if user['role'] == 'student' and not defense:
+        evidence = [key for key in form if key.startswith('evidence_note_') and form.get(key)]
+        fields.extend((key, 'Пояснение к критерию', project_criteria.NOTE_LIMIT)
+                      for key in evidence[:project_criteria.MAX_CRITERIA])
     content = ''
     for key, label, limit in fields:
         value = form.get(key, '')
@@ -3183,11 +3187,15 @@ def project_work_history(project_id):
         return render_error_page('Нет доступа', 'Вы не участвуете в этом проекте.', 403)
     try:
         work, page = history_parameters(request.args)
+        entry = form_database_id(request.args['entry']) if 'entry' in request.args else None
     except ValueError as exc:
         return render_error_page('История работ', str(exc), 400)
     conn = get_db()
     try:
-        history = load_history(conn, project_id, work, page)
+        try:
+            history = load_history(conn, project_id, work, page, entry=entry)
+        except LookupError as exc:
+            return render_error_page('Запись недоступна', str(exc), 404)
         if user['role'] == 'teacher':
             ids = [row['id'] for row in history['items'] if row['kind'] == 'stage' and row['event'] == 'submit']
             history['analyses'] = submission_analysis.saved_reports(conn, ids, user['id'])
@@ -3333,8 +3341,8 @@ def project_stage_page(project_id):
     if project_name is None:
         return render_error_page("Нет доступа", "Вы не участвуете в этом проекте.", 403)
     with closing(get_db()) as conn:
+        files = request.files.getlist('attachments')
         try:
-            files = request.files.getlist('attachments')
             attachments = read_uploads(files) if user['role'] == 'student' and request.form.get('action') == 'submit' else ()
             message = change_stage(conn, project_id, user, request.form, attachments=attachments)
             flash(message)
@@ -3348,8 +3356,9 @@ def project_stage_page(project_id):
         if not editable or submitted.get("number") != str(current["number"]) or submitted.get("revision") != str(current["revision"]):
             submitted = None
     unsaved = render_unsaved_result(request.form, user, f'/project/{project_id}/stages') if submitted is None else ''
+    upload_names = tuple((file.filename or '')[:150] for file in files if file.filename)
     response = app.make_response(project(project_id, stage_submitted=submitted, stage_error=error,
-                                         work_mode=True, unsaved=unsaved))
+                                         work_mode=True, unsaved=unsaved, upload_names=upload_names))
     if response.status_code == 200:
         response.status_code = 400
     return response

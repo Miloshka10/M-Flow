@@ -3,6 +3,7 @@ from hashlib import sha256
 from html import escape
 
 from database import begin_project_write, execute_schema, form_database_id
+from navigation import stage_feedback_url
 from submission_attachments import FILE_COUNT
 from teacher_supervision import participant
 from teamwork import hidden_token
@@ -11,7 +12,7 @@ MAX_CRITERIA = 5
 TITLE_LIMIT = 180
 NOTE_LIMIT = 1000
 DECISIONS = {'confirmed': 'Подтверждено', 'revise': 'Нужна доработка'}
-STYLE = '<link rel="stylesheet" href="/static/project-criteria.css?v=1">'
+STYLE = '<link rel="stylesheet" href="/static/project-criteria.css?v=2">'
 
 
 def initialize(conn):
@@ -195,7 +196,7 @@ def load(conn, project_id):
     rows = conn.execute("""SELECT c.*, s.state AS stage_state, s.revision AS stage_revision,
             h.id AS submission_id, h.revision AS submission_revision, h.attempt,
             r.status, r.note AS feedback, r.submission_id AS reviewed_submission,
-            decision.event AS decision_event, decision.revision AS decision_revision,
+            decision.id AS decision_id, decision.event AS decision_event, decision.revision AS decision_revision,
             ra.id AS reviewed_file_id, ra.filename AS reviewed_filename,
             b.note AS response, ba.id AS response_file_id, ba.filename AS response_filename, ba.sha256 AS response_hash,
             old.id AS previous_submission_id, previous.note AS previous_response,
@@ -248,7 +249,7 @@ def file_link(project_id, file_id, filename):
             if file_id else '')
 
 
-def render_history_notes(project_id, rows):
+def render_history_notes(project_id, rows, *, expanded=False):
     if not rows:
         return ''
     items = []
@@ -257,7 +258,7 @@ def render_history_notes(project_id, rows):
         note = f'<p class="criterion-note">{escape(row["note"])}</p>' if row['note'] else ''
         link = file_link(project_id, row['file_id'], row['filename'])
         items.append(f'<li><strong>{escape(row["title"])}</strong>{f" · {status}" if status else ""}{note}{link}</li>')
-    return '<details><summary>Критерии и комментарии этой версии</summary><ul>' + ''.join(items) + '</ul></details>'
+    return ('<details open>' if expanded else '<details>') + '<summary>Критерии и комментарии этой версии</summary><ul>' + ''.join(items) + '</ul></details>'
 
 
 def criterion_state(row):
@@ -297,9 +298,13 @@ def overview(project_id, groups, goal, goal_label, teacher, accepted):
         state, label = criterion_state(row)
         target = f'/project/{project_id}/stages?view_stage={row["number"]}#stage-{row["number"]}-result'
         link = evidence(project_id, row)
+        feedback_link = ''
+        if row['decision_event'] == 'return' and row['feedback']:
+            href = escape(stage_feedback_url(project_id, row['number'], row['decision_id']), quote=True)
+            feedback_link = f'<a class="criterion-source" href="{href}">К замечанию</a>'
         items.append(f'''<li class="criterion-overview-item"><div><small>Этап {row["number"]}</small>
             <a href="{target}">{escape(row["title"])}</a></div><span class="criterion-state" data-criterion-state="{state}">{label}</span>
-            {feedback(row)}{f'<small class="criterion-source">{link}</small>' if link else ''}</li>''')
+            {feedback(row)}{feedback_link}{f'<small class="criterion-source">{link}</small>' if link else ''}</li>''')
     summary = f'Подтверждено {counts.count("confirmed")} из {len(rows)}' if rows else 'Критерии ещё не заданы'
     goal_html = f'<p class="criterion-goal"><strong>{escape(goal_label)}</strong> {escape(goal)}</p>' if goal else ''
     manage = f'<a href="/project/{project_id}/criteria">Критерии проекта</a>'
@@ -355,15 +360,18 @@ def render_manage(project_id, groups, stages, teacher, token, selected):
     return STYLE + creation + (''.join(blocks) if blocks else '<p>Критерии проекта появятся, когда их добавит учитель.</p>')
 
 
-def student_fields(criteria, values=None):
+def student_fields(criteria, values=None, upload_names=()):
     if not criteria:
         return ''
     items = []
     for row in criteria:
         cid = row['id']
         note = values.get(f'evidence_note_{cid}', row['draft_note']) if values is not None else row['draft_note']
+        position = values.get(f'evidence_file_{cid}', '') if values is not None else ''
+        filename = next((name for i, name in enumerate(upload_names, 1) if str(i) == position), '')
+        reminder = f'<p>Выберите заново для критерия: <strong>{escape(filename)}</strong></p>' if filename else ''
         options = ''.join(f'<option value="{i}">Файл {i}</option>' for i in range(1, FILE_COUNT + 1))
-        items.append(f'''<fieldset class="criterion-fields"><legend>{escape(row["title"])}</legend>{feedback(row)}
+        items.append(f'''<fieldset class="criterion-fields"><legend>{escape(row["title"])}</legend>{feedback(row)}{reminder}
             <label>Пояснение<textarea name="evidence_note_{cid}" rows="2" maxlength="{NOTE_LIMIT}">{escape(note)}</textarea></label>
             <label>Файл для критерия<select name="evidence_file_{cid}" data-criterion-upload>
                 <option value="">Выбрать из вложений</option>{options}</select></label></fieldset>''')

@@ -130,11 +130,13 @@ def render_items(rows, token):
     items = []
     for row in rows:
         unread = row['read_at'] is None
+        target = notification_target(row)
+        feedback = '<small>К замечанию</small>' if '#history-event-' in target else ''
         button = (f'<form method="post" action="/notifications/{row["id"]}/read">{token}'
                   '<button class="secondary" type="submit">Отметить прочитанным</button></form>') if unread else '<small>Прочитано</small>'
         items.append(f'''<li class="notification-item {'is-unread' if unread else ''}">
-            <a href="{escape(notification_target(row), quote=True)}"><strong>{escape(row['title'])}</strong>
-            <span>{escape(row['project_name'])}</span><span>{escape(row['message'])}</span></a>
+            <a href="{escape(target, quote=True)}"><strong>{escape(row['title'])}</strong>
+            <span>{escape(row['project_name'])}</span><span>{escape(row['message'])}</span>{feedback}</a>
             <div class="notification-meta"><time>{escape(row['created_at'])} UTC</time>{button}</div></li>''')
     return '<ul class="notification-list">' + ''.join(items) + '</ul>'
 
