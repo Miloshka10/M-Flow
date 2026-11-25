@@ -574,7 +574,7 @@ class LearningGroupCases:
             return rows
         before = old_data()
         conn = self.module.get_db()
-        classroom_tables = ('group_assignment_projects', 'group_assignments',
+        classroom_tables = ('class_analysis_jobs', 'group_assignment_projects', 'group_assignments',
                             'learning_group_invitations', 'learning_group_members', 'learning_groups')
         for table in classroom_tables:
             conn.execute(f'DROP TABLE {table}')
